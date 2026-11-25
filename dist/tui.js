@@ -1068,687 +1068,6 @@ function buildLoopDossier(goal, nowMs) {
 `);
 }
 
-// src/core/dossier-export.ts
-import { writeFileSync } from "fs";
-import { join, resolve } from "path";
-var MAX_EXPORT_ATTEMPTS = 100;
-var dossierExportName = (nowMs, attempt = 0) => artifactName("dossier", nowMs, attempt);
-function exportLoopDossier(goal, nowMs, dir) {
-  const content = buildLoopDossier(goal, nowMs);
-  const targetDir = resolve(dir);
-  const bytes = Buffer.byteLength(content, "utf8");
-  for (let attempt = 0;attempt < MAX_EXPORT_ATTEMPTS; attempt++) {
-    const path = join(targetDir, dossierExportName(nowMs, attempt));
-    try {
-      writeFileSync(path, content, { encoding: "utf8", flag: "wx" });
-      return { path, bytes, attempts: attempt + 1 };
-    } catch (error) {
-      const code = error?.code;
-      if (code === "EEXIST")
-        continue;
-      throw error;
-    }
-  }
-  throw new Error(`no free dossier filename after ${MAX_EXPORT_ATTEMPTS} attempts in ${targetDir}`);
-}
-
-// src/core/verify-record.ts
-import { execFileSync } from "child_process";
-
-// src/core/record-attestation.ts
-function recordShaMentions(goal) {
-  const mentions = [];
-  const index = new Map;
-  for (const entry of goal.loopHistory ?? []) {
-    const sha = typeof entry.sha === "string" ? entry.sha.trim() : "";
-    if (!sha)
-      continue;
-    const at = index.get(sha);
-    if (at !== undefined) {
-      mentions[at].iterations.push(entry.version);
-      continue;
-    }
-    index.set(sha, mentions.length);
-    mentions.push({ sha, iterations: [entry.version] });
-  }
-  return mentions;
-}
-function sweepRecordMentions(goal, probe, positive, negative) {
-  const checks = recordShaMentions(goal).map((m) => {
-    let answer;
-    try {
-      answer = probe(m.sha);
-    } catch {
-      answer = "unknown";
-    }
-    const status = answer === true ? positive : answer === false ? negative : "unknown";
-    return { sha: m.sha, shortSha: shortSha(m.sha), iterations: m.iterations, status };
-  });
-  let positiveCount = 0;
-  let negativeCount = 0;
-  let unknown = 0;
-  let mentions = 0;
-  for (const check of checks) {
-    if (check.status === positive)
-      positiveCount += 1;
-    else if (check.status === negative)
-      negativeCount += 1;
-    else
-      unknown += 1;
-    mentions += check.iterations.length;
-  }
-  return { checks, unique: checks.length, mentions, positive: positiveCount, negative: negativeCount, unknown };
-}
-function renderRecordReport(goal, input, format, nowMs, directory) {
-  const stamp = stampOf(nowMs);
-  const conditionCell = conditionCellOf(goal.condition);
-  const statusCell = (status) => recordStatusCell(status, format.positive, format.negative);
-  const lines = [
-    format.title,
-    "",
-    `- Generated: ${stamp}`,
-    `- Repository: ${directory}`,
-    `- Condition: ${conditionCell}`,
-    `- Shas quoted by the record: ${input.unique} unique across ${input.mentions} mention${input.mentions === 1 ? "" : "s"}`,
-    "",
-    `| sha | quoted at | ${format.columnHeader} |`,
-    "| --- | --- | --- |"
-  ];
-  for (const check of input.checks) {
-    lines.push(`| ${check.shortSha} | ${iterationList(check.iterations)} | ${statusCell(check.status)} |`);
-  }
-  if (input.checks.length === 0)
-    lines.push("| \u2014 | \u2014 | \u2014 |");
-  lines.push("", format.countsLine, "", format.footer, "");
-  return lines.join(`
-`);
-}
-function recordSummaryLine(counts, format) {
-  if (counts.unique === 0)
-    return format.none;
-  if (counts.negative === 0 && counts.unknown === 0)
-    return format.success(counts);
-  if (counts.negative > 0)
-    return format.failure(counts);
-  return format.unknown(counts);
-}
-function recordAckSegment(counts, ascii, format) {
-  const ok = ascii ? "+" : "\u2713";
-  const bad = ascii ? "-" : "\u2717";
-  if (counts.unique === 0)
-    return ascii ? format.noneAscii : format.noneUnicode;
-  if (counts.negative > 0)
-    return ` (${bad} ${counts.negative} of ${counts.unique} ${format.negative})`;
-  if (counts.unknown > 0)
-    return ` (! ${counts.unknown} of ${counts.unique} ${format.unknown})`;
-  return ` (${ok} ${counts.positive}/${counts.unique} ${format.positive})`;
-}
-function recordCellHelpers() {
-  const cell = (status, positive, negative) => recordStatusCell(status, positive, negative);
-  return {
-    verifyCell: (status) => cell(status, "present", "missing"),
-    reachCell: (status) => cell(status, "ancestor", "unreached"),
-    signCell: (status) => cell(status, "verified", "unverified")
-  };
-}
-
-// src/core/verify-record.ts
-var GIT_TIMEOUT_MS = 1e4;
-function gitCatFileProbe(cwd) {
-  return (sha) => {
-    try {
-      execFileSync("git", ["-C", cwd, "cat-file", "-e", sha], { stdio: "ignore", timeout: GIT_TIMEOUT_MS });
-      return true;
-    } catch (error) {
-      const status = error?.status;
-      if (typeof status === "number")
-        return false;
-      return "unknown";
-    }
-  };
-}
-function verifyRecord(goal, probe) {
-  const swept = sweepRecordMentions(goal, probe, "present", "missing");
-  return {
-    checks: swept.checks,
-    unique: swept.unique,
-    mentions: swept.mentions,
-    present: swept.positive,
-    missing: swept.negative,
-    unknown: swept.unknown
-  };
-}
-function verifyReportMarkdown(goal, verification, nowMs, directory) {
-  return renderRecordReport(goal, verification, {
-    title: "# /goal-loop record verification",
-    columnHeader: "resolves",
-    countsLine: `- Present: ${verification.present} \xB7 missing: ${verification.missing} \xB7 unknown: ${verification.unknown}`,
-    footer: "Existence is not ancestry: a sha that resolves here may still belong to a rewritten history elsewhere. A sha that does not resolve is an unresolvable receipt, not proof of misconduct \u2014 the record says what HEAD was, this report says what the repository still holds. Unknown means git could not answer (no binary, not a repository, timed out) \u2014 never counted as missing. Existence is checked at the directory named above, at generation time, and says nothing about the working tree's cleanliness.",
-    positive: "present",
-    negative: "missing"
-  }, nowMs, directory);
-}
-function verifySummaryLine(verification) {
-  return recordSummaryLine({
-    unique: verification.unique,
-    positive: verification.present,
-    negative: verification.missing,
-    unknown: verification.unknown
-  }, {
-    none: "record quotes no shas to verify",
-    success: (v) => `record verifies: ${v.positive} of ${v.unique} shas resolve`,
-    failure: (v) => `record does not verify: ${v.negative} of ${v.unique} shas unresolvable`,
-    unknown: (v) => `record unverifiable: ${v.unknown} of ${v.unique} shas could not be checked`
-  });
-}
-function verifyAckSegment(verification, ascii) {
-  return recordAckSegment({
-    unique: verification.unique,
-    positive: verification.present,
-    negative: verification.missing,
-    unknown: verification.unknown
-  }, ascii, {
-    noneAscii: " (no shas)",
-    noneUnicode: " (no shas to verify)",
-    negative: "unresolvable",
-    unknown: "unknown",
-    positive: "resolve"
-  });
-}
-
-// src/core/reach-record.ts
-import { execFileSync as execFileSync2 } from "child_process";
-var REACH_TIMEOUT_MS = 1e4;
-function gitAncestorProbe(cwd) {
-  return (sha) => {
-    try {
-      execFileSync2("git", ["-C", cwd, "merge-base", "--is-ancestor", sha, "HEAD"], { stdio: "ignore", timeout: REACH_TIMEOUT_MS });
-      return true;
-    } catch (error) {
-      const status = error?.status;
-      if (status === 0)
-        return true;
-      if (status === 1)
-        return false;
-      return "unknown";
-    }
-  };
-}
-function reachRecord(goal, probe) {
-  const swept = sweepRecordMentions(goal, probe, "ancestor", "unreached");
-  return {
-    checks: swept.checks,
-    unique: swept.unique,
-    mentions: swept.mentions,
-    ancestors: swept.positive,
-    unreached: swept.negative,
-    unknown: swept.unknown
-  };
-}
-function reachReportMarkdown(goal, reach, nowMs, directory) {
-  return renderRecordReport(goal, reach, {
-    title: "# /goal-loop record ancestry",
-    columnHeader: "on this line",
-    countsLine: `- On this line (ancestor of HEAD): ${reach.ancestors} \xB7 not on this line: ${reach.unreached} \xB7 unknown: ${reach.unknown}`,
-    footer: "Not on this line is not misconduct: the sha may live on another branch, may have been rebased away, or this record may predate the merge that carried it. Existence is not ancestry, and ancestry is not content \u2014 a sha that belongs to this history may still carry a tree you have not read, and a sha that resolves here may still belong elsewhere. This report asks one question, per sha, of the repository at the directory named above, at generation time, and says nothing about which ref the work landed on, signatures, the working tree's cleanliness, or the content of any commit. Unknown means git could not answer (no binary, not a repository, unparseable sha, timed out) \u2014 never counted as \u201Cno\u201D.",
-    positive: "ancestor",
-    negative: "unreached"
-  }, nowMs, directory);
-}
-function reachSummaryLine(reach) {
-  return recordSummaryLine({
-    unique: reach.unique,
-    positive: reach.ancestors,
-    negative: reach.unreached,
-    unknown: reach.unknown
-  }, {
-    none: "record quotes no shas to place on this line",
-    success: (v) => `record reaches HEAD: ${v.positive} of ${v.unique} shas on this line`,
-    failure: (v) => `record does not reach HEAD: ${v.negative} of ${v.unique} shas not on this line`,
-    unknown: (v) => `record unverifiable: ${v.unknown} of ${v.unique} shas could not be placed`
-  });
-}
-function reachAckSegment(reach, ascii) {
-  return recordAckSegment({
-    unique: reach.unique,
-    positive: reach.ancestors,
-    negative: reach.unreached,
-    unknown: reach.unknown
-  }, ascii, {
-    noneAscii: " (no shas)",
-    noneUnicode: " (no shas to place)",
-    negative: "not on this line",
-    unknown: "unknown",
-    positive: "on this line"
-  });
-}
-
-// src/core/sign-record.ts
-import { execFileSync as execFileSync3 } from "child_process";
-var SIGN_TIMEOUT_MS = 1e4;
-function gitSignProbe(cwd) {
-  return (sha) => {
-    try {
-      execFileSync3("git", ["-C", cwd, "cat-file", "-e", sha], { stdio: "ignore", timeout: SIGN_TIMEOUT_MS });
-    } catch {
-      return "unknown";
-    }
-    try {
-      execFileSync3("git", ["-C", cwd, "verify-commit", sha], { stdio: "ignore", timeout: SIGN_TIMEOUT_MS });
-      return true;
-    } catch (error) {
-      const status = error?.status;
-      return typeof status === "number" ? false : "unknown";
-    }
-  };
-}
-function signRecord(goal, probe) {
-  const swept = sweepRecordMentions(goal, probe, "verified", "unverified");
-  return {
-    checks: swept.checks,
-    unique: swept.unique,
-    mentions: swept.mentions,
-    verified: swept.positive,
-    unverified: swept.negative,
-    unknown: swept.unknown
-  };
-}
-function signReportMarkdown(goal, sign, nowMs, directory) {
-  return renderRecordReport(goal, sign, {
-    title: "# /goal-loop record signatures",
-    columnHeader: "under seal",
-    countsLine: `- Under seal (git verified): ${sign.verified} \xB7 not under seal: ${sign.unverified} \xB7 unknown: ${sign.unknown}`,
-    footer: "A signature attests integrity only as strongly as the key and the trust configured at the probed directory \u2014 git decides by its own rules. `verified` means git's configured rules accepted the commit's signature, nothing more, nothing less. Anything else \u2014 an unsigned commit, an expired or untrusted key, a bad signature \u2014 is `not under seal`, never proof of forgery; most commits are unsigned, and git's thresholds differ across machines and time. An unresolvable object has no signature to judge and reads `unknown`, never `not under seal`. Unknown means git could not answer (no binary, not a repository, unparseable sha, timed out) \u2014 never counted as \u201Cno\u201D. Existence is not ancestry, ancestry is not content, content is not intent \u2014 the EC and ED reports are the other halves, and none substitutes for another. This report asks one question, per sha, of the repository at the directory named above, at generation time \u2014 it says nothing about the key's origin, the author's intent, the commit's content, or the working tree's cleanliness.",
-    positive: "verified",
-    negative: "unverified"
-  }, nowMs, directory);
-}
-function signSummaryLine(sign) {
-  return recordSummaryLine({
-    unique: sign.unique,
-    positive: sign.verified,
-    negative: sign.unverified,
-    unknown: sign.unknown
-  }, {
-    none: "record quotes no shas to attest",
-    success: (v) => `record under seal: ${v.positive} of ${v.unique} shas verify`,
-    failure: (v) => `record not under seal: ${v.negative} of ${v.unique} shas do not verify`,
-    unknown: (v) => `record unverifiable: ${v.unknown} of ${v.unique} shas could not be attested`
-  });
-}
-function signAckSegment(sign, ascii) {
-  return recordAckSegment({
-    unique: sign.unique,
-    positive: sign.verified,
-    negative: sign.unverified,
-    unknown: sign.unknown
-  }, ascii, {
-    noneAscii: " (no shas)",
-    noneUnicode: " (no shas to attest)",
-    negative: "unsigned",
-    unknown: "unknown",
-    positive: "signed"
-  });
-}
-
-// src/core/dossier-seal.ts
-import { writeFileSync as writeFileSync2 } from "fs";
-import { join as join2, resolve as resolve2 } from "path";
-var sealedDossierName = (nowMs, attempt = 0) => artifactName("dossier-sealed", nowMs, attempt);
-var { verifyCell: verifyCell2, reachCell, signCell } = recordCellHelpers();
-var cleanShaCount = (verification, reach, sign) => {
-  const reachStatus = new Map(reach.checks.map((c) => [c.sha, c.status]));
-  const signStatus = new Map(sign.checks.map((c) => [c.sha, c.status]));
-  let clean = 0;
-  for (const check of verification.checks) {
-    if (check.status === "present" && reachStatus.get(check.sha) === "ancestor" && signStatus.get(check.sha) === "verified") {
-      clean += 1;
-    }
-  }
-  return clean;
-};
-function attestationAppendix(_goal, verification, reach, sign, nowMs, directory) {
-  const stamp = stampOf(nowMs);
-  const lines = [
-    "## Attestation (freshly probed at seal time)",
-    "",
-    `_The bookkeeping above is the record's own and was not re-verified; it renders what the record holds, nothing more. The shas the record quotes were re-probed here, fresh, against \`${directory}\`, at ${stamp}: existence (the object store), ancestry (this line), and the seal (git's signature check). \`unknown\` means git could not answer and is never counted as a pass or a fail. No question substitutes for another._`,
-    ""
-  ];
-  const droppedLoop = _goal.loopHistoryDropped ?? 0;
-  const droppedVerdicts = _goal.historyDropped ?? 0;
-  if (droppedLoop > 0 || droppedVerdicts > 0) {
-    const bits = [];
-    if (droppedLoop > 0)
-      bits.push(`${droppedLoop} earlier iteration record${droppedLoop === 1 ? "" : "s"}`);
-    if (droppedVerdicts > 0)
-      bits.push(`${droppedVerdicts} earlier verdict${droppedVerdicts === 1 ? "" : "s"}`);
-    lines.push(`_${bits.join(" and ")} dropped by the retention caps; the shas they quoted are not re-probed here and are never implied held._`, "");
-  }
-  if (verification.unique === 0) {
-    lines.push("The record quotes no sha \u2014 there is nothing to seal. An unshaded record cannot be re-probed, and none is claimed.", "");
-    return lines;
-  }
-  const reachStatus = new Map(reach.checks.map((c) => [c.sha, c.status]));
-  const signStatus = new Map(sign.checks.map((c) => [c.sha, c.status]));
-  lines.push("| sha | iterations | exists | on this line | under seal |", "| --- | --- | --- | --- | --- |");
-  for (const check of verification.checks) {
-    lines.push(`| ${check.shortSha} | ${iterationList(check.iterations)} | ${verifyCell2(check.status)} | ${reachCell(reachStatus.get(check.sha) ?? "unknown")} | ${signCell(signStatus.get(check.sha) ?? "unknown")} |`);
-  }
-  const clean = cleanShaCount(verification, reach, sign);
-  lines.push("", `- Existence: ${verification.present} of ${verification.unique} shas resolve (${verification.unknown} unknown \u2014 never counted as present)`, `- Ancestry: ${reach.ancestors} of ${reach.unique} shas on this line (${reach.unknown} unknown)`, `- Seal: ${sign.verified} of ${sign.unique} shas under seal (${sign.unverified} not under seal \u2014 not an accusation; ${sign.unknown} unknown)`, `- All three: ${clean} of ${verification.unique} shas clean (present \xB7 on this line \xB7 under seal)`, "", "A clean row is the strongest thing this appendix can say: the object resolves, it belongs to this line, and git verified a signature on it at seal time. Anything short of that is not an accusation \u2014 existence is not ancestry, ancestry is not the seal, and most commits are unsigned. The loop that produced this record may be running right now; this file is a snapshot of its receipts at the moment it was written, and the stamp above travels with it.", "");
-  return lines;
-}
-function sealRecord(goal, directory, nowMs, probes = {}) {
-  const verifyProbe = probes.verify ?? gitCatFileProbe(directory);
-  const reachProbe = probes.reach ?? gitAncestorProbe(directory);
-  const signProbe = probes.sign ?? gitSignProbe(directory);
-  const verification = verifyRecord(goal, verifyProbe);
-  const reach = reachRecord(goal, reachProbe);
-  const sign = signRecord(goal, signProbe);
-  const clean = cleanShaCount(verification, reach, sign);
-  const base = buildLoopDossier(goal, nowMs);
-  const appendix = attestationAppendix(goal, verification, reach, sign, nowMs, directory);
-  const markdown = `${base}
-
-${appendix.join(`
-`)}`;
-  return { markdown, verification, reach, sign, unique: verification.unique, clean };
-}
-function exportSealedDossier(goal, nowMs, dir, probes = {}) {
-  const targetDir = resolve2(dir);
-  const seal = sealRecord(goal, targetDir, nowMs, probes);
-  const bytes = Buffer.byteLength(seal.markdown, "utf8");
-  for (let attempt = 0;attempt < MAX_EXPORT_ATTEMPTS; attempt++) {
-    const path = join2(targetDir, sealedDossierName(nowMs, attempt));
-    try {
-      writeFileSync2(path, seal.markdown, { encoding: "utf8", flag: "wx" });
-      return {
-        path,
-        bytes,
-        attempts: attempt + 1,
-        unique: seal.unique,
-        clean: seal.clean,
-        verification: seal.verification,
-        reach: seal.reach,
-        sign: seal.sign
-      };
-    } catch (error) {
-      const code = error?.code;
-      if (code === "EEXIST")
-        continue;
-      throw error;
-    }
-  }
-  throw new Error(`no free sealed-dossier filename after ${MAX_EXPORT_ATTEMPTS} attempts in ${targetDir}`);
-}
-function sealSummaryLine(seal) {
-  if (seal.unique === 0)
-    return "record quotes no shas to seal";
-  const hard = seal.verification.missing + seal.reach.unreached + seal.sign.unverified;
-  const unknown = seal.verification.unknown + seal.reach.unknown + seal.sign.unknown;
-  if (hard === 0 && unknown === 0)
-    return `record sealed: ${seal.clean} of ${seal.unique} shas pass all three checks`;
-  if (hard > 0)
-    return `record sealed with gaps: ${seal.clean} of ${seal.unique} shas pass all three checks`;
-  return `record sealed, unverifiable: ${unknown} of ${3 * seal.unique} checks could not answer`;
-}
-function sealAckSegment(seal, ascii) {
-  const ok = ascii ? "+" : "\u2713";
-  const bad = ascii ? "-" : "\u2717";
-  if (seal.unique === 0)
-    return ascii ? " (no shas)" : " (no shas to seal)";
-  const hard = seal.verification.missing + seal.reach.unreached + seal.sign.unverified;
-  if (hard > 0)
-    return ` (${bad} ${seal.clean} of ${seal.unique} sealed)`;
-  if (seal.clean < seal.unique)
-    return ` (! ${seal.clean} of ${seal.unique} sealed)`;
-  return ` (${ok} ${seal.clean}/${seal.unique} sealed)`;
-}
-
-// src/core/dossier-review.ts
-import { writeFileSync as writeFileSync3 } from "fs";
-import { join as join3, resolve as resolve3 } from "path";
-var reviewName = (nowMs, attempt = 0) => artifactName("dossier-review", nowMs, attempt);
-var { verifyCell: verifyCell3, reachCell: reachCell2, signCell: signCell2 } = recordCellHelpers();
-var reviewVerdict = (exists, onThisLine, underSeal) => {
-  if (exists === "no" || onThisLine === "no" || underSeal === "no")
-    return "gaps";
-  if (exists === "yes" && onThisLine === "yes" && underSeal === "yes")
-    return "clean";
-  return "unknown";
-};
-function buildReview(goal, directory, nowMs, probes = {}) {
-  const verifyProbe = probes.verify ?? gitCatFileProbe(directory);
-  const reachProbe = probes.reach ?? gitAncestorProbe(directory);
-  const signProbe = probes.sign ?? gitSignProbe(directory);
-  const verification = verifyRecord(goal, verifyProbe);
-  const reach = reachRecord(goal, reachProbe);
-  const sign = signRecord(goal, signProbe);
-  const base = buildLoopDossier(goal, nowMs);
-  const stamp = stampOf(nowMs);
-  const reachBySha = new Map(reach.checks.map((check) => [check.sha, check.status]));
-  const signBySha = new Map(sign.checks.map((check) => [check.sha, check.status]));
-  const rows = verification.checks.map((check) => {
-    const exists = verifyCell3(check.status);
-    const onThisLine = reachCell2(reachBySha.get(check.sha) ?? "unknown");
-    const underSeal = signCell2(signBySha.get(check.sha) ?? "unknown");
-    return {
-      sha: check.sha,
-      shortSha: shortSha(check.sha),
-      iterations: check.iterations,
-      exists,
-      onThisLine,
-      underSeal,
-      verdict: reviewVerdict(exists, onThisLine, underSeal)
-    };
-  });
-  const clean = rows.filter((row) => row.verdict === "clean").length;
-  const gaps = rows.filter((row) => row.verdict === "gaps").length;
-  const unknown = rows.filter((row) => row.verdict === "unknown").length;
-  const appendix = [
-    "## Review (freshly probed at generation time)",
-    "",
-    `_The bookkeeping above is the record's own and was not re-verified; it renders what the record holds, nothing more. The shas the record quotes were re-probed here, fresh, against \`${directory}\`, at ${stamp}: existence (the object store), ancestry (this line), and the seal (git's signature check). A verdict of \`clean\` requires a yes on all three; any \`no\` makes the row \`gaps\`; a row with no \`no\` but at least one question git could not answer is \`unknown\` \u2014 never collapsed into either. Existence is not ancestry, ancestry is not the seal; no question substitutes for another._`,
-    ""
-  ];
-  if (verification.unique === 0) {
-    appendix.push("The record quotes no sha \u2014 there is nothing to review. An unshaded record cannot be re-probed, and none is claimed.", "");
-  } else {
-    appendix.push("| sha | quoted at | exists | on this line | under seal | verdict |", "| --- | --- | --- | --- | --- | --- |");
-    for (const row of rows) {
-      appendix.push(`| ${row.shortSha} | ${iterationList(row.iterations)} | ${row.exists} | ${row.onThisLine} | ${row.underSeal} | ${row.verdict} |`);
-    }
-    appendix.push("", `- Existence: ${verification.present} of ${verification.unique} shas resolve (${verification.unknown} unknown \u2014 never counted as present)`, `- Ancestry: ${reach.ancestors} of ${reach.unique} shas on this line (${reach.unknown} unknown)`, `- Seal: ${sign.verified} of ${sign.unique} shas under seal (${sign.unverified} not under seal \u2014 not an accusation; ${sign.unknown} unknown)`, `- All three: ${clean} of ${verification.unique} shas clean (present \xB7 on this line \xB7 under seal) \xB7 ${gaps} with gaps \xB7 ${unknown} unverifiable`, "", "A clean row is the strongest thing this review can say: the object resolves, it belongs to this line, and git verified a signature on it at generation time. Anything short of that is not an accusation \u2014 existence is not ancestry, ancestry is not the seal, and most commits are unsigned. This file is a snapshot of the record's receipts at the moment it was written, and the stamp above travels with it. For a re-check weeks later, `goal.dossier.attest` answers whether what a sealed copy attests still holds.", "");
-  }
-  const markdown = `${base}
-
-${appendix.join(`
-`)}`;
-  return { markdown, verification, reach, sign, unique: verification.unique, clean, gaps, unknown };
-}
-function exportReview(goal, nowMs, dir, probes = {}) {
-  const targetDir = resolve3(dir);
-  const review = buildReview(goal, targetDir, nowMs, probes);
-  const bytes = Buffer.byteLength(review.markdown, "utf8");
-  for (let attempt = 0;attempt < MAX_EXPORT_ATTEMPTS; attempt++) {
-    const path = join3(targetDir, reviewName(nowMs, attempt));
-    try {
-      writeFileSync3(path, review.markdown, { encoding: "utf8", flag: "wx" });
-      return {
-        path,
-        bytes,
-        attempts: attempt + 1,
-        unique: review.unique,
-        clean: review.clean,
-        gaps: review.gaps,
-        unknown: review.unknown,
-        verification: review.verification,
-        reach: review.reach,
-        sign: review.sign
-      };
-    } catch (error) {
-      const code = error?.code;
-      if (code === "EEXIST")
-        continue;
-      throw error;
-    }
-  }
-  throw new Error(`no free review filename after ${MAX_EXPORT_ATTEMPTS} attempts in ${targetDir}`);
-}
-function reviewSummaryLine(review) {
-  if (review.unique === 0)
-    return "record quotes no shas to review";
-  if (review.gaps > 0)
-    return `review written with gaps: ${review.clean} of ${review.unique} shas clean on all three questions`;
-  if (review.unknown > 0)
-    return `review unverifiable: ${review.clean} of ${review.unique} shas clean, ${review.unknown} could not answer`;
-  return `review written: ${review.clean} of ${review.unique} shas clean on all three questions`;
-}
-
-// src/core/spend-ledger.ts
-import { writeFileSync as writeFileSync4 } from "fs";
-import { join as join4, resolve as resolve4 } from "path";
-var spendLedgerName = (nowMs, attempt = 0) => artifactName("spend-ledger", nowMs, attempt);
-var measuredSpend = (entry) => {
-  const spend = entry.spend;
-  if (!spend)
-    return;
-  const fields = [spend.cost, spend.input, spend.output, spend.reasoning, spend.cacheRead, spend.cacheWrite];
-  if (!fields.every((n) => Number.isFinite(n) && n >= 0))
-    return;
-  return spend;
-};
-var count = (n) => n !== undefined && Number.isFinite(n) ? String(Math.round(n)) : GAP;
-var costCell = (spend) => spend ? formatCost(spend.cost) : GAP;
-var toolsCell = (entry) => Number.isFinite(entry.toolCalls) ? String(entry.toolCalls) : GAP;
-var totalsOf = (entries) => {
-  let measured = 0;
-  let turns = 0;
-  let tools = 0;
-  let cost = 0;
-  let input = 0;
-  let output = 0;
-  let reasoning = 0;
-  let cacheRead = 0;
-  let cacheWrite = 0;
-  for (const entry of entries) {
-    turns += Number.isFinite(entry.turns) ? entry.turns : 0;
-    tools += Number.isFinite(entry.toolCalls) ? entry.toolCalls : 0;
-    const spend = measuredSpend(entry);
-    if (!spend)
-      continue;
-    measured += 1;
-    cost += spend.cost;
-    input += spend.input;
-    output += spend.output;
-    reasoning += spend.reasoning;
-    cacheRead += spend.cacheRead;
-    cacheWrite += spend.cacheWrite;
-  }
-  if (measured === 0)
-    return { iterations: entries.length, measured, turns, tools };
-  return { iterations: entries.length, measured, turns, tools, cost, input, output, reasoning, cacheRead, cacheWrite };
-};
-function buildSpendLedger(goal, nowMs) {
-  const entries = goal.loopHistory ?? [];
-  const dropped = goal.loopHistoryDropped ?? 0;
-  const isLoop = Boolean(goal.loopEnabled);
-  const totals = totalsOf(entries);
-  const stamp = isoOf(nowMs);
-  const lines = [];
-  lines.push(isLoop ? "# Goal loop spend ledger" : "# Goal spend ledger");
-  lines.push("");
-  lines.push(`_Generated ${stamp} from the goal-loop plugin's record. Every figure below is the record's own measurement \u2014 the usage delta the harness attributed to each landed iteration (arm \u2192 advance). A measurement the record does not carry renders as ${GAP}, never estimated. The session id is omitted on purpose._`);
-  lines.push("");
-  lines.push(isLoop ? "## Objective" : "## Condition");
-  lines.push("");
-  lines.push(...quote(isLoop ? goal.loopObjective ?? goal.condition : goal.condition));
-  lines.push("");
-  lines.push(dropped > 0 ? `## Per-iteration spend (${entries.length} most recent of ${entries.length + dropped} landed iterations)` : `## Per-iteration spend (${entries.length} landed iteration${entries.length === 1 ? "" : "s"})`);
-  if (dropped > 0)
-    lines.push(`_${dropped} earlier iteration record${dropped === 1 ? "" : "s"} dropped by the loop-history retention cap (${MAX_LOOP_HISTORY_ENTRIES} kept); the rows and totals below cover the retained iterations only \u2014 the dropped ones are not $0.00, they are unknown._`);
-  lines.push("");
-  if (entries.length === 0) {
-    lines.push("None \u2014 this record has not landed an iteration, so there is nothing to attribute. No figures are claimed.");
-    lines.push("");
-  } else {
-    lines.push("| iteration | ended | spend | in | out | reasoning | cache read | cache write | tools | sha |", "| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |");
-    for (const entry of entries) {
-      const spend = measuredSpend(entry);
-      lines.push(`| v${entry.version} | ${isoOf(entry.endedAt)} | ${costCell(spend)} | ${count(spend?.input)} | ${count(spend?.output)} | ${count(spend?.reasoning)} | ${count(spend?.cacheRead)} | ${count(spend?.cacheWrite)} | ${toolsCell(entry)} | ${shortSha(entry.sha)} |`);
-    }
-    lines.push("");
-  }
-  lines.push("## Totals");
-  lines.push("");
-  lines.push(`- Iterations recorded: ${totals.iterations}${dropped > 0 ? ` (+ ${dropped} dropped by the retention cap; totals cover the retained iterations only)` : ""}`);
-  lines.push(`- Turns: ${totals.turns} \xB7 Tool calls: ${totals.tools}`);
-  if (totals.measured === 0) {
-    lines.push("- Spend across iterations: no iteration carried a measurement");
-    lines.push(`- In tokens: ${GAP} \xB7 Out tokens: ${GAP} \xB7 Reasoning tokens: ${GAP}`);
-    lines.push(`- Cache read: ${GAP} \xB7 Cache write: ${GAP}`);
-  } else {
-    const partial = totals.measured < totals.iterations ? ` (${totals.measured} of ${totals.iterations} iterations measured \u2014 the unmeasured iterations are not $0.00; they are unknown)` : "";
-    lines.push(`- Spend across measured iterations: ${formatCost(totals.cost ?? 0)}${partial}`);
-    lines.push(`- In tokens: ${count(totals.input)} \xB7 Out tokens: ${count(totals.output)} \xB7 Reasoning tokens: ${count(totals.reasoning)}`);
-    lines.push(`- Cache read: ${count(totals.cacheRead)} \xB7 Cache write: ${count(totals.cacheWrite)}`);
-    if (totals.measured < totals.iterations) {
-      lines.push(`- Token totals sum the ${totals.measured} measured iterations only; adding the ${totals.iterations - totals.measured} unmeasured ones would be inventing numbers.`);
-    }
-  }
-  lines.push("");
-  lines.push("---");
-  lines.push("_goal-loop spend ledger \xB7 source: plugin record \xB7 the figures are the record's own measurements; cost is the host's reported usage delta, not a re-price; nothing was estimated, sampled, probed, or re-verified; an iteration counts as measured only when its full usage snapshot is present and finite; a measurement the record does not carry renders as " + GAP + "._");
-  return {
-    markdown: lines.join(`
-`),
-    iterations: totals.iterations,
-    measured: totals.measured,
-    ...totals.cost !== undefined ? { spendTotal: totals.cost } : {}
-  };
-}
-function exportSpendLedger(goal, nowMs, dir) {
-  const targetDir = resolve4(dir);
-  const ledger = buildSpendLedger(goal, nowMs);
-  const bytes = Buffer.byteLength(ledger.markdown, "utf8");
-  for (let attempt = 0;attempt < MAX_EXPORT_ATTEMPTS; attempt++) {
-    const path = join4(targetDir, spendLedgerName(nowMs, attempt));
-    try {
-      writeFileSync4(path, ledger.markdown, { encoding: "utf8", flag: "wx" });
-      return {
-        path,
-        bytes,
-        attempts: attempt + 1,
-        iterations: ledger.iterations,
-        measured: ledger.measured,
-        ...ledger.spendTotal !== undefined ? { spendTotal: ledger.spendTotal } : {}
-      };
-    } catch (error) {
-      const code = error?.code;
-      if (code === "EEXIST")
-        continue;
-      throw error;
-    }
-  }
-  throw new Error(`no free spend ledger filename after ${MAX_EXPORT_ATTEMPTS} attempts in ${targetDir}`);
-}
-function spendSummaryLine(result) {
-  if (result.iterations === 0)
-    return "no landed iterations to report";
-  if (result.measured === 0)
-    return `spend ledger written: no iteration carried a measurement (0 of ${result.iterations})`;
-  const spend = formatCost(result.spendTotal ?? 0);
-  if (result.measured < result.iterations)
-    return `spend ledger written: ${spend} across ${result.measured} of ${result.iterations} measured iterations`;
-  return `spend ledger written: ${spend} across ${result.iterations} iteration${result.iterations === 1 ? "" : "s"}`;
-}
-
-// src/core/dossier-index.ts
-import { createHash } from "crypto";
-import { readdirSync, readFileSync, writeFileSync as writeFileSync5 } from "fs";
-import { join as join5, resolve as resolve5 } from "path";
-
 // src/core/errors.ts
 function formatValue(value) {
   if (typeof value === "bigint")
@@ -1765,311 +1084,6 @@ function errorMessage(error) {
     return String(error.message);
   return String(error);
 }
-
-// src/core/dossier-index.ts
-var dossierIndexName = (nowMs, attempt = 0) => artifactName("dossier-index", nowMs, attempt);
-var STAMP = String.raw`\d{8}-\d{6}(?:-[1-9]\d*)?`;
-var KIND_PATTERNS = [
-  ["dossier", new RegExp(`^goal-dossier-${STAMP}\\.md$`)],
-  ["review", new RegExp(`^goal-dossier-review-${STAMP}\\.md$`)],
-  ["sealed", new RegExp(`^goal-dossier-sealed-${STAMP}\\.md$`)],
-  ["spend ledger", new RegExp(`^goal-spend-ledger-${STAMP}\\.md$`)],
-  ["index", new RegExp(`^goal-dossier-index-${STAMP}\\.md$`)]
-];
-var dossierArtifactKind = (name) => {
-  for (const [kind, pattern] of KIND_PATTERNS) {
-    if (pattern.test(name))
-      return kind;
-  }
-  return;
-};
-function scanDossierArtifacts(dir) {
-  const targetDir = resolve5(dir);
-  const candidates = [];
-  for (const item of readdirSync(targetDir, { withFileTypes: true })) {
-    if (!item.isFile())
-      continue;
-    if (dossierArtifactKind(item.name) === undefined)
-      continue;
-    candidates.push(item.name);
-  }
-  const entries = [];
-  let skipped = 0;
-  for (const name of candidates) {
-    const kind = dossierArtifactKind(name);
-    try {
-      const bytes = readFileSync(join5(targetDir, name));
-      entries.push({ name, kind, bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") });
-    } catch {
-      skipped += 1;
-    }
-  }
-  entries.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
-  return { entries, skipped };
-}
-function buildDossierIndex(entries, nowMs, skipped = 0) {
-  if (!Number.isInteger(skipped) || skipped < 0)
-    throw new Error(`skipped must be a non-negative integer, got ${formatValue(skipped)}`);
-  const stamp = isoOf(nowMs);
-  const totalBytes = entries.reduce((sum, entry) => sum + entry.bytes, 0);
-  const lines = [];
-  lines.push("# Goal dossier index");
-  lines.push("");
-  lines.push(`_Generated ${stamp}. Every row below is a file the dossier family exported into the directory this index was written from, read at generation time: file name, kind, bytes (UTF-8), sha256 of the exact bytes read. The directory path is omitted on purpose. This index inventories; it does not verify \u2014 a file can change after generation and a matching digest here proves nothing about the present._`);
-  lines.push("");
-  lines.push(`## Artifacts (${entries.length} file${entries.length === 1 ? "" : "s"}, ${totalBytes} bytes)`);
-  lines.push("");
-  if (entries.length === 0) {
-    lines.push("None \u2014 the directory holds no exported dossier artifacts the dossier family recognizes. No rows are claimed.");
-    lines.push("");
-  } else {
-    lines.push("| file | kind | bytes | sha256 |", "| --- | --- | ---: | --- |");
-    for (const entry of entries) {
-      lines.push(`| ${inlineCode(entry.name)} | ${entry.kind} | ${entry.bytes} | ${entry.sha256} |`);
-    }
-    lines.push("");
-  }
-  if (skipped > 0) {
-    lines.push(`- ${skipped} matching file${skipped === 1 ? "" : "s"} could not be read (I/O error) and ${skipped === 1 ? "is" : "are"} not listed above; ${skipped === 1 ? "its" : "their"} bytes and digests are unknown, not zero.`);
-    lines.push("");
-  }
-  lines.push("---");
-  lines.push("_goal-loop dossier index \xB7 source: the files at generation time \xB7 sha256 computed over the exact bytes read \xB7 nothing was estimated or inferred; an unreadable file is counted, never guessed \xB7 this index inventories, it does not verify._");
-  return {
-    markdown: lines.join(`
-`),
-    artifacts: entries.length,
-    bytes: totalBytes,
-    skipped
-  };
-}
-function exportDossierIndex(nowMs, dir) {
-  const targetDir = resolve5(dir);
-  const scan = scanDossierArtifacts(targetDir);
-  const built = buildDossierIndex(scan.entries, nowMs, scan.skipped);
-  const bytes = Buffer.byteLength(built.markdown, "utf8");
-  for (let attempt = 0;attempt < MAX_EXPORT_ATTEMPTS; attempt++) {
-    const path = join5(targetDir, dossierIndexName(nowMs, attempt));
-    try {
-      writeFileSync5(path, built.markdown, { encoding: "utf8", flag: "wx" });
-      return {
-        path,
-        bytes,
-        attempts: attempt + 1,
-        artifacts: built.artifacts,
-        artifactBytes: built.bytes,
-        skipped: built.skipped
-      };
-    } catch (error) {
-      const code = error?.code;
-      if (code === "EEXIST")
-        continue;
-      throw error;
-    }
-  }
-  throw new Error(`no free dossier index filename after ${MAX_EXPORT_ATTEMPTS} attempts in ${targetDir}`);
-}
-function dossierIndexSummaryLine(result) {
-  const skipped = result.skipped > 0 ? `; ${result.skipped} unreadable (not listed)` : "";
-  if (result.artifacts === 0)
-    return `dossier index written: no artifacts found${skipped}`;
-  return `dossier index written: ${result.artifacts} artifact${result.artifacts === 1 ? "" : "s"}, ${result.artifactBytes} bytes${skipped}`;
-}
-
-// src/core/dossier-attest.ts
-var ANSWERS = new Set(["yes", "no", "unknown"]);
-var cellAnswer = (raw) => {
-  const flat = raw.trim().toLowerCase();
-  return ANSWERS.has(flat) ? flat : "unknown";
-};
-var splitRow = (line) => {
-  const cells = line.split("|").map((cell) => cell.trim());
-  if (cells.length >= 2 && cells[0] === "" && cells[cells.length - 1] === "")
-    cells.shift(), cells.pop();
-  if (cells.length < 5)
-    return null;
-  return cells;
-};
-var SHA_RE = /^[0-9a-f]{4,64}$/i;
-function parseAttestationAppendix(markdown) {
-  const lines = markdown.split(`
-`);
-  const heading = lines.findIndex((line) => line.startsWith("## Attestation"));
-  if (heading === -1)
-    return { kind: "unsealed" };
-  const section = [];
-  for (let index = heading + 1;index < lines.length; index += 1) {
-    const line = lines[index];
-    if (line.startsWith("## "))
-      break;
-    section.push(line);
-  }
-  const body = section.join(`
-`);
-  const stamp = /at ([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.Z+-]+):/.exec(body)?.[1];
-  const directory = /against `([^`]+)`, at/.exec(body)?.[1];
-  const gap = section.some((line) => line.includes("The record quotes no sha"));
-  const rows = [];
-  let malformed = 0;
-  for (const line of section) {
-    if (!line.startsWith("|"))
-      continue;
-    const cells = splitRow(line);
-    if (!cells) {
-      malformed += 1;
-      continue;
-    }
-    const first = cells[0].toLowerCase();
-    if (first === "sha" || /^-+$/.test(first))
-      continue;
-    const sha = cells[0];
-    if (!SHA_RE.test(sha)) {
-      malformed += 1;
-      continue;
-    }
-    const iterations = (cells[1].match(/\d+/g) ?? []).map(Number);
-    rows.push({
-      sha,
-      iterations,
-      exists: cellAnswer(cells[2]),
-      onThisLine: cellAnswer(cells[3]),
-      underSeal: cellAnswer(cells[4])
-    });
-  }
-  if (rows.length === 0 && !gap)
-    return { kind: "unparsable" };
-  return { kind: "sealed", stamp, directory, rows, gap, malformed };
-}
-var { verifyCell: verifyCell4, reachCell: reachCell3, signCell: signCell3 } = recordCellHelpers();
-var shasAsGoal = (rows) => ({
-  loopHistory: rows.flatMap((row, index) => row.iterations.length > 0 ? row.iterations.map((version) => ({ version, sha: row.sha })) : [{ version: index + 1, sha: row.sha }])
-});
-function attestSealedDossier(markdown, directory, probes = {}) {
-  const parsed = parseAttestationAppendix(markdown);
-  if (parsed.kind !== "sealed")
-    return parsed;
-  const verifyProbe = probes.verify ?? gitCatFileProbe(directory);
-  const reachProbe = probes.reach ?? gitAncestorProbe(directory);
-  const signProbe = probes.sign ?? gitSignProbe(directory);
-  const seen = new Set;
-  const uniqRows = parsed.rows.filter((row) => {
-    if (seen.has(row.sha))
-      return false;
-    seen.add(row.sha);
-    return true;
-  });
-  const synthetic = shasAsGoal(uniqRows);
-  const verification = verifyRecord(synthetic, verifyProbe);
-  const reach = reachRecord(synthetic, reachProbe);
-  const sign = signRecord(synthetic, signProbe);
-  const reachBySha = new Map(reach.checks.map((check) => [check.sha, check.status]));
-  const signBySha = new Map(sign.checks.map((check) => [check.sha, check.status]));
-  const verifyBySha = new Map(verification.checks.map((check) => [check.sha, check.status]));
-  const rows = uniqRows.map((row) => {
-    const now = {
-      exists: verifyCell4(verifyBySha.get(row.sha) ?? "unknown"),
-      onThisLine: reachCell3(reachBySha.get(row.sha) ?? "unknown"),
-      underSeal: signCell3(signBySha.get(row.sha) ?? "unknown")
-    };
-    const seal = { exists: row.exists, onThisLine: row.onThisLine, underSeal: row.underSeal };
-    const wasClean = seal.exists === "yes" && seal.onThisLine === "yes" && seal.underSeal === "yes";
-    const flipped = [];
-    if (wasClean) {
-      if (now.exists === "no")
-        flipped.push("exists");
-      if (now.onThisLine === "no")
-        flipped.push("on this line");
-      if (now.underSeal === "no")
-        flipped.push("under seal");
-    }
-    const nowClean = now.exists === "yes" && now.onThisLine === "yes" && now.underSeal === "yes";
-    const verdict = !wasClean ? "was-not-clean" : flipped.length > 0 ? "regressed" : nowClean ? "held" : "unknown";
-    return { sha: row.sha, shortSha: shortSha(row.sha), iterations: row.iterations, seal, now, verdict, flipped };
-  });
-  const sealedClean = rows.filter((row) => row.seal.exists === "yes" && row.seal.onThisLine === "yes" && row.seal.underSeal === "yes").length;
-  const held = rows.filter((row) => row.verdict === "held").length;
-  const regressed = rows.filter((row) => row.verdict === "regressed").length;
-  const unknown = rows.filter((row) => row.verdict === "unknown").length;
-  const wasNotClean = rows.length - sealedClean;
-  return {
-    kind: "attested",
-    rows,
-    unique: rows.length,
-    sealedClean,
-    held,
-    regressed,
-    unknown,
-    wasNotClean,
-    stamp: parsed.stamp,
-    sealDirectory: parsed.directory,
-    malformed: parsed.malformed
-  };
-}
-function attestSummaryLine(attestation) {
-  if (attestation.unique === 0)
-    return "sealed dossier quotes no shas to attest";
-  if (attestation.sealedClean === 0)
-    return `nothing held: no sha was clean at seal time (${attestation.unique} quoted)`;
-  if (attestation.regressed > 0)
-    return `attestation drifted: ${attestation.regressed} of ${attestation.sealedClean} sealed-clean shas regressed since sealing`;
-  if (attestation.unknown > 0)
-    return `attestation unverifiable: ${attestation.held} held, ${attestation.unknown} of ${attestation.sealedClean} could not answer`;
-  return `attestation holds: ${attestation.held} of ${attestation.sealedClean} sealed-clean shas still clean`;
-}
-function attestationReportMarkdown(result, nowMs, directory, fileName) {
-  const stamp = stampOf(nowMs);
-  const lines = [
-    "# /goal-loop sealed dossier attestation",
-    "",
-    `- Generated: ${stamp}`,
-    `- Repository: ${directory}`,
-    `- File re-attested: ${fileName}`,
-    result.stamp !== undefined ? `- Sealed at: ${result.stamp}${result.sealDirectory !== undefined ? ` against ${result.sealDirectory}` : ""}` : "- Sealed at: unknown (the appendix does not carry a stamp this parser can read)",
-    `- Shas named by the appendix: ${result.unique} unique`,
-    "",
-    "| sha | sealed (exists \xB7 line \xB7 seal) | now (exists \xB7 line \xB7 seal) | verdict |",
-    "| --- | --- | --- | --- |"
-  ];
-  for (const row of result.rows) {
-    const sealCell = `${row.seal.exists} \xB7 ${row.seal.onThisLine} \xB7 ${row.seal.underSeal}`;
-    const nowCell = `${row.now.exists} \xB7 ${row.now.onThisLine} \xB7 ${row.now.underSeal}`;
-    const verdictCell = row.verdict === "regressed" ? `regressed (${row.flipped.join(", ")})` : row.verdict;
-    lines.push(`| ${row.shortSha} | ${sealCell} | ${nowCell} | ${verdictCell} |`);
-  }
-  if (result.rows.length === 0)
-    lines.push("| \u2014 | \u2014 | \u2014 | \u2014 |");
-  lines.push("", `- Held: ${result.held} \xB7 regressed: ${result.regressed} \xB7 unknown: ${result.unknown} \xB7 was not clean at seal time: ${result.wasNotClean}`, result.malformed > 0 ? `- ${result.malformed} table-looking row(s) could not be read and are excluded from every count` : "- Every table row parsed", "", "This report re-probes the shas the file names \u2014 existence in the object store, membership of this line of history, and git's signature check \u2014 against the repository at the directory named above, right now. It cannot audit the bytes around the table: an editor who rewrites appendix cells can make the file claim anything, and this report detects divergence between seal-time answers and fresh ones, not tampering with the file itself. A verdict of `regressed` means git answered yes at seal time and no right now on the named question; `unknown` means git could not answer and is counted as neither; `was-not-clean` is a sha that never qualified. Existence is not ancestry, ancestry is not the seal. The strongest thing this document can say is `held`, and it says only that three `git` processes answered yes to three questions, now.", "");
-  return lines.join(`
-`);
-}
-var SEALED_NAME_RE = /^goal-dossier-sealed-(\d{8})-(\d{6})(?:-([1-9]\d*))?\.md$/;
-function sealedDossierCandidates(names, statMtimeMs) {
-  const out = [];
-  for (const name of names) {
-    if (!SEALED_NAME_RE.test(name))
-      continue;
-    out.push({ name, mtimeMs: statMtimeMs(name) });
-  }
-  return out;
-}
-function selectNewestSealedDossier(entries) {
-  let best;
-  for (const entry of entries) {
-    const match = SEALED_NAME_RE.exec(entry.name);
-    if (!match)
-      continue;
-    const stamp = `${match[1]}-${match[2]}`;
-    const attempt = match[3] !== undefined ? Number(match[3]) : 1;
-    if (!best || stamp > best.stamp || stamp === best.stamp && attempt > best.attempt || stamp === best.stamp && attempt === best.attempt && entry.mtimeMs > best.mtimeMs) {
-      best = { name: entry.name, stamp, attempt, mtimeMs: entry.mtimeMs };
-    }
-  }
-  return best?.name;
-}
-
-// src/tui.tsx
-import { readFileSync as readFileSync3, readdirSync as readdirSync2, statSync } from "fs";
-import { join as join7 } from "path";
 
 // src/tui-error.ts
 var USER_ERROR_MAX_LENGTH = 200;
@@ -2587,6 +1601,446 @@ var dossierOutline = (markdown) => {
   }
   return out;
 };
+
+// src/core/verify-record.ts
+import { execFileSync } from "child_process";
+
+// src/core/record-attestation.ts
+function recordShaMentions(goal) {
+  const mentions = [];
+  const index = new Map;
+  for (const entry of goal.loopHistory ?? []) {
+    const sha = typeof entry.sha === "string" ? entry.sha.trim() : "";
+    if (!sha)
+      continue;
+    const at = index.get(sha);
+    if (at !== undefined) {
+      mentions[at].iterations.push(entry.version);
+      continue;
+    }
+    index.set(sha, mentions.length);
+    mentions.push({ sha, iterations: [entry.version] });
+  }
+  return mentions;
+}
+function sweepRecordMentions(goal, probe, positive, negative) {
+  const checks = recordShaMentions(goal).map((m) => {
+    let answer;
+    try {
+      answer = probe(m.sha);
+    } catch {
+      answer = "unknown";
+    }
+    const status = answer === true ? positive : answer === false ? negative : "unknown";
+    return { sha: m.sha, shortSha: shortSha(m.sha), iterations: m.iterations, status };
+  });
+  let positiveCount = 0;
+  let negativeCount = 0;
+  let unknown = 0;
+  let mentions = 0;
+  for (const check of checks) {
+    if (check.status === positive)
+      positiveCount += 1;
+    else if (check.status === negative)
+      negativeCount += 1;
+    else
+      unknown += 1;
+    mentions += check.iterations.length;
+  }
+  return { checks, unique: checks.length, mentions, positive: positiveCount, negative: negativeCount, unknown };
+}
+function renderRecordReport(goal, input, format, nowMs, directory) {
+  const stamp = stampOf(nowMs);
+  const conditionCell = conditionCellOf(goal.condition);
+  const statusCell = (status) => recordStatusCell(status, format.positive, format.negative);
+  const lines = [
+    format.title,
+    "",
+    `- Generated: ${stamp}`,
+    `- Repository: ${directory}`,
+    `- Condition: ${conditionCell}`,
+    `- Shas quoted by the record: ${input.unique} unique across ${input.mentions} mention${input.mentions === 1 ? "" : "s"}`,
+    "",
+    `| sha | quoted at | ${format.columnHeader} |`,
+    "| --- | --- | --- |"
+  ];
+  for (const check of input.checks) {
+    lines.push(`| ${check.shortSha} | ${iterationList(check.iterations)} | ${statusCell(check.status)} |`);
+  }
+  if (input.checks.length === 0)
+    lines.push("| \u2014 | \u2014 | \u2014 |");
+  lines.push("", format.countsLine, "", format.footer, "");
+  return lines.join(`
+`);
+}
+function recordSummaryLine(counts, format) {
+  if (counts.unique === 0)
+    return format.none;
+  if (counts.negative === 0 && counts.unknown === 0)
+    return format.success(counts);
+  if (counts.negative > 0)
+    return format.failure(counts);
+  return format.unknown(counts);
+}
+function recordAckSegment(counts, ascii, format) {
+  const ok = ascii ? "+" : "\u2713";
+  const bad = ascii ? "-" : "\u2717";
+  if (counts.unique === 0)
+    return ascii ? format.noneAscii : format.noneUnicode;
+  if (counts.negative > 0)
+    return ` (${bad} ${counts.negative} of ${counts.unique} ${format.negative})`;
+  if (counts.unknown > 0)
+    return ` (! ${counts.unknown} of ${counts.unique} ${format.unknown})`;
+  return ` (${ok} ${counts.positive}/${counts.unique} ${format.positive})`;
+}
+function recordCellHelpers() {
+  const cell = (status, positive, negative) => recordStatusCell(status, positive, negative);
+  return {
+    verifyCell: (status) => cell(status, "present", "missing"),
+    reachCell: (status) => cell(status, "ancestor", "unreached"),
+    signCell: (status) => cell(status, "verified", "unverified")
+  };
+}
+
+// src/core/verify-record.ts
+var GIT_TIMEOUT_MS = 1e4;
+function gitCatFileProbe(cwd) {
+  return (sha) => {
+    try {
+      execFileSync("git", ["-C", cwd, "cat-file", "-e", sha], { stdio: "ignore", timeout: GIT_TIMEOUT_MS });
+      return true;
+    } catch (error) {
+      const status = error?.status;
+      if (typeof status === "number")
+        return false;
+      return "unknown";
+    }
+  };
+}
+function verifyRecord(goal, probe) {
+  const swept = sweepRecordMentions(goal, probe, "present", "missing");
+  return {
+    checks: swept.checks,
+    unique: swept.unique,
+    mentions: swept.mentions,
+    present: swept.positive,
+    missing: swept.negative,
+    unknown: swept.unknown
+  };
+}
+function verifyReportMarkdown(goal, verification, nowMs, directory) {
+  return renderRecordReport(goal, verification, {
+    title: "# /goal-loop record verification",
+    columnHeader: "resolves",
+    countsLine: `- Present: ${verification.present} \xB7 missing: ${verification.missing} \xB7 unknown: ${verification.unknown}`,
+    footer: "Existence is not ancestry: a sha that resolves here may still belong to a rewritten history elsewhere. A sha that does not resolve is an unresolvable receipt, not proof of misconduct \u2014 the record says what HEAD was, this report says what the repository still holds. Unknown means git could not answer (no binary, not a repository, timed out) \u2014 never counted as missing. Existence is checked at the directory named above, at generation time, and says nothing about the working tree's cleanliness.",
+    positive: "present",
+    negative: "missing"
+  }, nowMs, directory);
+}
+function verifySummaryLine(verification) {
+  return recordSummaryLine({
+    unique: verification.unique,
+    positive: verification.present,
+    negative: verification.missing,
+    unknown: verification.unknown
+  }, {
+    none: "record quotes no shas to verify",
+    success: (v) => `record verifies: ${v.positive} of ${v.unique} shas resolve`,
+    failure: (v) => `record does not verify: ${v.negative} of ${v.unique} shas unresolvable`,
+    unknown: (v) => `record unverifiable: ${v.unknown} of ${v.unique} shas could not be checked`
+  });
+}
+function verifyAckSegment(verification, ascii) {
+  return recordAckSegment({
+    unique: verification.unique,
+    positive: verification.present,
+    negative: verification.missing,
+    unknown: verification.unknown
+  }, ascii, {
+    noneAscii: " (no shas)",
+    noneUnicode: " (no shas to verify)",
+    negative: "unresolvable",
+    unknown: "unknown",
+    positive: "resolve"
+  });
+}
+
+// src/core/reach-record.ts
+import { execFileSync as execFileSync2 } from "child_process";
+var REACH_TIMEOUT_MS = 1e4;
+function gitAncestorProbe(cwd) {
+  return (sha) => {
+    try {
+      execFileSync2("git", ["-C", cwd, "merge-base", "--is-ancestor", sha, "HEAD"], { stdio: "ignore", timeout: REACH_TIMEOUT_MS });
+      return true;
+    } catch (error) {
+      const status = error?.status;
+      if (status === 0)
+        return true;
+      if (status === 1)
+        return false;
+      return "unknown";
+    }
+  };
+}
+function reachRecord(goal, probe) {
+  const swept = sweepRecordMentions(goal, probe, "ancestor", "unreached");
+  return {
+    checks: swept.checks,
+    unique: swept.unique,
+    mentions: swept.mentions,
+    ancestors: swept.positive,
+    unreached: swept.negative,
+    unknown: swept.unknown
+  };
+}
+function reachReportMarkdown(goal, reach, nowMs, directory) {
+  return renderRecordReport(goal, reach, {
+    title: "# /goal-loop record ancestry",
+    columnHeader: "on this line",
+    countsLine: `- On this line (ancestor of HEAD): ${reach.ancestors} \xB7 not on this line: ${reach.unreached} \xB7 unknown: ${reach.unknown}`,
+    footer: "Not on this line is not misconduct: the sha may live on another branch, may have been rebased away, or this record may predate the merge that carried it. Existence is not ancestry, and ancestry is not content \u2014 a sha that belongs to this history may still carry a tree you have not read, and a sha that resolves here may still belong elsewhere. This report asks one question, per sha, of the repository at the directory named above, at generation time, and says nothing about which ref the work landed on, signatures, the working tree's cleanliness, or the content of any commit. Unknown means git could not answer (no binary, not a repository, unparseable sha, timed out) \u2014 never counted as \u201Cno\u201D.",
+    positive: "ancestor",
+    negative: "unreached"
+  }, nowMs, directory);
+}
+function reachSummaryLine(reach) {
+  return recordSummaryLine({
+    unique: reach.unique,
+    positive: reach.ancestors,
+    negative: reach.unreached,
+    unknown: reach.unknown
+  }, {
+    none: "record quotes no shas to place on this line",
+    success: (v) => `record reaches HEAD: ${v.positive} of ${v.unique} shas on this line`,
+    failure: (v) => `record does not reach HEAD: ${v.negative} of ${v.unique} shas not on this line`,
+    unknown: (v) => `record unverifiable: ${v.unknown} of ${v.unique} shas could not be placed`
+  });
+}
+function reachAckSegment(reach, ascii) {
+  return recordAckSegment({
+    unique: reach.unique,
+    positive: reach.ancestors,
+    negative: reach.unreached,
+    unknown: reach.unknown
+  }, ascii, {
+    noneAscii: " (no shas)",
+    noneUnicode: " (no shas to place)",
+    negative: "not on this line",
+    unknown: "unknown",
+    positive: "on this line"
+  });
+}
+
+// src/core/sign-record.ts
+import { execFileSync as execFileSync3 } from "child_process";
+var SIGN_TIMEOUT_MS = 1e4;
+function gitSignProbe(cwd) {
+  return (sha) => {
+    try {
+      execFileSync3("git", ["-C", cwd, "cat-file", "-e", sha], { stdio: "ignore", timeout: SIGN_TIMEOUT_MS });
+    } catch {
+      return "unknown";
+    }
+    try {
+      execFileSync3("git", ["-C", cwd, "verify-commit", sha], { stdio: "ignore", timeout: SIGN_TIMEOUT_MS });
+      return true;
+    } catch (error) {
+      const status = error?.status;
+      return typeof status === "number" ? false : "unknown";
+    }
+  };
+}
+function signRecord(goal, probe) {
+  const swept = sweepRecordMentions(goal, probe, "verified", "unverified");
+  return {
+    checks: swept.checks,
+    unique: swept.unique,
+    mentions: swept.mentions,
+    verified: swept.positive,
+    unverified: swept.negative,
+    unknown: swept.unknown
+  };
+}
+function signReportMarkdown(goal, sign, nowMs, directory) {
+  return renderRecordReport(goal, sign, {
+    title: "# /goal-loop record signatures",
+    columnHeader: "under seal",
+    countsLine: `- Under seal (git verified): ${sign.verified} \xB7 not under seal: ${sign.unverified} \xB7 unknown: ${sign.unknown}`,
+    footer: "A signature attests integrity only as strongly as the key and the trust configured at the probed directory \u2014 git decides by its own rules. `verified` means git's configured rules accepted the commit's signature, nothing more, nothing less. Anything else \u2014 an unsigned commit, an expired or untrusted key, a bad signature \u2014 is `not under seal`, never proof of forgery; most commits are unsigned, and git's thresholds differ across machines and time. An unresolvable object has no signature to judge and reads `unknown`, never `not under seal`. Unknown means git could not answer (no binary, not a repository, unparseable sha, timed out) \u2014 never counted as \u201Cno\u201D. Existence is not ancestry, ancestry is not content, content is not intent \u2014 the EC and ED reports are the other halves, and none substitutes for another. This report asks one question, per sha, of the repository at the directory named above, at generation time \u2014 it says nothing about the key's origin, the author's intent, the commit's content, or the working tree's cleanliness.",
+    positive: "verified",
+    negative: "unverified"
+  }, nowMs, directory);
+}
+function signSummaryLine(sign) {
+  return recordSummaryLine({
+    unique: sign.unique,
+    positive: sign.verified,
+    negative: sign.unverified,
+    unknown: sign.unknown
+  }, {
+    none: "record quotes no shas to attest",
+    success: (v) => `record under seal: ${v.positive} of ${v.unique} shas verify`,
+    failure: (v) => `record not under seal: ${v.negative} of ${v.unique} shas do not verify`,
+    unknown: (v) => `record unverifiable: ${v.unknown} of ${v.unique} shas could not be attested`
+  });
+}
+function signAckSegment(sign, ascii) {
+  return recordAckSegment({
+    unique: sign.unique,
+    positive: sign.verified,
+    negative: sign.unverified,
+    unknown: sign.unknown
+  }, ascii, {
+    noneAscii: " (no shas)",
+    noneUnicode: " (no shas to attest)",
+    negative: "unsigned",
+    unknown: "unknown",
+    positive: "signed"
+  });
+}
+
+// src/core/dossier-seal.ts
+import { writeFileSync as writeFileSync2 } from "fs";
+import { join as join2, resolve as resolve2 } from "path";
+
+// src/core/dossier-export.ts
+import { writeFileSync } from "fs";
+import { join, resolve } from "path";
+var MAX_EXPORT_ATTEMPTS = 100;
+var dossierExportName = (nowMs, attempt = 0) => artifactName("dossier", nowMs, attempt);
+function exportLoopDossier(goal, nowMs, dir) {
+  const content = buildLoopDossier(goal, nowMs);
+  const targetDir = resolve(dir);
+  const bytes = Buffer.byteLength(content, "utf8");
+  for (let attempt = 0;attempt < MAX_EXPORT_ATTEMPTS; attempt++) {
+    const path = join(targetDir, dossierExportName(nowMs, attempt));
+    try {
+      writeFileSync(path, content, { encoding: "utf8", flag: "wx" });
+      return { path, bytes, attempts: attempt + 1 };
+    } catch (error) {
+      const code = error?.code;
+      if (code === "EEXIST")
+        continue;
+      throw error;
+    }
+  }
+  throw new Error(`no free dossier filename after ${MAX_EXPORT_ATTEMPTS} attempts in ${targetDir}`);
+}
+
+// src/core/dossier-seal.ts
+var sealedDossierName = (nowMs, attempt = 0) => artifactName("dossier-sealed", nowMs, attempt);
+var { verifyCell: verifyCell2, reachCell, signCell } = recordCellHelpers();
+var cleanShaCount = (verification, reach, sign) => {
+  const reachStatus = new Map(reach.checks.map((c) => [c.sha, c.status]));
+  const signStatus = new Map(sign.checks.map((c) => [c.sha, c.status]));
+  let clean = 0;
+  for (const check of verification.checks) {
+    if (check.status === "present" && reachStatus.get(check.sha) === "ancestor" && signStatus.get(check.sha) === "verified") {
+      clean += 1;
+    }
+  }
+  return clean;
+};
+function attestationAppendix(_goal, verification, reach, sign, nowMs, directory) {
+  const stamp = stampOf(nowMs);
+  const lines = [
+    "## Attestation (freshly probed at seal time)",
+    "",
+    `_The bookkeeping above is the record's own and was not re-verified; it renders what the record holds, nothing more. The shas the record quotes were re-probed here, fresh, against \`${directory}\`, at ${stamp}: existence (the object store), ancestry (this line), and the seal (git's signature check). \`unknown\` means git could not answer and is never counted as a pass or a fail. No question substitutes for another._`,
+    ""
+  ];
+  const droppedLoop = _goal.loopHistoryDropped ?? 0;
+  const droppedVerdicts = _goal.historyDropped ?? 0;
+  if (droppedLoop > 0 || droppedVerdicts > 0) {
+    const bits = [];
+    if (droppedLoop > 0)
+      bits.push(`${droppedLoop} earlier iteration record${droppedLoop === 1 ? "" : "s"}`);
+    if (droppedVerdicts > 0)
+      bits.push(`${droppedVerdicts} earlier verdict${droppedVerdicts === 1 ? "" : "s"}`);
+    lines.push(`_${bits.join(" and ")} dropped by the retention caps; the shas they quoted are not re-probed here and are never implied held._`, "");
+  }
+  if (verification.unique === 0) {
+    lines.push("The record quotes no sha \u2014 there is nothing to seal. An unshaded record cannot be re-probed, and none is claimed.", "");
+    return lines;
+  }
+  const reachStatus = new Map(reach.checks.map((c) => [c.sha, c.status]));
+  const signStatus = new Map(sign.checks.map((c) => [c.sha, c.status]));
+  lines.push("| sha | iterations | exists | on this line | under seal |", "| --- | --- | --- | --- | --- |");
+  for (const check of verification.checks) {
+    lines.push(`| ${check.shortSha} | ${iterationList(check.iterations)} | ${verifyCell2(check.status)} | ${reachCell(reachStatus.get(check.sha) ?? "unknown")} | ${signCell(signStatus.get(check.sha) ?? "unknown")} |`);
+  }
+  const clean = cleanShaCount(verification, reach, sign);
+  lines.push("", `- Existence: ${verification.present} of ${verification.unique} shas resolve (${verification.unknown} unknown \u2014 never counted as present)`, `- Ancestry: ${reach.ancestors} of ${reach.unique} shas on this line (${reach.unknown} unknown)`, `- Seal: ${sign.verified} of ${sign.unique} shas under seal (${sign.unverified} not under seal \u2014 not an accusation; ${sign.unknown} unknown)`, `- All three: ${clean} of ${verification.unique} shas clean (present \xB7 on this line \xB7 under seal)`, "", "A clean row is the strongest thing this appendix can say: the object resolves, it belongs to this line, and git verified a signature on it at seal time. Anything short of that is not an accusation \u2014 existence is not ancestry, ancestry is not the seal, and most commits are unsigned. The loop that produced this record may be running right now; this file is a snapshot of its receipts at the moment it was written, and the stamp above travels with it.", "");
+  return lines;
+}
+function sealRecord(goal, directory, nowMs, probes = {}) {
+  const verifyProbe = probes.verify ?? gitCatFileProbe(directory);
+  const reachProbe = probes.reach ?? gitAncestorProbe(directory);
+  const signProbe = probes.sign ?? gitSignProbe(directory);
+  const verification = verifyRecord(goal, verifyProbe);
+  const reach = reachRecord(goal, reachProbe);
+  const sign = signRecord(goal, signProbe);
+  const clean = cleanShaCount(verification, reach, sign);
+  const base = buildLoopDossier(goal, nowMs);
+  const appendix = attestationAppendix(goal, verification, reach, sign, nowMs, directory);
+  const markdown = `${base}
+
+${appendix.join(`
+`)}`;
+  return { markdown, verification, reach, sign, unique: verification.unique, clean };
+}
+function exportSealedDossier(goal, nowMs, dir, probes = {}) {
+  const targetDir = resolve2(dir);
+  const seal = sealRecord(goal, targetDir, nowMs, probes);
+  const bytes = Buffer.byteLength(seal.markdown, "utf8");
+  for (let attempt = 0;attempt < MAX_EXPORT_ATTEMPTS; attempt++) {
+    const path = join2(targetDir, sealedDossierName(nowMs, attempt));
+    try {
+      writeFileSync2(path, seal.markdown, { encoding: "utf8", flag: "wx" });
+      return {
+        path,
+        bytes,
+        attempts: attempt + 1,
+        unique: seal.unique,
+        clean: seal.clean,
+        verification: seal.verification,
+        reach: seal.reach,
+        sign: seal.sign
+      };
+    } catch (error) {
+      const code = error?.code;
+      if (code === "EEXIST")
+        continue;
+      throw error;
+    }
+  }
+  throw new Error(`no free sealed-dossier filename after ${MAX_EXPORT_ATTEMPTS} attempts in ${targetDir}`);
+}
+function sealSummaryLine(seal) {
+  if (seal.unique === 0)
+    return "record quotes no shas to seal";
+  const hard = seal.verification.missing + seal.reach.unreached + seal.sign.unverified;
+  const unknown = seal.verification.unknown + seal.reach.unknown + seal.sign.unknown;
+  if (hard === 0 && unknown === 0)
+    return `record sealed: ${seal.clean} of ${seal.unique} shas pass all three checks`;
+  if (hard > 0)
+    return `record sealed with gaps: ${seal.clean} of ${seal.unique} shas pass all three checks`;
+  return `record sealed, unverifiable: ${unknown} of ${3 * seal.unique} checks could not answer`;
+}
+function sealAckSegment(seal, ascii) {
+  const ok = ascii ? "+" : "\u2713";
+  const bad = ascii ? "-" : "\u2717";
+  if (seal.unique === 0)
+    return ascii ? " (no shas)" : " (no shas to seal)";
+  const hard = seal.verification.missing + seal.reach.unreached + seal.sign.unverified;
+  if (hard > 0)
+    return ` (${bad} ${seal.clean} of ${seal.unique} sealed)`;
+  if (seal.clean < seal.unique)
+    return ` (! ${seal.clean} of ${seal.unique} sealed)`;
+  return ` (${ok} ${seal.clean}/${seal.unique} sealed)`;
+}
 
 // src/tui-history.tsx
 import { createElement as _$createElement2, setProp as _$setProp2, insert as _$insert2, effect as _$effect2, memo as _$memo2, insertNode as _$insertNode, createComponent as _$createComponent, createTextNode as _$createTextNode } from "@opentui/solid";
@@ -6254,14 +5708,14 @@ var pumpRpcEvent = async (options) => {
 };
 
 // src/core/mirror.ts
-import { mkdirSync, readFileSync as readFileSync2, renameSync, rmSync, writeFileSync as writeFileSync6 } from "fs";
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync as writeFileSync3 } from "fs";
 import { tmpdir } from "os";
-import { join as join6 } from "path";
+import { join as join3 } from "path";
 var fileFor = (dir, sessionID) => {
   const safe = sessionID.replace(/[^a-zA-Z0-9_-]/g, "_");
-  return join6(dir, `${safe}.json`);
+  return join3(dir, `${safe}.json`);
 };
-var createGoalMirror = (dir = join6(tmpdir(), "goal-loop-mirror")) => {
+var createGoalMirror = (dir = join3(tmpdir(), "goal-loop-mirror")) => {
   const ensured = new Set;
   const write = (snapshot) => {
     const target = fileFor(dir, snapshot.sessionID);
@@ -6272,7 +5726,7 @@ var createGoalMirror = (dir = join6(tmpdir(), "goal-loop-mirror")) => {
         mkdirSync(dir, { recursive: true, mode: 448 });
         ensured.add(dir);
       }
-      writeFileSync6(tmp, body, { mode: 384 });
+      writeFileSync3(tmp, body, { mode: 384 });
       renameSync(tmp, target);
     };
     try {
@@ -6294,7 +5748,7 @@ var createGoalMirror = (dir = join6(tmpdir(), "goal-loop-mirror")) => {
   };
   const read = (sessionID, directory) => {
     try {
-      const raw = readFileSync2(fileFor(dir, sessionID), "utf8");
+      const raw = readFileSync(fileFor(dir, sessionID), "utf8");
       const parsed = parseGoalSnapshot(JSON.parse(raw));
       if (!parsed)
         return;
@@ -6309,6 +5763,939 @@ var createGoalMirror = (dir = join6(tmpdir(), "goal-loop-mirror")) => {
   };
   return { write, remove, read };
 };
+
+// src/tui-actions.ts
+import { readFileSync as readFileSync3, readdirSync as readdirSync2, statSync } from "fs";
+import { join as join7 } from "path";
+
+// src/core/dossier-review.ts
+import { writeFileSync as writeFileSync4 } from "fs";
+import { join as join4, resolve as resolve3 } from "path";
+var reviewName = (nowMs, attempt = 0) => artifactName("dossier-review", nowMs, attempt);
+var { verifyCell: verifyCell3, reachCell: reachCell2, signCell: signCell2 } = recordCellHelpers();
+var reviewVerdict = (exists, onThisLine, underSeal) => {
+  if (exists === "no" || onThisLine === "no" || underSeal === "no")
+    return "gaps";
+  if (exists === "yes" && onThisLine === "yes" && underSeal === "yes")
+    return "clean";
+  return "unknown";
+};
+function buildReview(goal, directory, nowMs, probes = {}) {
+  const verifyProbe = probes.verify ?? gitCatFileProbe(directory);
+  const reachProbe = probes.reach ?? gitAncestorProbe(directory);
+  const signProbe = probes.sign ?? gitSignProbe(directory);
+  const verification = verifyRecord(goal, verifyProbe);
+  const reach = reachRecord(goal, reachProbe);
+  const sign = signRecord(goal, signProbe);
+  const base = buildLoopDossier(goal, nowMs);
+  const stamp = stampOf(nowMs);
+  const reachBySha = new Map(reach.checks.map((check) => [check.sha, check.status]));
+  const signBySha = new Map(sign.checks.map((check) => [check.sha, check.status]));
+  const rows = verification.checks.map((check) => {
+    const exists = verifyCell3(check.status);
+    const onThisLine = reachCell2(reachBySha.get(check.sha) ?? "unknown");
+    const underSeal = signCell2(signBySha.get(check.sha) ?? "unknown");
+    return {
+      sha: check.sha,
+      shortSha: shortSha(check.sha),
+      iterations: check.iterations,
+      exists,
+      onThisLine,
+      underSeal,
+      verdict: reviewVerdict(exists, onThisLine, underSeal)
+    };
+  });
+  const clean = rows.filter((row) => row.verdict === "clean").length;
+  const gaps = rows.filter((row) => row.verdict === "gaps").length;
+  const unknown = rows.filter((row) => row.verdict === "unknown").length;
+  const appendix = [
+    "## Review (freshly probed at generation time)",
+    "",
+    `_The bookkeeping above is the record's own and was not re-verified; it renders what the record holds, nothing more. The shas the record quotes were re-probed here, fresh, against \`${directory}\`, at ${stamp}: existence (the object store), ancestry (this line), and the seal (git's signature check). A verdict of \`clean\` requires a yes on all three; any \`no\` makes the row \`gaps\`; a row with no \`no\` but at least one question git could not answer is \`unknown\` \u2014 never collapsed into either. Existence is not ancestry, ancestry is not the seal; no question substitutes for another._`,
+    ""
+  ];
+  if (verification.unique === 0) {
+    appendix.push("The record quotes no sha \u2014 there is nothing to review. An unshaded record cannot be re-probed, and none is claimed.", "");
+  } else {
+    appendix.push("| sha | quoted at | exists | on this line | under seal | verdict |", "| --- | --- | --- | --- | --- | --- |");
+    for (const row of rows) {
+      appendix.push(`| ${row.shortSha} | ${iterationList(row.iterations)} | ${row.exists} | ${row.onThisLine} | ${row.underSeal} | ${row.verdict} |`);
+    }
+    appendix.push("", `- Existence: ${verification.present} of ${verification.unique} shas resolve (${verification.unknown} unknown \u2014 never counted as present)`, `- Ancestry: ${reach.ancestors} of ${reach.unique} shas on this line (${reach.unknown} unknown)`, `- Seal: ${sign.verified} of ${sign.unique} shas under seal (${sign.unverified} not under seal \u2014 not an accusation; ${sign.unknown} unknown)`, `- All three: ${clean} of ${verification.unique} shas clean (present \xB7 on this line \xB7 under seal) \xB7 ${gaps} with gaps \xB7 ${unknown} unverifiable`, "", "A clean row is the strongest thing this review can say: the object resolves, it belongs to this line, and git verified a signature on it at generation time. Anything short of that is not an accusation \u2014 existence is not ancestry, ancestry is not the seal, and most commits are unsigned. This file is a snapshot of the record's receipts at the moment it was written, and the stamp above travels with it. For a re-check weeks later, `goal.dossier.attest` answers whether what a sealed copy attests still holds.", "");
+  }
+  const markdown = `${base}
+
+${appendix.join(`
+`)}`;
+  return { markdown, verification, reach, sign, unique: verification.unique, clean, gaps, unknown };
+}
+function exportReview(goal, nowMs, dir, probes = {}) {
+  const targetDir = resolve3(dir);
+  const review = buildReview(goal, targetDir, nowMs, probes);
+  const bytes = Buffer.byteLength(review.markdown, "utf8");
+  for (let attempt = 0;attempt < MAX_EXPORT_ATTEMPTS; attempt++) {
+    const path = join4(targetDir, reviewName(nowMs, attempt));
+    try {
+      writeFileSync4(path, review.markdown, { encoding: "utf8", flag: "wx" });
+      return {
+        path,
+        bytes,
+        attempts: attempt + 1,
+        unique: review.unique,
+        clean: review.clean,
+        gaps: review.gaps,
+        unknown: review.unknown,
+        verification: review.verification,
+        reach: review.reach,
+        sign: review.sign
+      };
+    } catch (error) {
+      const code = error?.code;
+      if (code === "EEXIST")
+        continue;
+      throw error;
+    }
+  }
+  throw new Error(`no free review filename after ${MAX_EXPORT_ATTEMPTS} attempts in ${targetDir}`);
+}
+function reviewSummaryLine(review) {
+  if (review.unique === 0)
+    return "record quotes no shas to review";
+  if (review.gaps > 0)
+    return `review written with gaps: ${review.clean} of ${review.unique} shas clean on all three questions`;
+  if (review.unknown > 0)
+    return `review unverifiable: ${review.clean} of ${review.unique} shas clean, ${review.unknown} could not answer`;
+  return `review written: ${review.clean} of ${review.unique} shas clean on all three questions`;
+}
+
+// src/core/spend-ledger.ts
+import { writeFileSync as writeFileSync5 } from "fs";
+import { join as join5, resolve as resolve4 } from "path";
+var spendLedgerName = (nowMs, attempt = 0) => artifactName("spend-ledger", nowMs, attempt);
+var measuredSpend = (entry) => {
+  const spend = entry.spend;
+  if (!spend)
+    return;
+  const fields = [spend.cost, spend.input, spend.output, spend.reasoning, spend.cacheRead, spend.cacheWrite];
+  if (!fields.every((n) => Number.isFinite(n) && n >= 0))
+    return;
+  return spend;
+};
+var count = (n) => n !== undefined && Number.isFinite(n) ? String(Math.round(n)) : GAP;
+var costCell = (spend) => spend ? formatCost(spend.cost) : GAP;
+var toolsCell = (entry) => Number.isFinite(entry.toolCalls) ? String(entry.toolCalls) : GAP;
+var totalsOf = (entries) => {
+  let measured = 0;
+  let turns = 0;
+  let tools = 0;
+  let cost = 0;
+  let input = 0;
+  let output = 0;
+  let reasoning = 0;
+  let cacheRead = 0;
+  let cacheWrite = 0;
+  for (const entry of entries) {
+    turns += Number.isFinite(entry.turns) ? entry.turns : 0;
+    tools += Number.isFinite(entry.toolCalls) ? entry.toolCalls : 0;
+    const spend = measuredSpend(entry);
+    if (!spend)
+      continue;
+    measured += 1;
+    cost += spend.cost;
+    input += spend.input;
+    output += spend.output;
+    reasoning += spend.reasoning;
+    cacheRead += spend.cacheRead;
+    cacheWrite += spend.cacheWrite;
+  }
+  if (measured === 0)
+    return { iterations: entries.length, measured, turns, tools };
+  return { iterations: entries.length, measured, turns, tools, cost, input, output, reasoning, cacheRead, cacheWrite };
+};
+function buildSpendLedger(goal, nowMs) {
+  const entries = goal.loopHistory ?? [];
+  const dropped = goal.loopHistoryDropped ?? 0;
+  const isLoop = Boolean(goal.loopEnabled);
+  const totals = totalsOf(entries);
+  const stamp = isoOf(nowMs);
+  const lines = [];
+  lines.push(isLoop ? "# Goal loop spend ledger" : "# Goal spend ledger");
+  lines.push("");
+  lines.push(`_Generated ${stamp} from the goal-loop plugin's record. Every figure below is the record's own measurement \u2014 the usage delta the harness attributed to each landed iteration (arm \u2192 advance). A measurement the record does not carry renders as ${GAP}, never estimated. The session id is omitted on purpose._`);
+  lines.push("");
+  lines.push(isLoop ? "## Objective" : "## Condition");
+  lines.push("");
+  lines.push(...quote(isLoop ? goal.loopObjective ?? goal.condition : goal.condition));
+  lines.push("");
+  lines.push(dropped > 0 ? `## Per-iteration spend (${entries.length} most recent of ${entries.length + dropped} landed iterations)` : `## Per-iteration spend (${entries.length} landed iteration${entries.length === 1 ? "" : "s"})`);
+  if (dropped > 0)
+    lines.push(`_${dropped} earlier iteration record${dropped === 1 ? "" : "s"} dropped by the loop-history retention cap (${MAX_LOOP_HISTORY_ENTRIES} kept); the rows and totals below cover the retained iterations only \u2014 the dropped ones are not $0.00, they are unknown._`);
+  lines.push("");
+  if (entries.length === 0) {
+    lines.push("None \u2014 this record has not landed an iteration, so there is nothing to attribute. No figures are claimed.");
+    lines.push("");
+  } else {
+    lines.push("| iteration | ended | spend | in | out | reasoning | cache read | cache write | tools | sha |", "| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |");
+    for (const entry of entries) {
+      const spend = measuredSpend(entry);
+      lines.push(`| v${entry.version} | ${isoOf(entry.endedAt)} | ${costCell(spend)} | ${count(spend?.input)} | ${count(spend?.output)} | ${count(spend?.reasoning)} | ${count(spend?.cacheRead)} | ${count(spend?.cacheWrite)} | ${toolsCell(entry)} | ${shortSha(entry.sha)} |`);
+    }
+    lines.push("");
+  }
+  lines.push("## Totals");
+  lines.push("");
+  lines.push(`- Iterations recorded: ${totals.iterations}${dropped > 0 ? ` (+ ${dropped} dropped by the retention cap; totals cover the retained iterations only)` : ""}`);
+  lines.push(`- Turns: ${totals.turns} \xB7 Tool calls: ${totals.tools}`);
+  if (totals.measured === 0) {
+    lines.push("- Spend across iterations: no iteration carried a measurement");
+    lines.push(`- In tokens: ${GAP} \xB7 Out tokens: ${GAP} \xB7 Reasoning tokens: ${GAP}`);
+    lines.push(`- Cache read: ${GAP} \xB7 Cache write: ${GAP}`);
+  } else {
+    const partial = totals.measured < totals.iterations ? ` (${totals.measured} of ${totals.iterations} iterations measured \u2014 the unmeasured iterations are not $0.00; they are unknown)` : "";
+    lines.push(`- Spend across measured iterations: ${formatCost(totals.cost ?? 0)}${partial}`);
+    lines.push(`- In tokens: ${count(totals.input)} \xB7 Out tokens: ${count(totals.output)} \xB7 Reasoning tokens: ${count(totals.reasoning)}`);
+    lines.push(`- Cache read: ${count(totals.cacheRead)} \xB7 Cache write: ${count(totals.cacheWrite)}`);
+    if (totals.measured < totals.iterations) {
+      lines.push(`- Token totals sum the ${totals.measured} measured iterations only; adding the ${totals.iterations - totals.measured} unmeasured ones would be inventing numbers.`);
+    }
+  }
+  lines.push("");
+  lines.push("---");
+  lines.push("_goal-loop spend ledger \xB7 source: plugin record \xB7 the figures are the record's own measurements; cost is the host's reported usage delta, not a re-price; nothing was estimated, sampled, probed, or re-verified; an iteration counts as measured only when its full usage snapshot is present and finite; a measurement the record does not carry renders as " + GAP + "._");
+  return {
+    markdown: lines.join(`
+`),
+    iterations: totals.iterations,
+    measured: totals.measured,
+    ...totals.cost !== undefined ? { spendTotal: totals.cost } : {}
+  };
+}
+function exportSpendLedger(goal, nowMs, dir) {
+  const targetDir = resolve4(dir);
+  const ledger = buildSpendLedger(goal, nowMs);
+  const bytes = Buffer.byteLength(ledger.markdown, "utf8");
+  for (let attempt = 0;attempt < MAX_EXPORT_ATTEMPTS; attempt++) {
+    const path = join5(targetDir, spendLedgerName(nowMs, attempt));
+    try {
+      writeFileSync5(path, ledger.markdown, { encoding: "utf8", flag: "wx" });
+      return {
+        path,
+        bytes,
+        attempts: attempt + 1,
+        iterations: ledger.iterations,
+        measured: ledger.measured,
+        ...ledger.spendTotal !== undefined ? { spendTotal: ledger.spendTotal } : {}
+      };
+    } catch (error) {
+      const code = error?.code;
+      if (code === "EEXIST")
+        continue;
+      throw error;
+    }
+  }
+  throw new Error(`no free spend ledger filename after ${MAX_EXPORT_ATTEMPTS} attempts in ${targetDir}`);
+}
+function spendSummaryLine(result) {
+  if (result.iterations === 0)
+    return "no landed iterations to report";
+  if (result.measured === 0)
+    return `spend ledger written: no iteration carried a measurement (0 of ${result.iterations})`;
+  const spend = formatCost(result.spendTotal ?? 0);
+  if (result.measured < result.iterations)
+    return `spend ledger written: ${spend} across ${result.measured} of ${result.iterations} measured iterations`;
+  return `spend ledger written: ${spend} across ${result.iterations} iteration${result.iterations === 1 ? "" : "s"}`;
+}
+
+// src/core/dossier-index.ts
+import { createHash } from "crypto";
+import { readdirSync, readFileSync as readFileSync2, writeFileSync as writeFileSync6 } from "fs";
+import { join as join6, resolve as resolve5 } from "path";
+var dossierIndexName = (nowMs, attempt = 0) => artifactName("dossier-index", nowMs, attempt);
+var STAMP = String.raw`\d{8}-\d{6}(?:-[1-9]\d*)?`;
+var KIND_PATTERNS = [
+  ["dossier", new RegExp(`^goal-dossier-${STAMP}\\.md$`)],
+  ["review", new RegExp(`^goal-dossier-review-${STAMP}\\.md$`)],
+  ["sealed", new RegExp(`^goal-dossier-sealed-${STAMP}\\.md$`)],
+  ["spend ledger", new RegExp(`^goal-spend-ledger-${STAMP}\\.md$`)],
+  ["index", new RegExp(`^goal-dossier-index-${STAMP}\\.md$`)]
+];
+var dossierArtifactKind = (name) => {
+  for (const [kind, pattern] of KIND_PATTERNS) {
+    if (pattern.test(name))
+      return kind;
+  }
+  return;
+};
+function scanDossierArtifacts(dir) {
+  const targetDir = resolve5(dir);
+  const candidates = [];
+  for (const item of readdirSync(targetDir, { withFileTypes: true })) {
+    if (!item.isFile())
+      continue;
+    if (dossierArtifactKind(item.name) === undefined)
+      continue;
+    candidates.push(item.name);
+  }
+  const entries = [];
+  let skipped = 0;
+  for (const name of candidates) {
+    const kind = dossierArtifactKind(name);
+    try {
+      const bytes = readFileSync2(join6(targetDir, name));
+      entries.push({ name, kind, bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") });
+    } catch {
+      skipped += 1;
+    }
+  }
+  entries.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+  return { entries, skipped };
+}
+function buildDossierIndex(entries, nowMs, skipped = 0) {
+  if (!Number.isInteger(skipped) || skipped < 0)
+    throw new Error(`skipped must be a non-negative integer, got ${formatValue(skipped)}`);
+  const stamp = isoOf(nowMs);
+  const totalBytes = entries.reduce((sum, entry) => sum + entry.bytes, 0);
+  const lines = [];
+  lines.push("# Goal dossier index");
+  lines.push("");
+  lines.push(`_Generated ${stamp}. Every row below is a file the dossier family exported into the directory this index was written from, read at generation time: file name, kind, bytes (UTF-8), sha256 of the exact bytes read. The directory path is omitted on purpose. This index inventories; it does not verify \u2014 a file can change after generation and a matching digest here proves nothing about the present._`);
+  lines.push("");
+  lines.push(`## Artifacts (${entries.length} file${entries.length === 1 ? "" : "s"}, ${totalBytes} bytes)`);
+  lines.push("");
+  if (entries.length === 0) {
+    lines.push("None \u2014 the directory holds no exported dossier artifacts the dossier family recognizes. No rows are claimed.");
+    lines.push("");
+  } else {
+    lines.push("| file | kind | bytes | sha256 |", "| --- | --- | ---: | --- |");
+    for (const entry of entries) {
+      lines.push(`| ${inlineCode(entry.name)} | ${entry.kind} | ${entry.bytes} | ${entry.sha256} |`);
+    }
+    lines.push("");
+  }
+  if (skipped > 0) {
+    lines.push(`- ${skipped} matching file${skipped === 1 ? "" : "s"} could not be read (I/O error) and ${skipped === 1 ? "is" : "are"} not listed above; ${skipped === 1 ? "its" : "their"} bytes and digests are unknown, not zero.`);
+    lines.push("");
+  }
+  lines.push("---");
+  lines.push("_goal-loop dossier index \xB7 source: the files at generation time \xB7 sha256 computed over the exact bytes read \xB7 nothing was estimated or inferred; an unreadable file is counted, never guessed \xB7 this index inventories, it does not verify._");
+  return {
+    markdown: lines.join(`
+`),
+    artifacts: entries.length,
+    bytes: totalBytes,
+    skipped
+  };
+}
+function exportDossierIndex(nowMs, dir) {
+  const targetDir = resolve5(dir);
+  const scan = scanDossierArtifacts(targetDir);
+  const built = buildDossierIndex(scan.entries, nowMs, scan.skipped);
+  const bytes = Buffer.byteLength(built.markdown, "utf8");
+  for (let attempt = 0;attempt < MAX_EXPORT_ATTEMPTS; attempt++) {
+    const path = join6(targetDir, dossierIndexName(nowMs, attempt));
+    try {
+      writeFileSync6(path, built.markdown, { encoding: "utf8", flag: "wx" });
+      return {
+        path,
+        bytes,
+        attempts: attempt + 1,
+        artifacts: built.artifacts,
+        artifactBytes: built.bytes,
+        skipped: built.skipped
+      };
+    } catch (error) {
+      const code = error?.code;
+      if (code === "EEXIST")
+        continue;
+      throw error;
+    }
+  }
+  throw new Error(`no free dossier index filename after ${MAX_EXPORT_ATTEMPTS} attempts in ${targetDir}`);
+}
+function dossierIndexSummaryLine(result) {
+  const skipped = result.skipped > 0 ? `; ${result.skipped} unreadable (not listed)` : "";
+  if (result.artifacts === 0)
+    return `dossier index written: no artifacts found${skipped}`;
+  return `dossier index written: ${result.artifacts} artifact${result.artifacts === 1 ? "" : "s"}, ${result.artifactBytes} bytes${skipped}`;
+}
+
+// src/core/dossier-attest.ts
+var ANSWERS = new Set(["yes", "no", "unknown"]);
+var cellAnswer = (raw) => {
+  const flat = raw.trim().toLowerCase();
+  return ANSWERS.has(flat) ? flat : "unknown";
+};
+var splitRow = (line) => {
+  const cells = line.split("|").map((cell) => cell.trim());
+  if (cells.length >= 2 && cells[0] === "" && cells[cells.length - 1] === "")
+    cells.shift(), cells.pop();
+  if (cells.length < 5)
+    return null;
+  return cells;
+};
+var SHA_RE = /^[0-9a-f]{4,64}$/i;
+function parseAttestationAppendix(markdown) {
+  const lines = markdown.split(`
+`);
+  const heading = lines.findIndex((line) => line.startsWith("## Attestation"));
+  if (heading === -1)
+    return { kind: "unsealed" };
+  const section = [];
+  for (let index = heading + 1;index < lines.length; index += 1) {
+    const line = lines[index];
+    if (line.startsWith("## "))
+      break;
+    section.push(line);
+  }
+  const body = section.join(`
+`);
+  const stamp = /at ([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.Z+-]+):/.exec(body)?.[1];
+  const directory = /against `([^`]+)`, at/.exec(body)?.[1];
+  const gap = section.some((line) => line.includes("The record quotes no sha"));
+  const rows = [];
+  let malformed = 0;
+  for (const line of section) {
+    if (!line.startsWith("|"))
+      continue;
+    const cells = splitRow(line);
+    if (!cells) {
+      malformed += 1;
+      continue;
+    }
+    const first = cells[0].toLowerCase();
+    if (first === "sha" || /^-+$/.test(first))
+      continue;
+    const sha = cells[0];
+    if (!SHA_RE.test(sha)) {
+      malformed += 1;
+      continue;
+    }
+    const iterations = (cells[1].match(/\d+/g) ?? []).map(Number);
+    rows.push({
+      sha,
+      iterations,
+      exists: cellAnswer(cells[2]),
+      onThisLine: cellAnswer(cells[3]),
+      underSeal: cellAnswer(cells[4])
+    });
+  }
+  if (rows.length === 0 && !gap)
+    return { kind: "unparsable" };
+  return { kind: "sealed", stamp, directory, rows, gap, malformed };
+}
+var { verifyCell: verifyCell4, reachCell: reachCell3, signCell: signCell3 } = recordCellHelpers();
+var shasAsGoal = (rows) => ({
+  loopHistory: rows.flatMap((row, index) => row.iterations.length > 0 ? row.iterations.map((version) => ({ version, sha: row.sha })) : [{ version: index + 1, sha: row.sha }])
+});
+function attestSealedDossier(markdown, directory, probes = {}) {
+  const parsed = parseAttestationAppendix(markdown);
+  if (parsed.kind !== "sealed")
+    return parsed;
+  const verifyProbe = probes.verify ?? gitCatFileProbe(directory);
+  const reachProbe = probes.reach ?? gitAncestorProbe(directory);
+  const signProbe = probes.sign ?? gitSignProbe(directory);
+  const seen = new Set;
+  const uniqRows = parsed.rows.filter((row) => {
+    if (seen.has(row.sha))
+      return false;
+    seen.add(row.sha);
+    return true;
+  });
+  const synthetic = shasAsGoal(uniqRows);
+  const verification = verifyRecord(synthetic, verifyProbe);
+  const reach = reachRecord(synthetic, reachProbe);
+  const sign = signRecord(synthetic, signProbe);
+  const reachBySha = new Map(reach.checks.map((check) => [check.sha, check.status]));
+  const signBySha = new Map(sign.checks.map((check) => [check.sha, check.status]));
+  const verifyBySha = new Map(verification.checks.map((check) => [check.sha, check.status]));
+  const rows = uniqRows.map((row) => {
+    const now = {
+      exists: verifyCell4(verifyBySha.get(row.sha) ?? "unknown"),
+      onThisLine: reachCell3(reachBySha.get(row.sha) ?? "unknown"),
+      underSeal: signCell3(signBySha.get(row.sha) ?? "unknown")
+    };
+    const seal = { exists: row.exists, onThisLine: row.onThisLine, underSeal: row.underSeal };
+    const wasClean = seal.exists === "yes" && seal.onThisLine === "yes" && seal.underSeal === "yes";
+    const flipped = [];
+    if (wasClean) {
+      if (now.exists === "no")
+        flipped.push("exists");
+      if (now.onThisLine === "no")
+        flipped.push("on this line");
+      if (now.underSeal === "no")
+        flipped.push("under seal");
+    }
+    const nowClean = now.exists === "yes" && now.onThisLine === "yes" && now.underSeal === "yes";
+    const verdict = !wasClean ? "was-not-clean" : flipped.length > 0 ? "regressed" : nowClean ? "held" : "unknown";
+    return { sha: row.sha, shortSha: shortSha(row.sha), iterations: row.iterations, seal, now, verdict, flipped };
+  });
+  const sealedClean = rows.filter((row) => row.seal.exists === "yes" && row.seal.onThisLine === "yes" && row.seal.underSeal === "yes").length;
+  const held = rows.filter((row) => row.verdict === "held").length;
+  const regressed = rows.filter((row) => row.verdict === "regressed").length;
+  const unknown = rows.filter((row) => row.verdict === "unknown").length;
+  const wasNotClean = rows.length - sealedClean;
+  return {
+    kind: "attested",
+    rows,
+    unique: rows.length,
+    sealedClean,
+    held,
+    regressed,
+    unknown,
+    wasNotClean,
+    stamp: parsed.stamp,
+    sealDirectory: parsed.directory,
+    malformed: parsed.malformed
+  };
+}
+function attestSummaryLine(attestation) {
+  if (attestation.unique === 0)
+    return "sealed dossier quotes no shas to attest";
+  if (attestation.sealedClean === 0)
+    return `nothing held: no sha was clean at seal time (${attestation.unique} quoted)`;
+  if (attestation.regressed > 0)
+    return `attestation drifted: ${attestation.regressed} of ${attestation.sealedClean} sealed-clean shas regressed since sealing`;
+  if (attestation.unknown > 0)
+    return `attestation unverifiable: ${attestation.held} held, ${attestation.unknown} of ${attestation.sealedClean} could not answer`;
+  return `attestation holds: ${attestation.held} of ${attestation.sealedClean} sealed-clean shas still clean`;
+}
+function attestationReportMarkdown(result, nowMs, directory, fileName) {
+  const stamp = stampOf(nowMs);
+  const lines = [
+    "# /goal-loop sealed dossier attestation",
+    "",
+    `- Generated: ${stamp}`,
+    `- Repository: ${directory}`,
+    `- File re-attested: ${fileName}`,
+    result.stamp !== undefined ? `- Sealed at: ${result.stamp}${result.sealDirectory !== undefined ? ` against ${result.sealDirectory}` : ""}` : "- Sealed at: unknown (the appendix does not carry a stamp this parser can read)",
+    `- Shas named by the appendix: ${result.unique} unique`,
+    "",
+    "| sha | sealed (exists \xB7 line \xB7 seal) | now (exists \xB7 line \xB7 seal) | verdict |",
+    "| --- | --- | --- | --- |"
+  ];
+  for (const row of result.rows) {
+    const sealCell = `${row.seal.exists} \xB7 ${row.seal.onThisLine} \xB7 ${row.seal.underSeal}`;
+    const nowCell = `${row.now.exists} \xB7 ${row.now.onThisLine} \xB7 ${row.now.underSeal}`;
+    const verdictCell = row.verdict === "regressed" ? `regressed (${row.flipped.join(", ")})` : row.verdict;
+    lines.push(`| ${row.shortSha} | ${sealCell} | ${nowCell} | ${verdictCell} |`);
+  }
+  if (result.rows.length === 0)
+    lines.push("| \u2014 | \u2014 | \u2014 | \u2014 |");
+  lines.push("", `- Held: ${result.held} \xB7 regressed: ${result.regressed} \xB7 unknown: ${result.unknown} \xB7 was not clean at seal time: ${result.wasNotClean}`, result.malformed > 0 ? `- ${result.malformed} table-looking row(s) could not be read and are excluded from every count` : "- Every table row parsed", "", "This report re-probes the shas the file names \u2014 existence in the object store, membership of this line of history, and git's signature check \u2014 against the repository at the directory named above, right now. It cannot audit the bytes around the table: an editor who rewrites appendix cells can make the file claim anything, and this report detects divergence between seal-time answers and fresh ones, not tampering with the file itself. A verdict of `regressed` means git answered yes at seal time and no right now on the named question; `unknown` means git could not answer and is counted as neither; `was-not-clean` is a sha that never qualified. Existence is not ancestry, ancestry is not the seal. The strongest thing this document can say is `held`, and it says only that three `git` processes answered yes to three questions, now.", "");
+  return lines.join(`
+`);
+}
+var SEALED_NAME_RE = /^goal-dossier-sealed-(\d{8})-(\d{6})(?:-([1-9]\d*))?\.md$/;
+function sealedDossierCandidates(names, statMtimeMs) {
+  const out = [];
+  for (const name of names) {
+    if (!SEALED_NAME_RE.test(name))
+      continue;
+    out.push({ name, mtimeMs: statMtimeMs(name) });
+  }
+  return out;
+}
+function selectNewestSealedDossier(entries) {
+  let best;
+  for (const entry of entries) {
+    const match = SEALED_NAME_RE.exec(entry.name);
+    if (!match)
+      continue;
+    const stamp = `${match[1]}-${match[2]}`;
+    const attempt = match[3] !== undefined ? Number(match[3]) : 1;
+    if (!best || stamp > best.stamp || stamp === best.stamp && attempt > best.attempt || stamp === best.stamp && attempt === best.attempt && entry.mtimeMs > best.mtimeMs) {
+      best = { name: entry.name, stamp, attempt, mtimeMs: entry.mtimeMs };
+    }
+  }
+  return best?.name;
+}
+
+// src/tui-actions.ts
+function createDossierActions(deps) {
+  const { safeToast, toastError } = deps;
+  const copyReport = (report) => {
+    try {
+      return deps.copyToClipboard(report);
+    } catch {
+      return false;
+    }
+  };
+  const exportDossier = (sessionID, goal) => {
+    if (!goal || !sessionID)
+      return;
+    try {
+      const result = exportLoopDossier(goal, Date.now(), process.cwd());
+      safeToast({ title: "dossier exported", message: result.path, variant: "success", duration: 5000, sessionID });
+    } catch (error) {
+      toastError("export failed", error, sessionID);
+    }
+  };
+  const verifyRecordAction = (sessionID, goal) => {
+    if (!goal || !sessionID)
+      return;
+    try {
+      const directory = process.cwd();
+      const verification = verifyRecord(goal, gitCatFileProbe(directory));
+      const report = verifyReportMarkdown(goal, verification, Date.now(), directory);
+      const copied = copyReport(report);
+      const summary = verifySummaryLine(verification);
+      const title = verification.missing > 0 ? "record does not verify" : verification.unknown > 0 ? "record unverifiable" : verification.unique === 0 ? "nothing to verify" : "record verified";
+      const variant = verification.missing > 0 ? "error" : verification.unknown > 0 ? "warning" : "success";
+      safeToast({ title, message: copied ? summary : `${summary} \xB7 clipboard unavailable`, variant, duration: 6000, sessionID });
+      return verification;
+    } catch (error) {
+      toastError("verify failed", error, sessionID);
+      return;
+    }
+  };
+  const reachRecordAction = (sessionID, goal) => {
+    if (!goal || !sessionID)
+      return;
+    try {
+      const directory = process.cwd();
+      const reach = reachRecord(goal, gitAncestorProbe(directory));
+      const report = reachReportMarkdown(goal, reach, Date.now(), directory);
+      const copied = copyReport(report);
+      const summary = reachSummaryLine(reach);
+      const title = reach.unreached > 0 ? "record does not reach HEAD" : reach.unknown > 0 ? "record unverifiable" : reach.unique === 0 ? "nothing to place" : "record reaches HEAD";
+      const variant = reach.unreached > 0 || reach.unknown > 0 ? "warning" : "success";
+      safeToast({ title, message: copied ? summary : `${summary} \xB7 clipboard unavailable`, variant, duration: 6000, sessionID });
+      return reach;
+    } catch (error) {
+      toastError("reach check failed", error, sessionID);
+      return;
+    }
+  };
+  const signRecordAction = (sessionID, goal) => {
+    if (!goal || !sessionID)
+      return;
+    try {
+      const directory = process.cwd();
+      const sign = signRecord(goal, gitSignProbe(directory));
+      const report = signReportMarkdown(goal, sign, Date.now(), directory);
+      const copied = copyReport(report);
+      const summary = signSummaryLine(sign);
+      const title = sign.unverified > 0 ? "record not under seal" : sign.unknown > 0 ? "record unverifiable" : sign.unique === 0 ? "nothing to attest" : "record under seal";
+      const variant = sign.unverified > 0 || sign.unknown > 0 ? "warning" : "success";
+      safeToast({ title, message: copied ? summary : `${summary} \xB7 clipboard unavailable`, variant, duration: 6000, sessionID });
+      return sign;
+    } catch (error) {
+      toastError("sign check failed", error, sessionID);
+      return;
+    }
+  };
+  const attestSealedDossierAction = (sessionID) => {
+    try {
+      const directory = process.cwd();
+      let candidates;
+      try {
+        candidates = sealedDossierCandidates(readdirSync2(directory), (name) => {
+          try {
+            return statSync(join7(directory, name)).mtimeMs;
+          } catch {
+            return 0;
+          }
+        });
+      } catch (error) {
+        toastError("attest failed", error, sessionID, `cannot read ${directory}`);
+        return;
+      }
+      const newest = selectNewestSealedDossier(candidates);
+      if (!newest) {
+        safeToast({ title: "no sealed dossier", message: `no goal-dossier-sealed-*.md in ${directory} \u2014 seal one first with goal.dossier.seal`, variant: "warning", duration: 6000, sessionID });
+        return;
+      }
+      let markdown;
+      try {
+        markdown = readFileSync3(join7(directory, newest), "utf8");
+      } catch (error) {
+        toastError("attest failed", error, sessionID, `cannot read ${newest}`);
+        return;
+      }
+      const result = attestSealedDossier(markdown, directory);
+      if (result.kind === "unsealed") {
+        safeToast({ title: "not a sealed dossier", message: `${newest} carries no attestation appendix`, variant: "warning", duration: 6000, sessionID });
+        return;
+      }
+      if (result.kind === "unparsable") {
+        safeToast({ title: "attestation unreadable", message: `${newest}: the appendix heading is present but no row parses`, variant: "warning", duration: 6000, sessionID });
+        return;
+      }
+      const report = attestationReportMarkdown(result, Date.now(), directory, newest);
+      const copied = copyReport(report);
+      const summary = attestSummaryLine(result);
+      const title = result.regressed > 0 ? "attestation drifted" : result.unknown > 0 ? "attestation unverifiable" : result.unique === 0 ? "nothing to attest" : "attestation holds";
+      const variant = result.regressed > 0 || result.unknown > 0 ? "warning" : "success";
+      safeToast({ title, message: copied ? summary : `${summary} \xB7 clipboard unavailable`, variant, duration: 6000, sessionID });
+    } catch (error) {
+      toastError("attest failed", error, sessionID);
+    }
+  };
+  const reviewRecordAction = (sessionID, goal) => {
+    if (!goal || !sessionID)
+      return;
+    try {
+      const result = exportReview(goal, Date.now(), process.cwd());
+      const summary = reviewSummaryLine(result);
+      const title = result.unique === 0 ? "nothing to review" : result.gaps > 0 ? "review written with gaps" : result.unknown > 0 ? "review unverifiable" : "review written";
+      const variant = result.gaps > 0 || result.unknown > 0 ? "warning" : "success";
+      safeToast({ title, message: `${result.path} \xB7 ${summary}`, variant, duration: 6000, sessionID });
+    } catch (error) {
+      toastError("review failed", error, sessionID);
+    }
+  };
+  const spendLedgerAction = (sessionID, goal) => {
+    if (!goal || !sessionID)
+      return;
+    try {
+      const result = exportSpendLedger(goal, Date.now(), process.cwd());
+      const summary = spendSummaryLine(result);
+      const title = result.iterations === 0 ? "nothing to report" : result.measured < result.iterations ? "spend ledger written (partial)" : "spend ledger written";
+      const variant = result.iterations === 0 || result.measured < result.iterations ? "warning" : "success";
+      safeToast({ title, message: `${result.path} \xB7 ${summary}`, variant, duration: 6000, sessionID });
+    } catch (error) {
+      toastError("spend report failed", error, sessionID);
+    }
+  };
+  const sealRecordAction = (sessionID, goal) => {
+    if (!goal || !sessionID)
+      return;
+    try {
+      const result = exportSealedDossier(goal, Date.now(), process.cwd());
+      const summary = sealSummaryLine(result);
+      const title = result.unique === 0 ? "nothing to seal" : result.clean === result.unique ? "record sealed" : "record sealed with gaps";
+      const variant = result.clean === result.unique ? "success" : "warning";
+      safeToast({ title, message: `${result.path} \xB7 ${summary}`, variant, duration: 6000, sessionID });
+      return result;
+    } catch (error) {
+      toastError("seal failed", error, sessionID);
+      return;
+    }
+  };
+  const dossierIndexAction = (sessionID) => {
+    try {
+      const result = exportDossierIndex(Date.now(), process.cwd());
+      const summary = dossierIndexSummaryLine(result);
+      const title = result.artifacts === 0 ? "no artifacts found" : result.skipped > 0 ? "index written with gaps" : "dossier index written";
+      const variant = result.artifacts === 0 || result.skipped > 0 ? "warning" : "success";
+      safeToast({ title, message: `${result.path} \xB7 ${summary}`, variant, duration: 6000, sessionID });
+    } catch (error) {
+      toastError("index failed", error, sessionID);
+    }
+  };
+  return { exportDossier, verifyRecordAction, reachRecordAction, signRecordAction, attestSealedDossierAction, reviewRecordAction, spendLedgerAction, sealRecordAction, dossierIndexAction };
+}
+
+// src/tui-keymap.ts
+function registerGlobalKeymap(deps) {
+  const { addLayer, live, currentSession, entries, statusDialogOpen, setContextOpen, setHudSession, togglePin, copyToClipboard, requestStatus, requestClearGoal, runDossierAction, exportDossier, verifyRecordAction, reachRecordAction, signRecordAction, sealRecordAction, attestSealedDossierAction, reviewRecordAction, spendLedgerAction, dossierIndexAction } = deps;
+  addLayer(() => ({
+    mode: "global",
+    commands: [
+      {
+        id: "goal.status",
+        title: "Goal: show status",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+        run: () => requestStatus()
+      },
+      {
+        id: "goal.clear",
+        title: "Goal: clear",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession())),
+        run: () => requestClearGoal(currentSession())
+      },
+      {
+        id: "goal.loop.status",
+        title: "Goal loop: show status",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession())?.loopEnabled),
+        run: () => requestStatus()
+      },
+      {
+        id: "goal.hud.toggle",
+        title: "Goal HUD: toggle card",
+        group: "Goal",
+        palette: true,
+        enabled: () => hudArmEnabled(Boolean(live(currentSession())), statusDialogOpen()),
+        run: () => {
+          try {
+            if (statusDialogOpen())
+              return;
+            const sessionID = currentSession();
+            setContextOpen(false);
+            setHudSession((current) => sessionID && current === sessionID ? undefined : sessionID);
+          } catch {}
+        }
+      },
+      {
+        id: "goal.pin.toggle",
+        title: "Goal: toggle pinned condition",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession())),
+        run: () => {
+          try {
+            togglePin(currentSession());
+          } catch {}
+        }
+      },
+      {
+        id: "goal.condition.copy",
+        title: "Goal: copy condition",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal?.condition),
+        run: () => {
+          try {
+            const sessionID = currentSession();
+            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
+            if (goal?.condition && sessionID)
+              copyToClipboard(goal.condition, sessionID);
+          } catch {}
+        }
+      },
+      {
+        id: "goal.reason.copy",
+        title: "Goal: copy evaluator reason",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean((live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal)?.reason),
+        run: () => {
+          try {
+            const sessionID = currentSession();
+            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
+            if (goal?.reason && sessionID)
+              copyToClipboard(goal.reason, sessionID, "reason");
+          } catch {}
+        }
+      },
+      {
+        id: "goal.summary.copy",
+        title: "Goal: copy latest loop summary",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean((live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal)?.loopHistory?.at(-1)?.summary),
+        run: () => {
+          try {
+            const sessionID = currentSession();
+            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
+            const summary = goal?.loopHistory?.at(-1)?.summary;
+            if (summary && sessionID)
+              copyToClipboard(summary, sessionID, "summary");
+          } catch {}
+        }
+      },
+      {
+        id: "goal.dossier.copy",
+        title: "Goal: copy loop dossier (markdown)",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+        run: () => {
+          try {
+            const sessionID = currentSession();
+            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
+            if (goal && sessionID)
+              copyToClipboard(buildLoopDossier(goal, Date.now()), sessionID, "dossier");
+          } catch {}
+        }
+      },
+      {
+        id: "goal.dossier.export",
+        title: "Goal: export loop dossier (markdown file)",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+        run: () => runDossierAction(exportDossier)
+      },
+      {
+        id: "goal.dossier.verify",
+        title: "Goal: verify the record (shas + markdown report)",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+        run: () => runDossierAction(verifyRecordAction)
+      },
+      {
+        id: "goal.dossier.reach",
+        title: "Goal: verify the record reaches HEAD (shas + markdown report)",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+        run: () => runDossierAction(reachRecordAction)
+      },
+      {
+        id: "goal.dossier.sign",
+        title: "Goal: verify the record's signatures (shas + markdown report)",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+        run: () => runDossierAction(signRecordAction)
+      },
+      {
+        id: "goal.dossier.seal",
+        title: "Goal: seal the dossier with a fresh attestation (file)",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+        run: () => runDossierAction(sealRecordAction)
+      },
+      {
+        id: "goal.dossier.attest",
+        title: "Goal: attest a sealed dossier against HEAD (drift report)",
+        group: "Goal",
+        palette: true,
+        enabled: () => true,
+        run: () => {
+          try {
+            attestSealedDossierAction(currentSession());
+          } catch {}
+        }
+      },
+      {
+        id: "goal.dossier.review",
+        title: "Goal: review the dossier in one file (every question git can answer)",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+        run: () => runDossierAction(reviewRecordAction)
+      },
+      {
+        id: "goal.dossier.spend",
+        title: "Goal: export the spend ledger (markdown report)",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+        run: () => runDossierAction(spendLedgerAction)
+      },
+      {
+        id: "goal.dossier.index",
+        title: "Goal: index the exported dossier artifacts (markdown)",
+        group: "Goal",
+        palette: true,
+        enabled: () => true,
+        run: () => {
+          try {
+            dossierIndexAction(currentSession());
+          } catch {}
+        }
+      },
+      {
+        id: "goal.loop.clear",
+        title: "Goal loop: clear",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession())?.loopEnabled),
+        run: () => requestClearGoal(currentSession())
+      }
+    ]
+  }));
+}
 
 // src/rpc.ts
 import { Rpc } from "@opencode/plugin/rpc";
@@ -7573,248 +7960,27 @@ var tui_default = Plugin.define({
         toastError("copy failed", error, sessionID);
       }
     };
-    const copyReport = (report) => {
-      try {
-        return context.renderer.copyToClipboardOSC52(report);
-      } catch {
-        return false;
-      }
-    };
-    const exportDossier = (sessionID, goal) => {
-      if (!goal || !sessionID)
-        return;
-      try {
-        const result = exportLoopDossier(goal, Date.now(), process.cwd());
-        safeToast({
-          title: "dossier exported",
-          message: result.path,
-          variant: "success",
-          duration: 5000,
-          sessionID
-        });
-      } catch (error) {
-        toastError("export failed", error, sessionID);
-      }
-    };
-    const verifyRecordAction = (sessionID, goal) => {
-      if (!goal || !sessionID)
-        return;
-      try {
-        const directory = process.cwd();
-        const verification = verifyRecord(goal, gitCatFileProbe(directory));
-        const report = verifyReportMarkdown(goal, verification, Date.now(), directory);
-        const copied = copyReport(report);
-        const summary = verifySummaryLine(verification);
-        const title = verification.missing > 0 ? "record does not verify" : verification.unknown > 0 ? "record unverifiable" : verification.unique === 0 ? "nothing to verify" : "record verified";
-        const variant = verification.missing > 0 ? "error" : verification.unknown > 0 ? "warning" : "success";
-        safeToast({
-          title,
-          message: copied ? summary : `${summary} \xB7 clipboard unavailable`,
-          variant,
-          duration: 6000,
-          sessionID
-        });
-        return verification;
-      } catch (error) {
-        toastError("verify failed", error, sessionID);
-        return;
-      }
-    };
-    const reachRecordAction = (sessionID, goal) => {
-      if (!goal || !sessionID)
-        return;
-      try {
-        const directory = process.cwd();
-        const reach = reachRecord(goal, gitAncestorProbe(directory));
-        const report = reachReportMarkdown(goal, reach, Date.now(), directory);
-        const copied = copyReport(report);
-        const summary = reachSummaryLine(reach);
-        const title = reach.unreached > 0 ? "record does not reach HEAD" : reach.unknown > 0 ? "record unverifiable" : reach.unique === 0 ? "nothing to place" : "record reaches HEAD";
-        const variant = reach.unreached > 0 || reach.unknown > 0 ? "warning" : "success";
-        safeToast({
-          title,
-          message: copied ? summary : `${summary} \xB7 clipboard unavailable`,
-          variant,
-          duration: 6000,
-          sessionID
-        });
-        return reach;
-      } catch (error) {
-        toastError("reach check failed", error, sessionID);
-        return;
-      }
-    };
-    const signRecordAction = (sessionID, goal) => {
-      if (!goal || !sessionID)
-        return;
-      try {
-        const directory = process.cwd();
-        const sign = signRecord(goal, gitSignProbe(directory));
-        const report = signReportMarkdown(goal, sign, Date.now(), directory);
-        const copied = copyReport(report);
-        const summary = signSummaryLine(sign);
-        const title = sign.unverified > 0 ? "record not under seal" : sign.unknown > 0 ? "record unverifiable" : sign.unique === 0 ? "nothing to attest" : "record under seal";
-        const variant = sign.unverified > 0 || sign.unknown > 0 ? "warning" : "success";
-        safeToast({
-          title,
-          message: copied ? summary : `${summary} \xB7 clipboard unavailable`,
-          variant,
-          duration: 6000,
-          sessionID
-        });
-        return sign;
-      } catch (error) {
-        toastError("sign check failed", error, sessionID);
-        return;
-      }
-    };
-    const attestSealedDossierAction = (sessionID) => {
-      try {
-        const directory = process.cwd();
-        let candidates;
+    const {
+      exportDossier,
+      verifyRecordAction,
+      reachRecordAction,
+      signRecordAction,
+      attestSealedDossierAction,
+      reviewRecordAction,
+      spendLedgerAction,
+      sealRecordAction,
+      dossierIndexAction
+    } = createDossierActions({
+      copyToClipboard: (report) => {
         try {
-          candidates = sealedDossierCandidates(readdirSync2(directory), (name) => {
-            try {
-              return statSync(join7(directory, name)).mtimeMs;
-            } catch {
-              return 0;
-            }
-          });
-        } catch (error) {
-          toastError("attest failed", error, sessionID, `cannot read ${directory}`);
-          return;
+          return context.renderer.copyToClipboardOSC52(report);
+        } catch {
+          return false;
         }
-        const newest = selectNewestSealedDossier(candidates);
-        if (!newest) {
-          safeToast({
-            title: "no sealed dossier",
-            message: `no goal-dossier-sealed-*.md in ${directory} \u2014 seal one first with goal.dossier.seal`,
-            variant: "warning",
-            duration: 6000,
-            sessionID
-          });
-          return;
-        }
-        let markdown;
-        try {
-          markdown = readFileSync3(join7(directory, newest), "utf8");
-        } catch (error) {
-          toastError("attest failed", error, sessionID, `cannot read ${newest}`);
-          return;
-        }
-        const result = attestSealedDossier(markdown, directory);
-        if (result.kind === "unsealed") {
-          safeToast({
-            title: "not a sealed dossier",
-            message: `${newest} carries no attestation appendix`,
-            variant: "warning",
-            duration: 6000,
-            sessionID
-          });
-          return;
-        }
-        if (result.kind === "unparsable") {
-          safeToast({
-            title: "attestation unreadable",
-            message: `${newest}: the appendix heading is present but no row parses`,
-            variant: "warning",
-            duration: 6000,
-            sessionID
-          });
-          return;
-        }
-        const report = attestationReportMarkdown(result, Date.now(), directory, newest);
-        const copied = copyReport(report);
-        const summary = attestSummaryLine(result);
-        const title = result.regressed > 0 ? "attestation drifted" : result.unknown > 0 ? "attestation unverifiable" : result.unique === 0 ? "nothing to attest" : "attestation holds";
-        const variant = result.regressed > 0 || result.unknown > 0 ? "warning" : "success";
-        safeToast({
-          title,
-          message: copied ? summary : `${summary} \xB7 clipboard unavailable`,
-          variant,
-          duration: 6000,
-          sessionID
-        });
-      } catch (error) {
-        toastError("attest failed", error, sessionID);
-      }
-    };
-    const reviewRecordAction = (sessionID, goal) => {
-      if (!goal || !sessionID)
-        return;
-      try {
-        const result = exportReview(goal, Date.now(), process.cwd());
-        const summary = reviewSummaryLine(result);
-        const title = result.unique === 0 ? "nothing to review" : result.gaps > 0 ? "review written with gaps" : result.unknown > 0 ? "review unverifiable" : "review written";
-        const variant = result.gaps > 0 || result.unknown > 0 ? "warning" : "success";
-        safeToast({
-          title,
-          message: `${result.path} \xB7 ${summary}`,
-          variant,
-          duration: 6000,
-          sessionID
-        });
-      } catch (error) {
-        toastError("review failed", error, sessionID);
-      }
-    };
-    const spendLedgerAction = (sessionID, goal) => {
-      if (!goal || !sessionID)
-        return;
-      try {
-        const result = exportSpendLedger(goal, Date.now(), process.cwd());
-        const summary = spendSummaryLine(result);
-        const title = result.iterations === 0 ? "nothing to report" : result.measured < result.iterations ? "spend ledger written (partial)" : "spend ledger written";
-        const variant = result.iterations === 0 || result.measured < result.iterations ? "warning" : "success";
-        safeToast({
-          title,
-          message: `${result.path} \xB7 ${summary}`,
-          variant,
-          duration: 6000,
-          sessionID
-        });
-      } catch (error) {
-        toastError("spend report failed", error, sessionID);
-      }
-    };
-    const sealRecordAction = (sessionID, goal) => {
-      if (!goal || !sessionID)
-        return;
-      try {
-        const result = exportSealedDossier(goal, Date.now(), process.cwd());
-        const summary = sealSummaryLine(result);
-        const title = result.unique === 0 ? "nothing to seal" : result.clean === result.unique ? "record sealed" : "record sealed with gaps";
-        const variant = result.clean === result.unique ? "success" : "warning";
-        safeToast({
-          title,
-          message: `${result.path} \xB7 ${summary}`,
-          variant,
-          duration: 6000,
-          sessionID
-        });
-        return result;
-      } catch (error) {
-        toastError("seal failed", error, sessionID);
-        return;
-      }
-    };
-    const dossierIndexAction = (sessionID) => {
-      try {
-        const result = exportDossierIndex(Date.now(), process.cwd());
-        const summary = dossierIndexSummaryLine(result);
-        const title = result.artifacts === 0 ? "no artifacts found" : result.skipped > 0 ? "index written with gaps" : "dossier index written";
-        const variant = result.artifacts === 0 || result.skipped > 0 ? "warning" : "success";
-        safeToast({
-          title,
-          message: `${result.path} \xB7 ${summary}`,
-          variant,
-          duration: 6000,
-          sessionID
-        });
-      } catch (error) {
-        toastError("index failed", error, sessionID);
-      }
-    };
+      },
+      safeToast,
+      toastError
+    });
     const requestClearGoal = (sessionID) => {
       if (!sessionID)
         return;
@@ -8292,192 +8458,29 @@ var tui_default = Plugin.define({
         action(sessionID, goal);
       } catch {}
     };
-    context.keymap.layer(() => ({
-      mode: "global",
-      commands: [{
-        id: "goal.status",
-        title: "Goal: show status",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => requestStatus()
-      }, {
-        id: "goal.clear",
-        title: "Goal: clear",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean(live(currentSession())),
-        run: () => requestClearGoal(currentSession())
-      }, {
-        id: "goal.loop.status",
-        title: "Goal loop: show status",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean(live(currentSession())?.loopEnabled),
-        run: () => requestStatus()
-      }, {
-        id: "goal.hud.toggle",
-        title: "Goal HUD: toggle card",
-        group: "Goal",
-        palette: true,
-        enabled: () => hudArmEnabled(Boolean(live(currentSession())), statusDialogOpen()),
-        run: () => {
-          try {
-            if (statusDialogOpen())
-              return;
-            const sessionID = currentSession();
-            setContextOpen(false);
-            setHudSession((current) => sessionID && current === sessionID ? undefined : sessionID);
-          } catch {}
-        }
-      }, {
-        id: "goal.pin.toggle",
-        title: "Goal: toggle pinned condition",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean(live(currentSession())),
-        run: () => {
-          try {
-            togglePin(currentSession());
-          } catch {}
-        }
-      }, {
-        id: "goal.condition.copy",
-        title: "Goal: copy condition",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal?.condition),
-        run: () => {
-          try {
-            const sessionID = currentSession();
-            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
-            if (goal?.condition && sessionID)
-              copyToClipboard(goal.condition, sessionID);
-          } catch {}
-        }
-      }, {
-        id: "goal.reason.copy",
-        title: "Goal: copy evaluator reason",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean((live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal)?.reason),
-        run: () => {
-          try {
-            const sessionID = currentSession();
-            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
-            if (goal?.reason && sessionID)
-              copyToClipboard(goal.reason, sessionID, "reason");
-          } catch {}
-        }
-      }, {
-        id: "goal.summary.copy",
-        title: "Goal: copy latest loop summary",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean((live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal)?.loopHistory?.at(-1)?.summary),
-        run: () => {
-          try {
-            const sessionID = currentSession();
-            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
-            const summary = goal?.loopHistory?.at(-1)?.summary;
-            if (summary && sessionID)
-              copyToClipboard(summary, sessionID, "summary");
-          } catch {}
-        }
-      }, {
-        id: "goal.dossier.copy",
-        title: "Goal: copy loop dossier (markdown)",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => {
-          try {
-            const sessionID = currentSession();
-            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
-            if (goal && sessionID)
-              copyToClipboard(buildLoopDossier(goal, Date.now()), sessionID, "dossier");
-          } catch {}
-        }
-      }, {
-        id: "goal.dossier.export",
-        title: "Goal: export loop dossier (markdown file)",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => runDossierAction(exportDossier)
-      }, {
-        id: "goal.dossier.verify",
-        title: "Goal: verify the record (shas + markdown report)",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => runDossierAction(verifyRecordAction)
-      }, {
-        id: "goal.dossier.reach",
-        title: "Goal: verify the record reaches HEAD (shas + markdown report)",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => runDossierAction(reachRecordAction)
-      }, {
-        id: "goal.dossier.sign",
-        title: "Goal: verify the record's signatures (shas + markdown report)",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => runDossierAction(signRecordAction)
-      }, {
-        id: "goal.dossier.seal",
-        title: "Goal: seal the dossier with a fresh attestation (file)",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => runDossierAction(sealRecordAction)
-      }, {
-        id: "goal.dossier.attest",
-        title: "Goal: attest a sealed dossier against HEAD (drift report)",
-        group: "Goal",
-        palette: true,
-        enabled: () => true,
-        run: () => {
-          try {
-            attestSealedDossierAction(currentSession());
-          } catch {}
-        }
-      }, {
-        id: "goal.dossier.review",
-        title: "Goal: review the dossier in one file (every question git can answer)",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => runDossierAction(reviewRecordAction)
-      }, {
-        id: "goal.dossier.spend",
-        title: "Goal: export the spend ledger (markdown report)",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => runDossierAction(spendLedgerAction)
-      }, {
-        id: "goal.dossier.index",
-        title: "Goal: index the exported dossier artifacts (markdown)",
-        group: "Goal",
-        palette: true,
-        enabled: () => true,
-        run: () => {
-          try {
-            dossierIndexAction(currentSession());
-          } catch {}
-        }
-      }, {
-        id: "goal.loop.clear",
-        title: "Goal loop: clear",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean(live(currentSession())?.loopEnabled),
-        run: () => requestClearGoal(currentSession())
-      }]
-    }));
+    registerGlobalKeymap({
+      addLayer: (factory) => context.keymap.layer(factory),
+      live,
+      currentSession,
+      entries,
+      statusDialogOpen,
+      setContextOpen: (value) => setContextOpen(value),
+      setHudSession: (value) => setHudSession(value),
+      togglePin,
+      copyToClipboard,
+      requestStatus,
+      requestClearGoal,
+      runDossierAction,
+      exportDossier,
+      verifyRecordAction,
+      reachRecordAction,
+      signRecordAction,
+      sealRecordAction,
+      attestSealedDossierAction,
+      reviewRecordAction,
+      spendLedgerAction,
+      dossierIndexAction
+    });
     return () => {
       clearInterval(timer);
       pumpController.abort();

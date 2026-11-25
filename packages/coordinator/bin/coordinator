@@ -1017,6 +1017,122 @@ require_main_clean() {
   return 0
 }
 
+# Acquire the serial merge lock. Uses the caller's lock_dir/lock_file/epoch/started_iso
+# so the fd and holder stay owned by merge-next for the whole merge.
+acquire_merge_lock() {
+  mkdir -p "$DATA_DIR"
+  exec 9<>"$lock_file" || { printf 'error: cannot open merge lock file\n' >&2; exit 1; }
+  epoch=$(now_epoch)
+  started_iso=$(now_iso)
+  # never overwrite the recorded holder before we own the lock; on contention we only read it
+  if command -v flock >/dev/null 2>&1; then
+    if ! flock -n 9; then
+      local holder
+      holder=$(cat "$lock_dir/holder" 2>/dev/null || cat "$lock_file" 2>/dev/null || printf 'unknown')
+      printf 'error: merge lock held (%s)\n' "${holder%$'\n'}" >&2
+      { exec 9>&-; } 2>/dev/null || true
+      exit 1
+    fi
+  fi
+  if ! mkdir "$lock_dir" 2>/dev/null; then
+    # Stale lock handling: an old dir, a dead holder pid, or a holder past the shared reclaim window.
+    # The last two match merge-status/await-merge, which otherwise advertise "safe to retry" while
+    # merge-next refuses the lock for the remaining minutes.
+    if [ -d "$lock_dir" ] && { [ -n "$(find "$lock_dir" -maxdepth 0 -mmin +60 2>/dev/null)" ] || merge_holder_stale; }; then
+      local holder reclaimed_age
+      holder=$(cat "$lock_dir/holder" 2>/dev/null || cat "$lock_file" 2>/dev/null || printf 'slug=? (no holder was recorded)')
+      reclaimed_age=$(( ( $(now_epoch) - $(stat -c %Y "$lock_dir" 2>/dev/null || printf '0') ) / 60 ))
+      printf 'warning: reclaiming stale merge lock; it held: %s (lock dir age %s min)\n' "${holder%$'\n'}" "$reclaimed_age" >&2
+      # mv is atomic: exactly one contender renames the stale dir aside; the rest fail and exit.
+      if mv "$lock_dir" "${lock_dir}.stale.$$" 2>/dev/null; then
+        rm -rf "${lock_dir}.stale.$$"
+      else
+        printf 'error: merge lock held\n' >&2
+        { exec 9>&-; } 2>/dev/null || true
+        exit 1
+      fi
+      # The stale holder died without releasing: clear its mergeLock under the same state flock used
+      # by every other write, so `doctor` does not keep failing on a lock nobody holds.
+      state_lock
+      state_write_filter '.mergeLock = null'
+      state_unlock
+      if ! mkdir "$lock_dir" 2>/dev/null; then
+        printf 'error: merge lock held\n' >&2
+        { exec 9>&-; } 2>/dev/null || true
+        exit 1
+      fi
+    else
+      local holder
+      holder=$(cat "$lock_dir/holder" 2>/dev/null || cat "$lock_file" 2>/dev/null || printf 'unknown')
+      printf 'error: merge lock held (%s)\n' "${holder%$'\n'}" >&2
+      { exec 9>&-; } 2>/dev/null || true
+      exit 1
+    fi
+  fi
+  # we own the lock now: record the holder inside the lock file and the lock dir
+  # Publish the holder by atomic rename: merge-status reads this file without a lock, so a truncate
+  # followed by a write would let it observe an empty or partial line.
+  local holder_tmp
+  holder_tmp=$(mktemp "$DATA_DIR/.holder.XXXXXX") || holder_tmp=""
+  if [ -n "$holder_tmp" ]; then
+    printf 'slug=%s branch=%s pid=%s started=%s\n' "$slug" "$branch" "$$" "$started_iso" > "$holder_tmp" 2>/dev/null || true
+    # Test hook: widen the publication window to exercise unlocked readers deterministically.
+    if [ -n "${COORDINATOR_TEST_HOLDER_WRITE_SLEEP:-}" ]; then sleep "$COORDINATOR_TEST_HOLDER_WRITE_SLEEP"; fi
+    mv -f "$holder_tmp" "$lock_dir/holder" 2>/dev/null || rm -f "$holder_tmp"
+  fi
+  # The flock target must keep one inode for its whole lifetime; never unlink it on release.
+  printf 'slug=%s branch=%s pid=%s started=%s\n' "$slug" "$branch" "$$" "$started_iso" > "$lock_file" 2>/dev/null || true
+}
+
+# Warn about lease path and module overlap before the gate runs. Read-only.
+preflight_merge_risks() {
+  # Preflight: say, BEFORE the gate runs, what this merge touches and which in-flight leases it invalidates.
+  local touched others other ostatus overlap_found=0 semantic_found=0 touched_modules other_modules shared mod agency
+  touched=$(git -C "$MAIN_ROOT" diff --name-only "$DEV_BRANCH"..."$scratch" 2>/dev/null || true)
+  local touched_count
+  touched_count=$(printf '%s' "$touched" | grep -c . || true)
+  printf 'preflight: merge touches %s file(s)\n' "${touched_count:-0}"
+  printf '%s\n' "$touched" | sed 's/^/  /'
+  others=$(jq -r '.leases | to_entries | map(select(.value.status != "done")) | .[].key' "$STATE_FILE" 2>/dev/null || true)
+  for other in $others; do
+    [ "$other" = "$slug" ] && continue
+    ostatus=$(jq -r --arg o "$other" '.leases[$o].status' "$STATE_FILE" 2>/dev/null || printf '?')
+    local opaths of agency
+    opaths=$(jq -r --arg o "$other" '.leases[$o].paths // ""' "$STATE_FILE" 2>/dev/null || printf '')
+    agency=$(jq -r --arg o "$other" '.leases[$o].agent // "?"' "$STATE_FILE" 2>/dev/null || printf '?')
+    local f hit=0
+    while IFS= read -r f; do
+      [ -z "$f" ] && continue
+      if path_in_scopes "$f" "$opaths"; then hit=1; break; fi
+    done <<<"$touched"
+    if [ "$hit" = "1" ]; then
+      overlap_found=1
+      printf 'preflight: WARNING: lease %s (agent %s, status %s, paths %s) overlaps this merge — it will need a rebase onto %s and a re-run of its checks after this merge lands\n' "$other" "$agency" "$ostatus" "$opaths" "$DEV_BRANCH" >&2
+    fi
+  done
+  [ "$overlap_found" = "0" ] && printf 'preflight: no non-done lease overlaps this merge\n'
+
+  # Semantic risk: a literal path-overlap check cannot see two leases touching different files of the same module
+  # (shared APIs, shared test surface). Warn — never block — so the submitting agents know to re-validate.
+  touched_modules=$(modules_of_paths "$(printf '%s\n' "$touched" | tr '\n' ',' )")
+  for other in $others; do
+    [ "$other" = "$slug" ] && continue
+    opaths=$(jq -r --arg o "$other" '.leases[$o].paths // ""' "$STATE_FILE" 2>/dev/null || printf '')
+    [ -z "$opaths" ] && continue
+    agency=$(jq -r --arg o "$other" '.leases[$o].agent // "?"' "$STATE_FILE" 2>/dev/null || printf '?')
+    other_modules=$(modules_of_paths "$opaths")
+    shared=""
+    for mod in $touched_modules; do
+      case " $other_modules " in *" $mod "*) shared="${shared:+$shared }$mod" ;; esac
+    done
+    if [ -n "$shared" ]; then
+      semantic_found=1
+      printf 'preflight: SEMANTIC-RISK: lease %s (agent %s) shares module(s) %s with this merge; re-run its checks after this merge lands\n' "$other" "$agency" "$shared" >&2
+    fi
+  done
+  [ "$semantic_found" = "0" ] && printf 'preflight: no shared-module semantic risk with active leases\n'
+}
+
 do_merge_next() {
   need_jq
   ensure_state
@@ -1150,69 +1266,8 @@ do_merge_next() {
   # acquire serial lock: flock (when available) plus a mkdir lock dir for visibility
   local lock_dir="$DATA_DIR/.merge-lock"
   local lock_file="$DATA_DIR/.merge-lock-file"
-  mkdir -p "$DATA_DIR"
-  exec 9<>"$lock_file" || { printf 'error: cannot open merge lock file\n' >&2; exit 1; }
   local epoch started_iso
-  epoch=$(now_epoch)
-  started_iso=$(now_iso)
-  # never overwrite the recorded holder before we own the lock; on contention we only read it
-  if command -v flock >/dev/null 2>&1; then
-    if ! flock -n 9; then
-      local holder
-      holder=$(cat "$lock_dir/holder" 2>/dev/null || cat "$lock_file" 2>/dev/null || printf 'unknown')
-      printf 'error: merge lock held (%s)\n' "${holder%$'\n'}" >&2
-      { exec 9>&-; } 2>/dev/null || true
-      exit 1
-    fi
-  fi
-  if ! mkdir "$lock_dir" 2>/dev/null; then
-    # Stale lock handling: an old dir, a dead holder pid, or a holder past the shared reclaim window.
-    # The last two match merge-status/await-merge, which otherwise advertise "safe to retry" while
-    # merge-next refuses the lock for the remaining minutes.
-    if [ -d "$lock_dir" ] && { [ -n "$(find "$lock_dir" -maxdepth 0 -mmin +60 2>/dev/null)" ] || merge_holder_stale; }; then
-      local holder reclaimed_age
-      holder=$(cat "$lock_dir/holder" 2>/dev/null || cat "$lock_file" 2>/dev/null || printf 'slug=? (no holder was recorded)')
-      reclaimed_age=$(( ( $(now_epoch) - $(stat -c %Y "$lock_dir" 2>/dev/null || printf '0') ) / 60 ))
-      printf 'warning: reclaiming stale merge lock; it held: %s (lock dir age %s min)\n' "${holder%$'\n'}" "$reclaimed_age" >&2
-      # mv is atomic: exactly one contender renames the stale dir aside; the rest fail and exit.
-      if mv "$lock_dir" "${lock_dir}.stale.$$" 2>/dev/null; then
-        rm -rf "${lock_dir}.stale.$$"
-      else
-        printf 'error: merge lock held\n' >&2
-        { exec 9>&-; } 2>/dev/null || true
-        exit 1
-      fi
-      # The stale holder died without releasing: clear its mergeLock under the same state flock used
-      # by every other write, so `doctor` does not keep failing on a lock nobody holds.
-      state_lock
-      state_write_filter '.mergeLock = null'
-      state_unlock
-      if ! mkdir "$lock_dir" 2>/dev/null; then
-        printf 'error: merge lock held\n' >&2
-        { exec 9>&-; } 2>/dev/null || true
-        exit 1
-      fi
-    else
-      local holder
-      holder=$(cat "$lock_dir/holder" 2>/dev/null || cat "$lock_file" 2>/dev/null || printf 'unknown')
-      printf 'error: merge lock held (%s)\n' "${holder%$'\n'}" >&2
-      { exec 9>&-; } 2>/dev/null || true
-      exit 1
-    fi
-  fi
-  # we own the lock now: record the holder inside the lock file and the lock dir
-  # Publish the holder by atomic rename: merge-status reads this file without a lock, so a truncate
-  # followed by a write would let it observe an empty or partial line.
-  local holder_tmp
-  holder_tmp=$(mktemp "$DATA_DIR/.holder.XXXXXX") || holder_tmp=""
-  if [ -n "$holder_tmp" ]; then
-    printf 'slug=%s branch=%s pid=%s started=%s\n' "$slug" "$branch" "$$" "$started_iso" > "$holder_tmp" 2>/dev/null || true
-    # Test hook: widen the publication window to exercise unlocked readers deterministically.
-    if [ -n "${COORDINATOR_TEST_HOLDER_WRITE_SLEEP:-}" ]; then sleep "$COORDINATOR_TEST_HOLDER_WRITE_SLEEP"; fi
-    mv -f "$holder_tmp" "$lock_dir/holder" 2>/dev/null || rm -f "$holder_tmp"
-  fi
-  # The flock target must keep one inode for its whole lifetime; never unlink it on release.
-  printf 'slug=%s branch=%s pid=%s started=%s\n' "$slug" "$branch" "$$" "$started_iso" > "$lock_file" 2>/dev/null || true
+  acquire_merge_lock || exit 1
 
   # A wt branch that records only .term/coordinator/state.json lease bookkeeping must merge cleanly
   # through the gate. The state file is exempt from the cleanliness check below (claim/submit leave it
@@ -1493,51 +1548,7 @@ do_merge_next() {
     fi
   fi
 
-  # Preflight: say, BEFORE the gate runs, what this merge touches and which in-flight leases it invalidates.
-  local touched others other ostatus overlap_found=0 semantic_found=0 touched_modules other_modules shared mod agency
-  touched=$(git -C "$MAIN_ROOT" diff --name-only "$DEV_BRANCH"..."$scratch" 2>/dev/null || true)
-  local touched_count
-  touched_count=$(printf '%s' "$touched" | grep -c . || true)
-  printf 'preflight: merge touches %s file(s)\n' "${touched_count:-0}"
-  printf '%s\n' "$touched" | sed 's/^/  /'
-  others=$(jq -r '.leases | to_entries | map(select(.value.status != "done")) | .[].key' "$STATE_FILE" 2>/dev/null || true)
-  for other in $others; do
-    [ "$other" = "$slug" ] && continue
-    ostatus=$(jq -r --arg o "$other" '.leases[$o].status' "$STATE_FILE" 2>/dev/null || printf '?')
-    local opaths of agency
-    opaths=$(jq -r --arg o "$other" '.leases[$o].paths // ""' "$STATE_FILE" 2>/dev/null || printf '')
-    agency=$(jq -r --arg o "$other" '.leases[$o].agent // "?"' "$STATE_FILE" 2>/dev/null || printf '?')
-    local f hit=0
-    while IFS= read -r f; do
-      [ -z "$f" ] && continue
-      if path_in_scopes "$f" "$opaths"; then hit=1; break; fi
-    done <<<"$touched"
-    if [ "$hit" = "1" ]; then
-      overlap_found=1
-      printf 'preflight: WARNING: lease %s (agent %s, status %s, paths %s) overlaps this merge — it will need a rebase onto %s and a re-run of its checks after this merge lands\n' "$other" "$agency" "$ostatus" "$opaths" "$DEV_BRANCH" >&2
-    fi
-  done
-  [ "$overlap_found" = "0" ] && printf 'preflight: no non-done lease overlaps this merge\n'
-
-  # Semantic risk: a literal path-overlap check cannot see two leases touching different files of the same module
-  # (shared APIs, shared test surface). Warn — never block — so the submitting agents know to re-validate.
-  touched_modules=$(modules_of_paths "$(printf '%s\n' "$touched" | tr '\n' ',' )")
-  for other in $others; do
-    [ "$other" = "$slug" ] && continue
-    opaths=$(jq -r --arg o "$other" '.leases[$o].paths // ""' "$STATE_FILE" 2>/dev/null || printf '')
-    [ -z "$opaths" ] && continue
-    agency=$(jq -r --arg o "$other" '.leases[$o].agent // "?"' "$STATE_FILE" 2>/dev/null || printf '?')
-    other_modules=$(modules_of_paths "$opaths")
-    shared=""
-    for mod in $touched_modules; do
-      case " $other_modules " in *" $mod "*) shared="${shared:+$shared }$mod" ;; esac
-    done
-    if [ -n "$shared" ]; then
-      semantic_found=1
-      printf 'preflight: SEMANTIC-RISK: lease %s (agent %s) shares module(s) %s with this merge; re-run its checks after this merge lands\n' "$other" "$agency" "$shared" >&2
-    fi
-  done
-  [ "$semantic_found" = "0" ] && printf 'preflight: no shared-module semantic risk with active leases\n'
+  preflight_merge_risks "$scratch" "$slug"
 
   # The gate runs on the merged result, not on dev's pre-merge HEAD.
   if command -v bun >/dev/null 2>&1; then

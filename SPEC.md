@@ -2044,7 +2044,7 @@ The arm-time planner's soft 30s budget cancels the child prompt but no longer en
 <!-- workstream:raw-kickoff-waits-for-planner:end -->
 <!-- workstream:fix-over-engineering-findings:start -->
 
-### Follow-up (fix-over-engineering-findings) — dossier sections split by section; rendered output byte-identical. Full `bun run check` green; `test/dossier.test.ts` passes.
+### Follow-up (fix-over-engineering-findings) — all audit findings fixed: shared host-child lifecycle, slim server setup, split dossier/controller/TUI hot spots, factored coordinator merge phases. Rendered dossier output is byte-identical; full `bun run check` green.
 <!-- workstream:fix-over-engineering-findings:end -->
 <!-- per-slug-workstreams:end -->
 

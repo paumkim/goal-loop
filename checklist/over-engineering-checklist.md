@@ -3,7 +3,7 @@
 Scan date: 2026-11-25 (UTC)
 Base: `dev` @ `9d878dfb48d2b2760fa3b36eb6b8350951e8878e` (`chore(coordinator): record over-eng-checklist lease done after merge`)
 Work branch: `wt/over-engineering-audit` (leased via `coordinator claim over-engineering-audit --agent build --paths checklist/`)
-Method: read-only audit; no production behavior changed. Findings are listed, not fixed. `file:line` references are against the base commit.
+Method: read-only audit produced the findings; each was then fixed one at a time and removed from this list. Original `file:line` references are against the base commit.
 
 ## Scope inspected
 
@@ -20,22 +20,12 @@ Excluded from findings: `node_modules/`, `dist/` (generated), `SPEC.md` / `SPEC-
 | Severity | Count |
 | --- | --- |
 | High | 0 |
-| Medium | 3 |
+| Medium | 0 |
 | Low | 0 |
 
 ## Confirmed findings
 
-### Medium
-
-- `src/tui.tsx:286` — **complexity hot spot (over-engineering)**. `Plugin.define({ setup(context) { ... } })` is a single ~1623-line function ending at the file's close (~1909 lines). It owns RPC wiring, ~10 signals, keybind/plumbing tables, status-dialog/history/menu state, and the whole render tree. Evidence: brace-counted span from `setup(context)` at :286 to EOF; `showStatusDialogInner` alone is 97 lines at :401. Impact: any UI change must load the entire function; state and side effects are shared implicitly. Recommended action: split setup into focused factory functions (state, RPC subscriptions, keybinds, render) that return typed slices; keep one thin composition root. Status: open.
-
-
-- `src/runtime/controller.ts:1401` — **complexity hot spot (over-engineering)**. `private async evaluate(...)` runs ~195 lines (:1401 to next method `evaluationFailed` :2596) inside a 3187-line controller. Evidence: method boundary read at :1398–:1406 and `evaluationFailed` at :2596. Impact: turn evaluation, check verification, check-in timers, and verdict dispatch are interleaved in one method. Recommended action: split verification and timer/disarm logic into helpers on the controller; add a test per branch. Status: open.
-
-- `packages/coordinator/bin/coordinator:1020` — **complexity hot spot (over-engineering)**. `do_merge_next()` is 588 lines (:1020 to next function `finish_merged_lease` :1608) in a 2149-line bash script with 51 functions. Evidence: `grep -c '^[a-zA-Z_][a-zA-Z0-9_]*()'` = 51; awk span for `do_merge_next` = 588 lines; dispatcher at :2112. Impact: merge lock handling, trial merge, gate, bookkeeping union, and worktree removal all live in one function — the safety-critical path is the hardest to review. Recommended action: factor lock acquisition, trial merge, and bookkeeping into separate functions with explicit inputs; add shell tests per phase. Status: open.
-
-### Low
-
+All findings from the audit have been fixed and removed; no completed items remain.
 
 ## Verified non-findings (checked, no action)
 
@@ -49,7 +39,7 @@ Excluded from findings: `node_modules/`, `dist/` (generated), `SPEC.md` / `SPEC-
 ## Recurring patterns / watch list
 
 - Long-lived orchestration files accrete branching and inline state: `src/tui.tsx` (1909 lines), `src/runtime/controller.ts` (3187), `src/index.ts` (1147), `packages/coordinator/bin/coordinator` (2149). Watch new guards for copy-paste drift and for new responsibilities added to `setup`/`evaluate`/`do_merge_next`.
-- The two host-child runtimes in `src/index.ts` are the likeliest place for a timeout/abort fix to be applied to only one copy. Any change there should update both or extract the helper first.
+- The judge and planner child runtimes now share `src/host-child.ts`; a timeout/abort change should be made in that helper, not in one call site.
 - Wiring/invariant gates catch new config-field consumers; verify each new field still has a real consumer beyond the gate regex.
 - TUI bind/keybind plumbing is repeated across dialogs; watch for drift in the chord tables.
 
