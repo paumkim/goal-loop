@@ -7234,9 +7234,11 @@
       "paths": "src/runtime/background.ts,src/index.ts,test/controller.test.ts,test/plugin.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/evaluator-internal-subagent-exclusion",
       "worktree": "worktree/wt-evaluator-internal-subagent-exclusion",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-25T05:16:57Z",
-      "submittedAt": "2026-11-25T05:33:58Z"
+      "submittedAt": "2026-11-25T05:33:58Z",
+      "mergedAt": "2026-11-25T05:38:54Z",
+      "mergedInto": "dev"
     },
     "tui-copy-report-helper": {
       "agent": "build",
@@ -7259,6 +7261,14 @@
       "submittedAt": "2026-11-25T05:31:25Z",
       "mergedAt": "2026-11-25T05:34:00Z",
       "mergedInto": "dev"
+    },
+    "telemetry-pass-count-doc": {
+      "agent": "build",
+      "paths": "src/core/outcome-telemetry.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/telemetry-pass-count-doc",
+      "worktree": "worktree/wt-telemetry-pass-count-doc",
+      "status": "claimed",
+      "createdAt": "2026-11-25T05:37:42Z"
     }
   },
   "mergeLock": null,
