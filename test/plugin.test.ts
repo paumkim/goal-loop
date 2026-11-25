@@ -1568,27 +1568,30 @@ describe("verdicts are delegated to a first-class evaluator agent (CXXX)", () =>
     const root = join(import.meta.dir, "..")
     const read = (path: string) => readFileSync(join(root, path), "utf8")
     const host = read("src/index.ts")
-    const code = host.split("\n").filter((line) => !line.trim().startsWith("//")).join("\n")
-    // Two session creators remain, both built-in subagent children of the goal session: one reused evaluator child
-    // serves every verdict and loop step, one reused planner child serves every arm. Neither adds a top-level
-    // "Goal planner" / "evaluator" session to the session list. Their completions are consumed from their own
-    // event streams and stripped from the worker's context by child id, so a parent link cannot wake the worker.
-    expect(code.match(/ctx\.session\.create\(/g) ?? []).toHaveLength(2)
-    expect(code.match(/parentID: sessionID/g) ?? []).toHaveLength(2)
-    expect(code.slice(code.indexOf("const planGoal =")).includes("parentID: sessionID")).toBe(true)
+    const child = read("src/host-child.ts")
+    const harness = read("src/harness.ts")
+    const hooks = read("src/hooks.ts")
+    const stripComments = (src: string) => src.split("\n").filter((line) => !line.trim().startsWith("//")).join("\n")
+    const code = stripComments(harness) + stripComments(hooks) + stripComments(child) + stripComments(host)
+    // Both built-in subagent children are created by one shared helper: one reused evaluator child serves every
+    // verdict and loop step, one reused planner child serves every arm. Neither adds a top-level "Goal planner" /
+    // "evaluator" session to the session list. Their completions are consumed from their own event streams and
+    // stripped from the worker's context by child id, so a parent link cannot wake the worker.
+    expect(code.match(/session\.create\(/g) ?? []).toHaveLength(1)
+    expect(code.match(/parentID: sessionID/g) ?? []).toHaveLength(1)
+    expect(code.slice(code.indexOf("const planGoal =")).includes("agentID: PLANNER_AGENT_ID")).toBe(true)
     // A host report from either harness-owned child is dropped by id, not only by agent metadata.
-    expect(code).toContain("background.internalAgentOf(id) !== undefined")
+    expect(code).toContain("background().internalAgentOf(id) !== undefined")
     expect(code).toContain("return live && fresh && !isInternalChildReport(message)")
-    expect(code).toContain("evaluatorChildBySession.set(sessionID, id)")
-    expect(code).toContain("evaluatorChildBySession.get(sessionID)")
-    expect(code).toContain("plannerChildBySession.set(sessionID, id)")
-    expect(code).toContain("plannerChildBySession.get(sessionID)")
+    expect(code).toContain("cache.set(sessionID, id)")
+    expect(code).toContain("cache.get(sessionID)")
     expect(code).toContain("evaluatorChildBySession.clear()")
     expect(code).toContain("plannerChildBySession.clear()")
     // Both parent-linked children register their own id + agent identity with the background tracker, so a
     // verdict or arm cannot self-defer behind the plugin's own machinery. Real delegated workers stay counted.
-    expect(code).toContain("background.noteInternal(id, EVALUATOR_AGENT_ID)")
-    expect(code).toContain("background.noteInternal(id, PLANNER_AGENT_ID)")
+    expect(code).toContain("agentID: EVALUATOR_AGENT_ID")
+    expect(code).toContain("agentID: PLANNER_AGENT_ID")
+    expect(code).toContain("noteInternal(id, agentID)")
     // The judge belongs to the goal-owning parent only: no descendant completion spawns a verdict, so no
     // child session needs owner routing and no verdict admits a `<subagent>` completion into the parent inbox.
     expect(code).not.toContain("ownerSessionID")

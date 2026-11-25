@@ -328,11 +328,8 @@ const verifyLines = (goal: GoalSnapshot): string[] => {
  * The whole dossier. Deterministic: the same record and the same clock render the same
  * document, byte for byte. `nowMs` is the caller's clock — nothing here reads Date.now().
  */
-export function buildLoopDossier(goal: GoalSnapshot, nowMs: number): string {
+function dossierHead(goal: GoalSnapshot, isLoop: boolean, generatedAt: string): string[] {
   const lines: string[] = []
-  const isLoop = Boolean(goal.loopEnabled)
-  const generatedAt = isoOf(nowMs)
-
   lines.push(isLoop ? "# Goal loop dossier" : "# Goal dossier")
   lines.push("")
   lines.push(
@@ -378,8 +375,11 @@ export function buildLoopDossier(goal: GoalSnapshot, nowMs: number): string {
     lines.push(...quote(goal.reason))
   }
   lines.push("")
+  return lines
+}
 
-  // ---- Iterations
+function dossierIterations(goal: GoalSnapshot, isLoop: boolean): string[] {
+  const lines: string[] = []
   const entries = goal.loopHistory ?? []
   const dropped = goal.loopHistoryDropped ?? 0
   if (isLoop || entries.length > 0) {
@@ -397,8 +397,11 @@ export function buildLoopDossier(goal: GoalSnapshot, nowMs: number): string {
       })
     }
   }
+  return lines
+}
 
-  // ---- Verdict trail
+function dossierVerdictTrail(goal: GoalSnapshot): string[] {
+  const lines: string[] = []
   const history = goal.history ?? []
   const historyDropped = goal.historyDropped ?? 0
   const totalTrail = history.length + historyDropped
@@ -420,7 +423,12 @@ export function buildLoopDossier(goal: GoalSnapshot, nowMs: number): string {
     lines.push(...verdictProse(history))
     lines.push("")
   }
+  return lines
+}
 
+function dossierTail(goal: GoalSnapshot, nowMs: number): string[] {
+  const lines: string[] = []
+  const entries = goal.loopHistory ?? []
   // ---- Boundary compaction
   lines.push("## Boundary compaction")
   lines.push("")
@@ -455,6 +463,15 @@ export function buildLoopDossier(goal: GoalSnapshot, nowMs: number): string {
   lines.push("")
   lines.push("---")
   lines.push("_goal-loop dossier · source: plugin record · nothing above was re-verified; it is the record's own bookkeeping._")
+  return lines
+}
 
-  return lines.join("\n")
+export function buildLoopDossier(goal: GoalSnapshot, nowMs: number): string {
+  const isLoop = Boolean(goal.loopEnabled)
+  return [
+    ...dossierHead(goal, isLoop, isoOf(nowMs)),
+    ...dossierIterations(goal, isLoop),
+    ...dossierVerdictTrail(goal),
+    ...dossierTail(goal, nowMs),
+  ].join("\n")
 }

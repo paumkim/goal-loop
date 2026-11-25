@@ -69,7 +69,7 @@ pattern("stallTurns-zero-disables", "src/runtime/controller.ts", /config\.stallT
 pattern("maxRetries-zero-disables", "src/runtime/controller.ts", /config\.maxRetries > 0/, 2)
 pattern("compactAtTokens-zero-disables", "src/runtime/controller.ts", /compactAtTokens > 0/)
 pattern("compact-on-loop-off", "src/runtime/compactor.ts", /if \(!config\.compactOnLoopIteration\) return \{ requested: false, reason: "disabled" \}/)
-pattern("system-reminder-on", "src/index.ts", /if \(config\.systemReminder\)/)
+pattern("system-reminder-on", "src/hooks.ts", /if \(config\.systemReminder\)/)
 pattern("consensus-two-branch", "src/runtime/evaluator.ts", /this\.config\.consensus !== 2/)
 
 // The fixed defect: the mirror flag must gate BOTH the server write and the TUI read.

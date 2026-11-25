@@ -2042,6 +2042,10 @@ The TUI swaps the leading glyph to the existing `delegating` icon through the sa
 
 The arm-time planner's soft 30s budget cancels the child prompt but no longer ends the wait: planGoal releases the caller only on the child's own terminal event (succeeded / failed / interrupted), re-subscribing if the event stream drops, with a 5-minute hard ceiling. Stale terminal events from a reused child are ignored until a started/delta event proves this generation is live. A /goal opening mid-check-in re-checks the planning window after the busy check, and no continuation steer is dispatched while planning is active, so the original raw goal is delivered only after the planner is really done (or failed).
 <!-- workstream:raw-kickoff-waits-for-planner:end -->
+<!-- workstream:fix-over-engineering-findings:start -->
+
+### Follow-up (fix-over-engineering-findings) — all audit findings fixed: shared host-child lifecycle, slim server setup, split dossier/controller/TUI hot spots, factored coordinator merge phases. Rendered dossier output is byte-identical; full `bun run check` green.
+<!-- workstream:fix-over-engineering-findings:end -->
 <!-- per-slug-workstreams:end -->
 
 ## Historical workstreams

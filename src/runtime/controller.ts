@@ -1432,15 +1432,12 @@ export class GoalController {
   // ---------------------------------------------------------------- turn evaluation
 
   private async evaluate(record: GoalRecord, runtime: Runtime, epoch: number, tools: number): Promise<void> {
-    const { config, clock, session } = this.deps
+    const { clock, session } = this.deps
     // A check-in armed while the turn was deferred on background work must not survive into evaluation: when it
     // fires mid-judge it sends a "still waiting" steer that wakes the parent before the verdict lands (and before
     // the loop planner that follows it has armed the next iteration). Disarm it on every evaluation path — turn
     // end, busy-check fallback, background drain, restore — so no stale wake timer outlives the deferral.
-    if (runtime.timer !== undefined) {
-      clock.clearTimeout(runtime.timer)
-      runtime.timer = undefined
-    }
+    this.disarmEvaluationTimer(runtime)
     const sessionID = record.sessionID
     // No verdict may settle a goal while its background work is still in flight. The turn-end gate can be
     // bypassed (busy-check retries exhaust, events land late, a restore resumes a pending evaluation), so
@@ -1562,6 +1559,55 @@ export class GoalController {
       return
     }
 
+    const gated = await this.gateCandidateVerdict(record, runtime, epoch, tools, turn, result)
+    if (!gated) return
+    result = gated.result
+    const verificationMatrix = gated.matrix
+
+    record.turns = turn
+    record.stall = stall
+    record.retries = 0
+    record.verdict = result.verdict
+    record.reason = result.reason || undefined
+    // iterationToolCalls is maintained eagerly in onToolCalled; this evaluation only reads it (loop arming).
+    // The why ledger stamps the same HEAD sha the loop rail stamps at advance — the verdict lands on a commit the reader can inspect. Guarded like headAtAdvance: outside a repository or when HEAD cannot be read, the sha is absent, never guessed.
+    const shaAtEvaluation = currentHead(this.directoryFor(sessionID))
+    // Legacy single-check evidence remains for compatibility; matrix evidence records every required check.
+    const verifyEvidence = verificationMatrix && record.lastVerify
+      ? { command: record.lastVerify.command, code: record.lastVerify.code, ...(record.lastVerify.timedOut ? { timedOut: true } : {}), ...(record.lastVerify.tail ? { tail: record.lastVerify.tail } : {}) }
+      : undefined
+    const verdictEntry = { turn, verdict: result.verdict, reason: result.reason, at: clock.now(), toolCalls: tools, ...(turnSpend ? { spend: turnSpend } : {}), ...(shaAtEvaluation ? { sha: shaAtEvaluation } : {}), ...(verifyEvidence ? { verify: verifyEvidence } : {}), ...(verificationMatrix ? { verification: verificationMatrix } : {}) }
+    record.history.push(verdictEntry)
+    // Verdict-trail retention cap: the persisted record (and the changed-snapshot clone of it) stays bounded no matter how many turns a long session evaluates. The drop delta accumulates onto `historyDropped` so displays can say "N most recent of M evaluated turns" instead of silently showing a 20-turn window.
+    const historyBound = boundVerdictHistory(record.history)
+    if (historyBound.dropped > 0) {
+      record.history = historyBound.retained
+      record.historyDropped = (record.historyDropped ?? 0) + historyBound.dropped
+      this.deps.log.info("verdict trail retention cap: dropped oldest evaluated-turn records", { sessionID, dropped: historyBound.dropped, retained: historyBound.retained.length, totalDropped: record.historyDropped })
+    }
+    this.writeLearningTurnVerdict(record, verdictEntry)
+
+    await this.dispatchPostVerdict(record, runtime, epoch, tools, turn, stall, result, verdictEntry)
+  }
+
+  /** Clear a check-in timer left armed by a deferral before the verdict can land. */
+  private disarmEvaluationTimer(runtime: Runtime): void {
+    const { clock } = this.deps
+    if (runtime.timer !== undefined) {
+      clock.clearTimeout(runtime.timer)
+      runtime.timer = undefined
+    }
+  }
+
+  /** Apply the zero-tool downgrade and the verification gate to a candidate verdict. */
+  private async gateCandidateVerdict(
+    record: GoalRecord,
+    runtime: Runtime,
+    epoch: number,
+    tools: number,
+    turn: number,
+    result: EvaluationResult,
+  ): Promise<{ result: EvaluationResult; matrix?: VerdictVerificationMatrix } | undefined> {
     // A met verdict on a turn with zero tool calls, where the condition names production of a thing, is not a
     // verdict — it is state inspection. Downgrade to not_met; the next turn re-attempts with tools in hand.
     // Scoped to the first evaluated turn: on later turns prior evidence may already satisfy the condition and
@@ -1588,32 +1634,24 @@ export class GoalController {
       const verified = await this.verifyMet(record, runtime, result)
       result = verified.result
       verificationMatrix = verified.matrix
-      if (this.stale(record, runtime, epoch)) return
+      if (this.stale(record, runtime, epoch)) return undefined
     }
+    return { result, matrix: verificationMatrix }
+  }
 
-    record.turns = turn
-    record.stall = stall
-    record.retries = 0
-    record.verdict = result.verdict
-    record.reason = result.reason || undefined
-    // iterationToolCalls is maintained eagerly in onToolCalled; this evaluation only reads it (loop arming).
-    // The why ledger stamps the same HEAD sha the loop rail stamps at advance — the verdict lands on a commit the reader can inspect. Guarded like headAtAdvance: outside a repository or when HEAD cannot be read, the sha is absent, never guessed.
-    const shaAtEvaluation = currentHead(this.directoryFor(sessionID))
-    // Legacy single-check evidence remains for compatibility; matrix evidence records every required check.
-    const verifyEvidence = verificationMatrix && record.lastVerify
-      ? { command: record.lastVerify.command, code: record.lastVerify.code, ...(record.lastVerify.timedOut ? { timedOut: true } : {}), ...(record.lastVerify.tail ? { tail: record.lastVerify.tail } : {}) }
-      : undefined
-    const verdictEntry = { turn, verdict: result.verdict, reason: result.reason, at: clock.now(), toolCalls: tools, ...(turnSpend ? { spend: turnSpend } : {}), ...(shaAtEvaluation ? { sha: shaAtEvaluation } : {}), ...(verifyEvidence ? { verify: verifyEvidence } : {}), ...(verificationMatrix ? { verification: verificationMatrix } : {}) }
-    record.history.push(verdictEntry)
-    // Verdict-trail retention cap: the persisted record (and the changed-snapshot clone of it) stays bounded no matter how many turns a long session evaluates. The drop delta accumulates onto `historyDropped` so displays can say "N most recent of M evaluated turns" instead of silently showing a 20-turn window.
-    const historyBound = boundVerdictHistory(record.history)
-    if (historyBound.dropped > 0) {
-      record.history = historyBound.retained
-      record.historyDropped = (record.historyDropped ?? 0) + historyBound.dropped
-      this.deps.log.info("verdict trail retention cap: dropped oldest evaluated-turn records", { sessionID, dropped: historyBound.dropped, retained: historyBound.retained.length, totalDropped: record.historyDropped })
-    }
-    this.writeLearningTurnVerdict(record, verdictEntry)
-
+  /** Settle the durable verdict and dispatch its terminal, guard or continuation step. */
+  private async dispatchPostVerdict(
+    record: GoalRecord,
+    runtime: Runtime,
+    epoch: number,
+    tools: number,
+    turn: number,
+    stall: number,
+    result: EvaluationResult,
+    verdictEntry: VerdictEntry,
+  ): Promise<void> {
+    const { config, clock } = this.deps
+    const sessionID = record.sessionID
     if (result.verdict === "met") {
       if (record.loopEnabled) return this.loopAdvance(record, runtime, epoch, result, turn)
       void this.settleTerminal(record, "achieved", {
@@ -1722,6 +1760,7 @@ export class GoalController {
       turn: turn + 1,
     })
   }
+
 
   /**
    * Runs the applicable verification matrix for a candidate met verdict and returns the (possibly downgraded) verdict

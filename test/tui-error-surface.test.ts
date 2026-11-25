@@ -6,7 +6,9 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 
-const source = readFileSync(new URL("../src/tui.tsx", import.meta.url), "utf8")
+const source =
+  readFileSync(new URL("../src/tui.tsx", import.meta.url), "utf8") +
+  readFileSync(new URL("../src/tui-actions.ts", import.meta.url), "utf8")
 
 describe("src/tui.tsx user-facing error surfaces", () => {
   test("never renders an error stack to the user", () => {
