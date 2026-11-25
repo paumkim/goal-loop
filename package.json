@@ -63,6 +63,7 @@
     "compile": "bun scripts/build.ts",
     "docs:watch": "bun scripts/docs-watch.ts watch",
     "docs:once": "bun scripts/docs-watch.ts once",
+    "rearm": "bun scripts/rearm.ts",
     "check:dist": "bun scripts/build.ts --check"
   },
   "dependencies": {
