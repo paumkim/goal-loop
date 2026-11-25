@@ -7289,8 +7289,11 @@
       "paths": "src/index.ts,test/plugin.test.ts",
       "branch": "wt/planner-no-premature-delivery",
       "worktree": "worktree/wt-planner-no-premature-delivery",
-      "status": "claimed",
-      "createdAt": "2026-11-25T05:53:59Z"
+      "status": "done",
+      "createdAt": "2026-11-25T05:53:59Z",
+      "submittedAt": "2026-11-25T06:06:17Z",
+      "mergedAt": "2026-11-25T06:07:58Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
