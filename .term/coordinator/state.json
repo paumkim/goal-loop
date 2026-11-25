@@ -7736,6 +7736,17 @@
       "submittedAt": "2026-11-25T18:41:19Z",
       "mergedAt": "2026-11-25T18:43:52Z",
       "mergedInto": "dev"
+    },
+    "coordinator-standby-autopark": {
+      "agent": "hy4-flash-free",
+      "paths": "src/core/coordinator-wait.ts,src/index.ts,test/coordinator-wait.test.ts,test/plugin.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/coordinator-standby-autopark",
+      "worktree": "worktree/wt-coordinator-standby-autopark",
+      "status": "done",
+      "createdAt": "2026-11-25T18:51:19Z",
+      "submittedAt": "2026-11-25T18:58:37Z",
+      "mergedAt": "2026-11-25T19:01:12Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
