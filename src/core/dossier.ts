@@ -29,7 +29,7 @@ export const recordStatusCell = (status: string, positive: string, negative: str
   status === positive ? "yes" : status === negative ? "no" : "unknown"
 
 /**
- * Iteration column shared by the verify, reach, sign and review record tables. Those five renderers
+ * Iteration column shared by the verify, reach, sign, seal and review record tables. Those five renderers
  * used to spell the same `v1, v2` list out locally; one home keeps every table identical.
  */
 export const iterationList = (iterations: readonly number[]): string => iterations.map((v) => `v${v}`).join(", ")

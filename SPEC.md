@@ -1933,6 +1933,12 @@ verdict previously stalled the loop with `not_met` on every turn. No other calle
 Verification: `test/core.test.ts` pins both forms (strict JSON and JSON-ish fallback) of the empty echo returning
 `""`, plus the fail-closed verdict and the still-accepted omitted echo; focused suite 186 pass / 0 fail.
 
+### Two comment-only corrections (dossier-find-doc-comments, 2026-11-24)
+
+`iterationList`'s doc named four record tables but claimed five renderers; the seal table was omitted from the list.
+The JSDoc for `FindSegment` in `src/core/find.ts` was separated from the interface by the `memoizeBounded` import,
+orphaning it. Both are comment-only: no exported signature, condition or rendered byte changes.
+
 ## Historical workstreams
 
 Workstreams older than the "Recent workstreams" section above are archived verbatim in
