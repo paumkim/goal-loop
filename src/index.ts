@@ -21,6 +21,7 @@ import {
   readCoordinatorState,
   STANDBY_PREFIX,
   standbyKey,
+  standbySlugFromSubmitOutput,
   withStandbyActivity,
   type StandbyRecord,
 } from "./core/coordinator-wait.ts"
@@ -428,6 +429,13 @@ export default Plugin.define({
       const parent = info?.parentID
       return typeof parent === "string" && parent !== "" && parent !== sessionID ? parent : sessionID
     }
+    /** One parking path for the explicit tool and the submit hook: idempotent re-parks just refresh the record. */
+    const parkStandby = async (sessionID: string, slug: string, address: string): Promise<void> => {
+      if (probe || !coordinatorStatePath) return
+      const record: StandbyRecord = { slug, address, at: systemClock.now() }
+      await ctx.storage.set(standbyKey(sessionID), record as unknown as Parameters<typeof ctx.storage.set>[1])
+      standbySessions.add(sessionID)
+    }
     await ctx.tool.transform((editor) => {
       editor.add({
         name: "goal_msg_send",
@@ -497,20 +505,23 @@ export default Plugin.define({
           const slug = typeof (input as { slug?: unknown }).slug === "string" ? (input as { slug: string }).slug.trim() : ""
           if (!slug) return { content: "goal_standby needs a non-empty `slug` (the lease you submitted)." }
           if (!coordinatorStatePath) return { content: "goal_standby: no coordinator repository detected; nothing to wait for." }
-          const record: StandbyRecord = {
-            slug,
-            address: await agentIdFor(toolContext.sessionID),
-            at: systemClock.now(),
-          }
-          if (!probe) {
-            await ctx.storage.set(standbyKey(toolContext.sessionID), record as unknown as Parameters<typeof ctx.storage.set>[1])
-            standbySessions.add(toolContext.sessionID)
-          }
+          await parkStandby(toolContext.sessionID, slug, await agentIdFor(toolContext.sessionID))
           return {
             content: `Standby registered for ${slug}. End your turn — the system will message you when your merge turn arrives, then run coordinator merge-next --wait --target ${slug} from the main repo.`,
           }
         },
       })
+    })
+    // Delegation-flow integration: a worker that submits through the coordinator is parked automatically, even
+    // if it never calls goal_standby. The submit output is the same durable signal the CLI prints on success;
+    // a failed call or a mere transcript mention cannot park a session.
+    await ctx.tool.hook("execute.after", (event) => {
+      if (event.status !== "completed" || !/\b(shell|bash)\b/.test(event.tool)) return
+      const slug = standbySlugFromSubmitOutput(event.result)
+      if (!slug) return
+      void agentIdFor(event.sessionID)
+        .then((address) => parkStandby(event.sessionID, slug, address))
+        .catch((error) => log.warn("goal submit standby failed", { sessionID: event.sessionID, error: String(error) }))
     })
     // The compactor and the controller need each other: the controller asks the compactor to compact at a loop boundary,
     // and the compactor asks the controller (and the background tracker) whether the session has work in flight.

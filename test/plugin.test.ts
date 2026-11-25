@@ -85,6 +85,7 @@ function context(directory: string, options: Record<string, unknown> = {}) {
         list: () => calls.tools,
         namespace: () => {},
       }),
+      hook: async (name: string, fn: (event: any) => any) => void (hooks[`tool:${name}`] = fn),
     },
     storage: {
       get: async (key: string) => storage.get(key),
@@ -462,6 +463,30 @@ describe("plugin setup", () => {
       expect(directive.text).toContain("all tests pass")
       expect(directive.text).not.toContain("Coordinator repo")
       expect(directive.text).not.toContain("wt/<slug>")
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("a completed coordinator submit automatically parks the submitting worker", async () => {
+    const directory = coordinatorRepository()
+    const { ctx, hooks, storage } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const hook = hooks["tool:execute.after"]!
+      const settle = async () => {
+        for (let i = 0; i < 5; i++) await new Promise<void>((resolve) => setTimeout(resolve, 0))
+      }
+      expect(typeof hook).toBe("function")
+      hook({ tool: "shell", sessionID: "ses_1", status: "completed", result: { output: "submitted wt/my-slug\n" } })
+      await settle()
+      expect(storage.get("goal/standby/v1/ses_1")).toMatchObject({ slug: "my-slug", address: "ses_1" })
+      // A failed submit and a shell result that merely mentions submit must not park anyone.
+      storage.delete("goal/standby/v1/ses_1")
+      hook({ tool: "shell", sessionID: "ses_1", status: "error", error: "boom" })
+      hook({ tool: "shell", sessionID: "ses_1", status: "completed", result: { output: "how to submit wt/other" } })
+      await settle()
+      expect(storage.has("goal/standby/v1/ses_1")).toBe(false)
     } finally {
       await dispose?.()
     }
