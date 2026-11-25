@@ -20,6 +20,13 @@ describe("evaluationAbstention", () => {
     }
   })
 
+  test("a request with no condition field at all abstains instead of throwing", () => {
+    // A harness-injected bare request can omit the field entirely; the gate must defer, not crash the evaluator
+    // (a TypeError here would fail closed and pause the goal rather than abstain).
+    expect(evaluationAbstention({ hasFreshEvidence: true, activeSessions: false })).toBe("empty-condition")
+    expect(evaluationAbstention({ hasFreshEvidence: false, activeSessions: true })).toBe("empty-condition")
+  })
+
   test("no fresh evidence abstains", () => {
     expect(evaluationAbstention({ ...complete, hasFreshEvidence: false })).toBe("no-fresh-evidence")
   })
