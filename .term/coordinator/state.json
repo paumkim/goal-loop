@@ -7195,6 +7195,17 @@
       "submittedAt": "2026-11-24T22:35:59Z",
       "mergedAt": "2026-11-24T22:38:42Z",
       "mergedInto": "dev"
+    },
+    "evaluator-gate-missing-condition-field": {
+      "agent": "opencode",
+      "paths": "src,test,docs,SPEC.md,README.md",
+      "branch": "wt/evaluator-gate-missing-condition-field",
+      "worktree": "worktree/wt-evaluator-gate-missing-condition-field",
+      "status": "done",
+      "createdAt": "2026-11-25T00:02:17Z",
+      "submittedAt": "2026-11-25T00:06:41Z",
+      "mergedAt": "2026-11-25T00:09:20Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
