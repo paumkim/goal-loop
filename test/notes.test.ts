@@ -186,6 +186,9 @@ describe("isGoalInstructionMessage / stripGoalContext", () => {
     expect(backgroundResultID(report('<background-result kind="shell" sessionID="ses_3">done</background-result>'))).toBeUndefined()
     expect(backgroundResultID(report("ordinary user text"))).toBeUndefined()
     expect(backgroundResultID(report('<background-result kind="subagent">no id</background-result>'))).toContain("no id")
+    // The host also delivers injected context as a flat `text`, not only as `content` text parts.
+    expect(backgroundResultID({ role: "user", text: '<background-result kind="subagent" sessionID="ses_flat">done</background-result>' })).toBe("ses_flat")
+    expect(backgroundResultID({ role: "user", text: "ordinary text" })).toBeUndefined()
   })
 
   test("a compaction checkpoint is history, not an instruction, and survives the terminal strip", () => {

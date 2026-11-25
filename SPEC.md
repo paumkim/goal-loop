@@ -1947,7 +1947,7 @@ passes with the fix; it asserts the turn stays at 0 turns with no verdict, then 
 
 A completed child's `<background-result kind="subagent">` rides every later request after a goal ends, so each looked like
 fresh work: stale report -> "no new condition" -> end turn -> same report injected again. `src/core/prompts.ts` exports
-`backgroundResultID` (kind-gated, keyed by `sessionID`); the `src/index.ts` `context` hook strips all such reports when
+`backgroundResultID` (kind-gated, keyed by `sessionID`, flat `text` or `content` parts); the `src/index.ts` hook strips all reports when
 no goal is live, marks even stripped ids as stale, admits each fresh id once while live with the goal strips' splice-back
 contract, and keeps them out of the trailing-user repair. `TERMINAL_REMINDER` calls injected reports stale history.
 

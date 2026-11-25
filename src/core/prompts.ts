@@ -460,24 +460,35 @@ export const stripGoalNotes = <T>(messages: ReadonlyArray<T>): T[] => messages.f
  * wakes the working session by folding a completed child's `<background-result kind="subagent">` into the next
  * request; the same report then rides every later request until it is compacted away. It is history, not an
  * instruction — after a goal ends, re-reading it on every request drives a no-op wake loop (stale report -> "no new
- * condition" -> end turn -> same report injected again). Match on the text content part like the other host-shape
- * matchers; the `kind` attribute scopes this to delegated subagents, since shell results are not wake signals.
+ * condition" -> end turn -> same report injected again). Match the flat `text` and `content` text-part shapes the
+ * host uses for injected messages, like the other host-shape matchers; `kind` scopes this to delegated subagents,
+ * since shell results are not wake signals.
  *
  * The stable id is the delegated child's `sessionID` on the opening tag when present, else the whole text. Reports
  * from the reused judge/planner children share an id; only the first is admitted, which is safe because their
  * verdicts and plans come from the child's event stream, never from a report.
  */
+const backgroundResultIDFromText = (text: string): string | undefined => {
+  const tag = /<background-result\b[^>]*\bkind\s*=\s*["']subagent["'][^>]*>/i.exec(text)
+  if (!tag) return undefined
+  return /\bsessionid\s*=\s*["']([^"']+)["']/i.exec(tag[0])?.[1] ?? text
+}
+
 export const backgroundResultID = (message: unknown): string | undefined => {
   if (typeof message !== "object" || message === null) return undefined
-  const content = (message as NoteMessageLike).content
+  const m = message as NoteMessageLike & { text?: unknown }
+  if (typeof m.text === "string") {
+    const id = backgroundResultIDFromText(m.text)
+    if (id !== undefined) return id
+  }
+  const content = m.content
   if (!Array.isArray(content)) return undefined
   for (const part of content) {
     if (typeof part !== "object" || part === null) continue
     const { type, text } = part as { type?: unknown; text?: unknown }
     if (type !== "text" || typeof text !== "string") continue
-    const tag = /<background-result\b[^>]*\bkind\s*=\s*["']subagent["'][^>]*>/i.exec(text)
-    if (!tag) continue
-    return /\bsessionid\s*=\s*["']([^"']+)["']/i.exec(tag[0])?.[1] ?? text
+    const id = backgroundResultIDFromText(text)
+    if (id !== undefined) return id
   }
   return undefined
 }
