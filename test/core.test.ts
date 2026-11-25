@@ -21,7 +21,7 @@ import {
 } from "../src/core/prompts.ts"
 import { currentTurnStart, renderParentSummary, renderTranscript } from "../src/core/transcript.ts"
 import { isEvaluatorReport, verdictFromNativeReport, echoedCondition, echoMatches } from "../src/core/evaluator-agent.ts"
-import { DELEGATE_VERDICT } from "../src/core/prompts.ts"
+import { DELEGATE_VERDICT, MESSAGE_WAKE_TEXT, PEER_PARENTS_HINT } from "../src/core/prompts.ts"
 import { EMPTY_USAGE, type CommitPolicy, type GoalRecord } from "../src/core/types.ts"
 import { isAlreadySatisfiedLanding, parseVerdict } from "../src/core/verdict.ts"
 
@@ -731,6 +731,14 @@ describe("prompts", () => {
     expect(retry({ condition: "a", label: "timeout" }, COMMIT)).toContain("`dev` branch")
     expect(checkin({ condition: "a", waitedMs: 1_000, subagents: 1, shells: 0 }, COMMIT)).toContain("`dev` branch")
     expect(systemReminder("a", COMMIT)).toContain("`dev` branch")
+  })
+  test("messaging hints surface both tools without carrying a message body", () => {
+    for (const text of [PEER_PARENTS_HINT, MESSAGE_WAKE_TEXT]) {
+      expect(text).toContain("goal_msg_send")
+      expect(text).toContain("goal_msg_read")
+      expect(text.split("\n")).toHaveLength(1)
+      expect(text).not.toContain("<")
+    }
   })
   test("the commit rule says what counts as committed", () => {
     const text = directive("all tests pass", COMMIT)
