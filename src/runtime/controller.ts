@@ -2700,8 +2700,13 @@ export class GoalController {
       // Persist the deferral on the record so a restart/plugin reload restores the `waiting` paint instead of
       // forgetting it mid-wait; commit also emits the snapshot the pill and mirror paint from.
       record.waitingSince = runtime.deferredSince
-      void this.commit(record)
     }
+    // The pill names what the parent is waiting on. Set the twin BEFORE commit/emit: both snapshot the record
+    // synchronously, so assigning afterwards would persist and paint a count-less wait. A later deferral can
+    // see a different worker count (one child finished, another started) — push that change too.
+    const countChanged = record.waitingSubagents !== work.subagents
+    if (countChanged) record.waitingSubagents = work.subagents
+    if (firstDefer || countChanged) void this.commit(record)
     this.armCheckin(record, runtime, work)
   }
 
@@ -3107,6 +3112,7 @@ export class GoalController {
     if (!wasWaiting) return
     const ours = record !== undefined && this.goals.get(record.sessionID) === record
     if (record && record.waitingSince !== undefined) delete record.waitingSince
+    if (record && record.waitingSubagents !== undefined) delete record.waitingSubagents
     if (ours) void this.commit(record)
   }
 

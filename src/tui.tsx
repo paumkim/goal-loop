@@ -31,7 +31,7 @@ import { userFacingError } from "./tui-error.ts"
 import { StatusDialogBody, foreignLiveRows, FOREIGN_ROWS_VISIBLE } from "./status-dialog.tsx"
 import { HudCard, hudCardRows, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
 import { scrollbarTrackOptions, type HostScrollbarTheme } from "./core/scrollbar.ts"
-import { pillModel, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, staleUnprovenSessionIDs, staleRecentlyTerminalSessionIDs, expiredTerminalSessionIDs, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, breathCrest, BREATH_PHASE_MS, isRetryStuck, achievedAckAccentColor, contextMenuRows, nextMenuIndex, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type NeutralTheme } from "./core/hud.ts"
+import { pillModel, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, staleUnprovenSessionIDs, staleRecentlyTerminalSessionIDs, expiredTerminalSessionIDs, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, breathCrest, BREATH_PHASE_MS, isRetryStuck, waitingOnSubagents, achievedAckAccentColor, contextMenuRows, nextMenuIndex, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type NeutralTheme } from "./core/hud.ts"
 import { preserveCarriedFields, applySnapshot, goalsEqual, dropSessions, shouldKeepPlanningPlaceholder, isStalePlanningPull, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { makeGoalRefresh } from "./core/repull.ts"
 import { pumpRpcEvent } from "./core/rpc-pump.ts"
@@ -1352,9 +1352,12 @@ export default Plugin.define({
         }
         // Split the single leading cell from the rest of the line so the icon can carry its own accent color.
         // withIntentGlyph owns the swap contract; without a live intent the HUD's own glyph stays untouched.
+        // A parent waiting on a delegated subagent borrows the delegation icon: the hollow ring only says
+        // "nothing is happening", while the pill's state word now names the child it is waiting for.
         const pillCells = (): { readonly glyph: string; readonly rest: string } => {
           const text = pillText()
-          const override = activeIntent()
+          const g = goal()
+          const override: AgentIntent | undefined = activeIntent() ?? (g !== undefined && waitingOnSubagents(g) ? "delegating" : undefined)
           if (!override) return { glyph: text.slice(0, 1), rest: text.slice(1) }
           return withIntentGlyph(text, override, motionDisabled(process.env))
         }

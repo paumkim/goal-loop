@@ -6,7 +6,7 @@
 import { describe, expect, test } from "bun:test"
 import stringWidth from "string-width"
 import { AGENT_ICONS, INTENT_TTL_MS, NO_ACTIVITY, activityBadgeCells, activityWord, applyIntentSignal, intentAccent, intentForActivity, intentGlyph, resolveToolIntent, withIntentGlyph, type AgentIntent, type ActivityMap, type IntentSignal } from "../src/tui.tsx"
-import { pillModel } from "../src/core/hud.ts"
+import { pillModel, waitingOnSubagents } from "../src/core/hud.ts"
 import type { GoalSnapshot } from "../src/core/types.ts"
 
 const INTENTS: readonly AgentIntent[] = ["thinking", "reading", "writing", "executing", "web", "memory", "waiting", "done", "error", "delegating"]
@@ -213,5 +213,44 @@ describe("live tool-use lifecycle", () => {
     const state = fold([input("c1", "read")])
     const staleSuccess = applyIntentSignal(state, { type: "tool-success", sessionID: SID, callID: "never-started" })
     expect(staleSuccess).toBe(state)
+  })
+})
+
+describe("waiting-for-subagent pill", () => {
+  const waiting = (count?: number): GoalSnapshot => goal({ waiting: true, waitingSubagents: count })
+
+  test("one delegated child names what the parent waits on instead of a bare 'waiting'", () => {
+    const text = pillModel(waiting(1), 240_000, false, 80)!.text
+    expect(text).toContain("goal waiting for subagent")
+    expect(text).not.toContain("waiting ·")
+  })
+
+  test("more than one child shows the count so the pill agrees with the host tally", () => {
+    const text = pillModel(waiting(4), 240_000, false, 80)!.text
+    expect(text).toContain("goal waiting for 4 subagents")
+    expect(text).not.toContain("waiting for subagent ·")
+  })
+
+  test("shell-only and restored legacy waits keep the honest 'waiting' word", () => {
+    expect(pillModel(waiting(0), 240_000, false, 80)!.text).toContain("goal waiting ·")
+    expect(pillModel(waiting(), 240_000, false, 80)!.text).toContain("goal waiting ·")
+  })
+
+  test("the delegating icon swaps the ring without changing the state word or the line width", () => {
+    const text = pillModel(waiting(2), 240_000, false, 80)!.text
+    const swapped = withIntentGlyph(text, "delegating")
+    expect(swapped.glyph).toBe(AGENT_ICONS.delegating.nerd)
+    expect(swapped.rest).toContain("goal waiting for 2 subagents")
+    expect(stringWidth(swapped.glyph + swapped.rest)).toBe(stringWidth(text))
+  })
+
+  test("the icon predicate fires only for a live wait with a known subagent", () => {
+    expect(waitingOnSubagents(waiting(1))).toBe(true)
+    expect(waitingOnSubagents(waiting(4))).toBe(true)
+    expect(waitingOnSubagents(waiting(0))).toBe(false)
+    expect(waitingOnSubagents(waiting())).toBe(false)
+    expect(waitingOnSubagents(goal({ waitingSubagents: 1 }))).toBe(false) // not waiting
+    expect(waitingOnSubagents(goal({ status: "paused", waiting: true, waitingSubagents: 1 }))).toBe(false)
+    expect(waitingOnSubagents(goal({ evaluating: true, waitingSubagents: 1 }))).toBe(false)
   })
 })

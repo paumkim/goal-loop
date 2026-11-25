@@ -2158,7 +2158,20 @@ var compactMarker = (compact, ascii = false) => {
     return { text: "unmeasurable", tone: "unknown" };
   return { text: "pending", tone: "pending" };
 };
-var stateWord = (goal) => goal.status === "paused" ? "paused" : goal.evaluating ? "checking" : goal.waiting ? "waiting" : goal.queued ? "queued" : isRetryStuck(goal) ? "stuck" : "active";
+var waitingOnSubagents = (goal) => goal.status === "active" && goal.waiting === true && (goal.waitingSubagents ?? 0) > 0;
+var stateWord = (goal) => {
+  if (goal.status === "paused")
+    return "paused";
+  if (goal.evaluating)
+    return "checking";
+  if (goal.waiting) {
+    const count = goal.waitingSubagents ?? 0;
+    return count > 1 ? `waiting for ${count} subagents` : count === 1 ? "waiting for subagent" : "waiting";
+  }
+  if (goal.queued)
+    return "queued";
+  return isRetryStuck(goal) ? "stuck" : "active";
+};
 var compactMarkerFg = (theme, tone, mono) => {
   if (mono)
     return theme.text.muted;
@@ -7888,7 +7901,8 @@ var tui_default = Plugin.define({
         };
         const pillCells = () => {
           const text = pillText();
-          const override = activeIntent();
+          const g = goal();
+          const override = activeIntent() ?? (g !== undefined && waitingOnSubagents(g) ? "delegating" : undefined);
           if (!override)
             return {
               glyph: text.slice(0, 1),

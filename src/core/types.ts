@@ -467,6 +467,12 @@ export interface GoalRecord {
    */
   waitingSince?: number
   /**
+   * Number of delegated subagents holding evaluation back when the deferral above was armed. Additive;
+   * absent on legacy records and whenever no deferral is in flight. Lets the TUI say "waiting for subagent"
+   * (and show the count when more than one) instead of a bare "waiting" that hides what the parent is waiting on.
+   */
+  waitingSubagents?: number
+  /**
    * Persisted twin of a turn's in-flight post-turn step, so a restart/plugin reload mid-evaluation resumes
    * the owed step instead of silently dropping it (the goal would otherwise sit active forever: no new
    * `session.execution.succeeded` event arrives after a restart to re-trigger evaluation). Additive; absent
