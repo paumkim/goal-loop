@@ -646,7 +646,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=158 tests=2430 -->
+<!-- spec-check files=159 tests=2441 -->
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
     600000, min 1000). When set, a `met` verdict is held at the verification gate in the controller
@@ -1536,44 +1536,6 @@ where its contract is defined in the current tree:
 
 ## Recent workstreams
 
-## Workstream CCIV — one diagnostic artifact per failure streak (bounded-failure-diagnostics) (2026-11-23)
-
-CCIII made escalation proactive, which means it now fires on every not_met turn of a stuck streak instead
-of pausing after the third. The diagnostic writer still used a timestamped filename, so a single recurring
-signature produced a new JSON file on every turn — 433 artifacts accumulated for one repeated signature in
-this repository, and a proactive loop would keep growing that set without bound. Artifact names are now
-keyed by `(sessionID, SHA-256 prefix of the full signature)`, so the set is capped at one file per distinct
-signature per session; each escalation overwrites that file with the latest count, turn, and timestamp, and
-the steer cites a stable path. Pre-existing timestamped files are never deleted. The escalation reason text
-also dropped its now-stale "send a message to resume" instruction and states that the goal stays active
-while the next turn rotates strategy automatically.
-
-Verification: new regression in `test/failure-signature.test.ts` writes 12 escalations of one signature and
-3 of another and pins an independent oracle of exactly 2 files, the latest count/turn in the overwritten
-artifact, and path stability on repeat. Focused suite: 130 pass / 0 fail, 689 expect() calls. Full
-`bun run check` green after artifact regeneration; marker re-counted, no shipped file added or removed.
-
-## Workstream CCV — one universal no-progress recognizer (universal-no-progress-recognition) (2026-11-23)
-
-CCIII's escalation still keyed on a single repeated *identical* failure signature, so alternating gaps —
-the "no evidence of work ... zero tool calls this turn" downgrade recurring beside other reasons — could
-keep a goal stuck without ever matching. The trigger is now one pure recognizer,
-`recognizeNoProgress()` in `src/core/failure-signature.ts`, which reads six independent signals in one pass:
-`repeated_signature`, `diverse_failure` (three not_met turns with *different* signatures), `zero_tool_turn`,
-`retry_streak`, `stall`, and `loop_not_progress`. Any signal produces one escalation; the streak is the max
-across signals, rotation keeps advancing, and every recognized signal is named in the steer
-("Recognized no-progress signals: ..."). The result is a single self-recognizing mechanism for every stuck
-shape instead of a special case per guard, and it still routes through the proactive, non-pausing path from
-CCIII — loops and plain goals alike. `detectRepeatedFailureSignature` remains the low-level primitive; the
-controller calls only the recognizer.
-
-Verification: six new pure regressions in `test/failure-signature.test.ts` use independent oracles for
-alternating signatures, dual signals, zero-tool turns below threshold, scalar retry/stall/loop signals,
-non-stuck states, and verification-kind parity; `test/controller.test.ts` now pins that different
-signatures produce a `diverse_failure` escalation instead of evading it; `test/core.test.ts` pins the
-visible signal list. Focused suite: 322 pass / 0 fail, 178078 expect() calls. Full `bun run check` green after
-artifact regeneration; marker re-counted, no shipped file added or removed.
-
 ## Workstream CCVI — stop the turn-1 zero-tool downgrade from recurring on restore (restore-turn-counter-fix) (2026-11-23)
 
 Root cause of the repeated canned "no evidence of work toward the condition, only state inspection (zero
@@ -1988,6 +1950,14 @@ fresh work: stale report -> "no new condition" -> end turn -> same report inject
 `backgroundResultID` (kind-gated, keyed by `sessionID`); the `src/index.ts` `context` hook strips all such reports when
 no goal is live, marks even stripped ids as stale, admits each fresh id once while live with the goal strips' splice-back
 contract, and keeps them out of the trailing-user repair. `TERMINAL_REMINDER` calls injected reports stale history.
+
+## Agent-to-agent messaging (agent-messaging, 2026-11-25)
+
+Registered inside plugin `setup()`, so `goal_msg_send` / `goal_msg_read` and the unread hint exist only while the
+goal-plugin is enabled. An agent's address is its parent session id: a worker resolves `parentID`, a top-level session uses its own id, so each parent is both sender and receiver. Messages live under
+`goal/msg/v1/<parentSessionID>`, carry `from`/`to`/`text`/`at`, cap at 100, are serialized per inbox and drained
+on read; the context hook shows a one-line unread nudge without copying bodies into model context; probe mode drops writes.
+`test/messaging.test.ts` plus three plugin tests cover routing, two-way flow, concurrency, cap and the hint.
 
 ## Historical workstreams
 
