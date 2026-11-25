@@ -221,6 +221,8 @@ describe("lease-scoped paths, enforced at submit (requirement 3)", () => {
     writeFileSync(join(wt, "src", "only.ts"), "claimed\n")
     mkdirSync(join(wt, "docs"), { recursive: true })
     writeFileSync(join(wt, "docs", "changelog.html"), "<p>new row</p>\n")
+    mkdirSync(join(wt, ".term", "changelog-pending"), { recursive: true })
+    writeFileSync(join(wt, ".term", "changelog-pending", "changelog-touch.md"), "<!-- behavior-change: shared pending -->\n")
     git(wt, ["add", "-A"])
     git(wt, ["commit", "-q", "-m", "changelog row"], "2026-11-02T10:00:00+00:00")
     const submit = run(wt, ["submit"])
@@ -264,57 +266,50 @@ describe("lease-scoped paths, enforced at submit (requirement 3)", () => {
   })
 })
 
-describe("merge-owned SPEC marker (requirement 4)", () => {
-  const specFixture = (reality: { files: number; tests: number }, marker: string) => {
+describe("gate-computed spec counts (requirement 4)", () => {
+  const specFixture = (reality: { files: number; tests: number }) => {
     mkdirSync(join(dir, "scripts"), { recursive: true })
     writeFileSync(
       join(dir, "scripts", "spec-check.ts"),
       `#!/usr/bin/env bun
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 const ROOT = join(import.meta.dir, "..");
 const reality = JSON.parse(readFileSync(join(ROOT, ".reality.json"), "utf8"));
-const spec = readFileSync(join(ROOT, "SPEC.md"), "utf8");
-const m = spec.match(/<!--\\s*spec-check\\s+files=(\\d+)\\s+tests=(\\d+)\\s*-->/);
-const ok = m && Number(m[1]) === reality.files && Number(m[2]) === reality.tests;
-if (process.argv.includes("--write")) {
-  if (reality.tests < 0) process.exit(1);
-  const next = spec.replace(/<!--\\s*spec-check\\s+files=\\d+\\s+tests=\\d+\\s*-->/, \`<!-- spec-check files=\${reality.files} tests=\${reality.tests} -->\`);
-  writeFileSync(join(ROOT, "SPEC.md"), next);
-  process.exit(0);
-}
-process.exit(ok ? 0 : 1);
+if (reality.tests < 0) { console.error("bun test exits non-zero (a test failed)"); process.exit(1); }
+console.log("spec-check: ok (" + reality.files + " files, " + reality.tests + " tests — computed at gate time)");
+process.exit(0);
 `,
     )
-    writeFileSync(join(dir, "SPEC.md"), `# fixture\n\n${marker}\n`)
+    writeFileSync(join(dir, "SPEC.md"), "# fixture\n\nno stored marker\n")
     writeFileSync(join(dir, ".reality.json"), JSON.stringify(reality) + "\n")
   }
 
-  test("merge-next re-counts the marker on the merged tree; no agent hand-bump; gate goes green", () => {
+  test("merge-next computes counts on the merged tree; SPEC.md is never rewritten", () => {
     setup("bun scripts/spec-check.ts")
-    specFixture({ files: 2, tests: 3 }, "<!-- spec-check files=1 tests=1 -->")
+    specFixture({ files: 2, tests: 3 })
     git(dir, ["add", "-A"])
-    git(dir, ["commit", "-q", "-m", "add stale marker + fake spec-check"])
-    const wtMarker = claimCommitSubmit("marker-flow", { "src/new.ts": "export {}\n" }, "2026-11-02T10:00:00+00:00", "src/**,SPEC.md,scripts/**,.reality.json")
-    const result = run(wtMarker, ["merge-next"])
+    git(dir, ["commit", "-q", "-m", "count-at-gate fixture"])
+    const wt = claimCommitSubmit("count-flow", { "src/new.ts": "export {}\n" }, "2026-11-02T10:00:00+00:00", "src/**,SPEC.md,scripts/**,.reality.json")
+    const result = run(wt, ["merge-next"])
     expect(result.status).toBe(0)
-    const devSpec = git(dir, ["show", "dev:SPEC.md"])
-    expect(devSpec).toContain("<!-- spec-check files=2 tests=3 -->")
-    expect(lease("marker-flow").status).toBe("done")
+    expect(result.stdout).toContain("counts computed at gate time")
+    expect(git(dir, ["show", "dev:SPEC.md"])).toContain("no stored marker")
+    expect(lease("count-flow").status).toBe("done")
   })
 
   test("a red suite in the merged tree aborts before the gate; dev untouched; lease stays submitted", () => {
     setup("bun scripts/spec-check.ts")
-    specFixture({ files: 2, tests: -1 }, "<!-- spec-check files=1 tests=1 -->")
+    specFixture({ files: 2, tests: -1 })
     git(dir, ["add", "-A"])
     git(dir, ["commit", "-q", "-m", "red suite"])
-    const wtMarkerRed = claimCommitSubmit("marker-red", { "src/new.ts": "export {}\n" }, "2026-11-02T10:00:00+00:00", "src/**,SPEC.md,scripts/**,.reality.json")
+    const wtRed = claimCommitSubmit("count-red", { "src/new.ts": "export {}\n" }, "2026-11-02T10:00:00+00:00", "src/**,SPEC.md,scripts/**,.reality.json")
     const devBefore = git(dir, ["rev-parse", "dev"]).trim()
-    const result = run(wtMarkerRed, ["merge-next"])
+    const result = run(wtRed, ["merge-next"])
     expect(result.status).toBe(1)
-    expect(result.stderr).toContain("spec-check --write failed")
+    expect(result.stderr).toContain("spec-check failed")
     expect(git(dir, ["rev-parse", "dev"]).trim()).toBe(devBefore)
-    expect(lease("marker-red").status).toBe("submitted")
+    expect(lease("count-red").status).toBe("submitted")
   })
 })
 
@@ -359,6 +354,32 @@ writeFileSync(f, c.replace("<!-- changes:end -->", "<tr><td>merged-row</td></tr>
     expect(result.stderr).toContain("docs-watch once failed")
     expect(git(dir, ["rev-parse", "dev"]).trim()).toBe(devBefore)
     expect(lease("changelog-red").status).toBe("submitted")
+  })
+})
+
+
+describe("merge folds per-slug changelog pending files", () => {
+  test("a lease's pending note lands in docs/changelog.html and the pending file is deleted", () => {
+    setup("true")
+    mkdirSync(join(dir, "scripts"), { recursive: true })
+    // A no-op docs-watch keeps the folded note intact (the real one only manages stamps/table).
+    writeFileSync(join(dir, "scripts", "docs-watch.ts"), "process.exit(0)\n")
+    mkdirSync(join(dir, "docs"), { recursive: true })
+    writeFileSync(join(dir, "docs", "changelog.html"), "<!-- changes:start -->\n<!-- changes:end -->\n")
+    git(dir, ["add", "-A"])
+    git(dir, ["commit", "-q", "-m", "docs fixture"])
+    const wt = claimCommitSubmit(
+      "pending-fold",
+      { ".term/changelog-pending/pending-fold.md": "<!-- behavior-change: pending fold landed -->\n", "src/note.ts": "export {}\n" },
+      "2026-11-02T10:00:00+00:00",
+      "src/**,.term/changelog-pending/**",
+    )
+    const result = run(wt, ["merge-next"])
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain("folded changelog pending for pending-fold")
+    expect(git(dir, ["show", "dev:docs/changelog.html"])).toContain("pending fold landed")
+    expect(git(dir, ["ls-tree", "-r", "--name-only", "dev", "--", ".term/changelog-pending/"]).trim()).toBe("")
+    expect(lease("pending-fold").status).toBe("done")
   })
 })
 
@@ -587,7 +608,7 @@ describe("semantic and drift guards (Workstream CXIII)", () => {
     git(dir, ["add", "-A"])
     git(dir, ["commit", "-q", "--amend", "--no-edit"], "2026-11-01T10:00:00+00:00")
     claimCommitSubmit("sem-a", { "src/core/a.ts": "a\n" }, "2026-11-02T10:00:00+00:00", "src/core/a.ts")
-    const result = run(join(dir, "worktree", "wt-sem-a"), ["merge-next"])
+    const result = run(join(dir, "worktree", "wt-sem-a"), ["merge-next", "--force"])
     expect(result.status).toBe(0)
     expect(result.stderr).toContain("SEMANTIC-RISK")
     expect(result.stderr).toContain("sem-b")

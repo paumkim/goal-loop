@@ -13,8 +13,13 @@ set -uo pipefail
 #      start of a merge step and is fast-forwarded onto the verified scratch branch.
 #   3. Submit enforces the lease's claimed paths against the commits on the branch;
 #      override with submit --force (logged to the lease record).
-#   4. The SPEC.md spec-check marker is re-counted by merge-next itself on the merged
-#      tree (scripts/spec-check.ts --write), never by hand.
+#   4. Counts are COMPUTED at gate time by scripts/spec-check.ts; no count is stored in SPEC.md,
+#      so there is no marker to hand-bump or re-count. SPEC.md workstream prose is append-only at
+#      per-slug anchors; changelog notes live in .term/changelog-pending/<slug>.md and are folded
+#      into docs/changelog.html by merge-next.
+#   5. merge-next lands leases FIFO: a non-head lease is refused unless --force, or --wait-for-turn
+#      waits until it reaches the head. `merge-next --wait` auto-rebases a stale target onto the
+#      current dev and re-runs the gate before landing.
 
 find_root() {
   git rev-parse --show-toplevel 2>/dev/null || pwd
@@ -38,7 +43,7 @@ STATE_FILE="$DATA_DIR/state.json"
 
 DEV_BRANCH="dev"
 WORKTREE_DIR="worktree"
-SHARED_PATHS_DEFAULT=".term/coordinator/state.json,docs/changelog.html"
+SHARED_PATHS_DEFAULT=".term/coordinator/state.json,docs/changelog.html,.term/changelog-pending"
 
 read_config() {
   DEV_BRANCH="dev"
@@ -48,7 +53,7 @@ read_config() {
     if command -v jq >/dev/null 2>&1; then
       DEV_BRANCH=$(jq -r '.devBranch // "dev"' "$CONFIG_FILE" 2>/dev/null || printf 'dev')
       WORKTREE_DIR=$(jq -r '.worktreeDir // "worktree"' "$CONFIG_FILE" 2>/dev/null || printf 'worktree')
-      SHARED_PATHS=$(jq -r '.sharedPaths // ".term/coordinator/state.json,docs/changelog.html"' "$CONFIG_FILE" 2>/dev/null || printf '%s' "$SHARED_PATHS_DEFAULT")
+      SHARED_PATHS=$(jq -r '.sharedPaths // ".term/coordinator/state.json,docs/changelog.html,.term/changelog-pending"' "$CONFIG_FILE" 2>/dev/null || printf '%s' "$SHARED_PATHS_DEFAULT")
     else
       local v
       v=$(grep -o '"devBranch"[[:space:]]*:[[:space:]]*"[^"]*"' "$CONFIG_FILE" 2>/dev/null | sed -E 's/.*"devBranch"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/' | head -1)
@@ -1016,20 +1021,27 @@ do_merge_next() {
   need_jq
   ensure_state
   read_config
-  local review=0 target="" explicit_target=0 wait=0
+  local review=0 target="" explicit_target=0 wait=0 force=0 wait_for_turn=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --help|-h)
-        printf 'usage: coordinator merge-next [<slug>|--target <slug>] [--review] [--wait]\n'
+        printf 'usage: coordinator merge-next [<slug>|--target <slug>] [--review] [--wait] [--wait-for-turn] [--force]\n'
         printf '\n  --target <slug>  land a specific submitted lease (required to land someone else'"'"'s lease)\n'
         printf '  --review         stop before fast-forwarding dev: merged result stays on the\n'
         printf '                   merge-check-* branch, prints the exact command to finish\n'
-        printf '  --wait           await-merge first: poll the existing merge lock until it is free\n'
+        printf '  --wait           drain the merge lock, then auto-rebase a stale target onto the\n'
+        printf '                   current dev and re-run the gate before landing\n'
+        printf '  --wait-for-turn  wait until the target is the head of the FIFO merge queue\n'
+        printf '  --force          land a non-head lease now, overriding the FIFO guard\n'
         return 0 ;;
       --review)
         review=1; shift ;;
       --wait)
         wait=1; shift ;;
+      --wait-for-turn)
+        wait_for_turn=1; shift ;;
+      --force)
+        force=1; shift ;;
       --target)
         target="${2:-}"; explicit_target=1; shift 2 ;;
       --target=*)
@@ -1094,10 +1106,43 @@ do_merge_next() {
     exit 1
   fi
 
+  # FIFO: the oldest submitted lease owns the next merge. Landing a non-head lease out of order is
+  # what forces everyone behind it to rebase; refuse unless --force, or wait with --wait-for-turn.
+  fifo_head() {
+    jq -r '[ .leases | to_entries[] | select(.value.status=="submitted") ]
+           | sort_by(.value.submittedAt // .value.createdAt // "") | .[0].key // empty' "$STATE_FILE" 2>/dev/null || true
+  }
+  local head
+  head=$(fifo_head)
+  if [ -n "$head" ] && [ "$slug" != "$head" ] && [ "$force" -eq 0 ]; then
+    if [ "$wait_for_turn" -eq 1 ]; then
+      local turn_timeout="${COORDINATOR_WAIT_FOR_TURN_TIMEOUT:-300}" turn_deadline
+      case "$turn_timeout" in ''|*[!0-9]*) turn_timeout=300 ;; esac
+      turn_deadline=$(( $(now_epoch) + turn_timeout ))
+      printf 'fifo: %s is not the queue head (%s is); waiting up to %ss for the turn\n' "$slug" "$head" "$turn_timeout" >&2
+      while :; do
+        head=$(fifo_head)
+        [ -z "$head" ] && head="$slug"
+        [ "$slug" = "$head" ] && break
+        if [ "$(now_epoch)" -ge "$turn_deadline" ]; then
+          printf 'error: timed out after %ss waiting for %s to reach the FIFO head (head: %s)\n' "$turn_timeout" "$slug" "$head" >&2
+          printf 'recovery: land earlier leases first, or re-run with --force to override the FIFO guard\n' >&2
+          exit 1
+        fi
+        sleep 1
+      done
+      printf 'fifo: %s is now the queue head\n' "$slug"
+    else
+      printf 'error: lease %s is not the FIFO head (%s is); land earlier leases first, or re-run with --wait-for-turn or --force\n' "$slug" "$head" >&2
+      exit 1
+    fi
+  fi
+
   branch=$(jq -r --arg s "$slug" '.leases[$s].branch // ("wt/" + $s)' "$STATE_FILE" 2>/dev/null || printf 'wt/%s' "$slug")
 
-  # Thin alias: --wait just drains the existing merge lock via await-merge before the
-  # normal merge-next path. The lock is still acquired below under the same flock.
+  # --wait drains the existing merge lock first, then (at the stale-base guard below) auto-rebases
+  # a stale target onto the current dev and re-runs the gate before landing. The lock is still
+  # acquired below under the same flock.
   if [ "$wait" -eq 1 ]; then
     do_await_merge || exit 1
   fi
@@ -1177,6 +1222,8 @@ do_merge_next() {
   local scratch="merge-check-${slug}-${epoch}-$$"
   local merge_wt="$MAIN_ROOT/$WORKTREE_DIR/wt-${scratch}"
   local merge_wt_rel="$WORKTREE_DIR/wt-${scratch}"
+  # Auto-rebase scratch state (only used by `merge-next --wait`); cleared by fail()/release on any exit.
+  local rebase_wt="" rebase_branch="" auto_rebased=0
 
   release_merge_lock() {
     restore_state_stash
@@ -1211,6 +1258,10 @@ do_merge_next() {
       safe_remove_worktree "$merge_wt" "${scratch}" "failed merge" >/dev/null 2>&1 || true
     fi
     git -C "$MAIN_ROOT" branch -D "$scratch" >/dev/null 2>&1 || true
+    if [ -n "$rebase_wt" ] && [ -d "$rebase_wt" ]; then
+      safe_remove_worktree "$rebase_wt" "${rebase_branch:-rebase-scratch}" "failed auto-rebase" >/dev/null 2>&1 || true
+    fi
+    [ -n "$rebase_branch" ] && git -C "$MAIN_ROOT" branch -D "$rebase_branch" >/dev/null 2>&1 || true
     release_merge_lock
     exit 1
   }
@@ -1268,8 +1319,46 @@ do_merge_next() {
   if [ -n "$dev_tip" ] && [ -n "$merge_base" ] && [ "$merge_base" != "$dev_tip" ]; then
     wt_rel=$(jq -r --arg s "$slug" '.leases[$s].worktree // empty' "$STATE_FILE" 2>/dev/null || printf "$WORKTREE_DIR/wt-$slug")
     wt_abs="$MAIN_ROOT/$wt_rel"
-    fail "lease $slug is stale: merge-base($DEV_BRANCH,$branch) is not $DEV_BRANCH tip (dev moved under it); dev untouched" \
-      "git -C $wt_abs fetch && git -C $wt_abs rebase $DEV_BRANCH, resolve conflicts, git -C $wt_abs add <resolved>, git -C $wt_abs rebase --continue, re-run 'bun run check' in $wt_abs, then coordinator merge-next"
+    if [ "$wait" -eq 1 ]; then
+      # --wait: rebase the target onto the current dev in a throwaway worktree (never the claimant's),
+      # re-run the gate on the rebased tree, then advance the submitted branch ref. update-ref is used
+      # instead of `git branch -f` because $branch is checked out in the claimant's worktree.
+      rebase_branch="rebase-check-${slug}-${epoch}-$$"
+      rebase_wt="$MAIN_ROOT/$WORKTREE_DIR/wt-${rebase_branch}"
+      printf 'rebase: %s is stale (dev moved); auto-rebasing onto %s under --wait\n' "$slug" "$DEV_BRANCH"
+      if ! git -C "$MAIN_ROOT" branch "$rebase_branch" "$branch" >/dev/null 2>&1; then
+        fail "cannot create rebase branch $rebase_branch"
+      fi
+      if ! git -C "$MAIN_ROOT" worktree add "$rebase_wt" "$rebase_branch" >/dev/null 2>&1; then
+        fail "cannot create rebase worktree $rebase_wt"
+      fi
+      ensure_node_modules "$rebase_wt"
+      if ! (cd "$rebase_wt" && git rebase "$DEV_BRANCH" >/dev/null 2>&1); then
+        (cd "$rebase_wt" && git rebase --abort >/dev/null 2>&1) || true
+        fail "auto-rebase of $branch onto $DEV_BRANCH hit a conflict; dev untouched" \
+          "resolve in $rebase_wt (git rebase $DEV_BRANCH, fix, git rebase --continue), re-run 'bun run check', then coordinator merge-next --wait"
+      fi
+      if ! (cd "$rebase_wt" && bun run check >/dev/null 2>&1); then
+        fail "auto-rebased $branch fails bun run check; dev untouched" \
+          "fix the rebased tree in $rebase_wt, re-run 'bun run check', then coordinator merge-next --wait"
+      fi
+      local rebased_tip
+      rebased_tip=$(git -C "$rebase_wt" rev-parse HEAD 2>/dev/null || printf '')
+      [ -n "$rebased_tip" ] || fail "could not read the rebased tip; dev untouched"
+      if ! git -C "$MAIN_ROOT" update-ref "refs/heads/$branch" "$rebased_tip"; then
+        fail "could not advance $branch to its rebased tip; dev untouched"
+      fi
+      auto_rebased=1
+      printf 'rebase: %s advanced to %s; gate green on the rebased tree\n' "$branch" "${rebased_tip:0:12}"
+      safe_remove_worktree "$rebase_wt" "$rebase_branch" "auto-rebase" >/dev/null 2>&1 || true
+      git -C "$MAIN_ROOT" branch -D "$rebase_branch" >/dev/null 2>&1 || true
+      rebase_wt=""; rebase_branch=""
+      merge_base=$(git -C "$MAIN_ROOT" merge-base "$DEV_BRANCH" "$branch" 2>/dev/null || printf '')
+      [ "$merge_base" = "$dev_tip" ] || fail "auto-rebase did not put $branch on the current $DEV_BRANCH tip; dev untouched"
+    else
+      fail "lease $slug is stale: merge-base($DEV_BRANCH,$branch) is not $DEV_BRANCH tip (dev moved under it); dev untouched" \
+        "git -C $wt_abs fetch && git -C $wt_abs rebase $DEV_BRANCH, resolve conflicts, git -C $wt_abs add <resolved>, git -C $wt_abs rebase --continue, re-run 'bun run check' in $wt_abs, then coordinator merge-next --wait (auto-rebase) or plain merge-next with the manual rebase"
+    fi
   fi
 
   # Worktree drift guard: a submitted worktree whose HEAD moved past the submitted branch means the agent kept
@@ -1284,8 +1373,15 @@ do_merge_next() {
     wt_head=$(git -C "$wt_abs" rev-parse HEAD 2>/dev/null || printf '')
     br_head=$(git -C "$MAIN_ROOT" rev-parse "$branch" 2>/dev/null || printf '')
     if [ -n "$wt_head" ] && [ -n "$br_head" ] && [ "$wt_head" != "$br_head" ]; then
-      fail "worktree drift for lease $slug: worktree HEAD $wt_head differs from submitted branch $branch tip $br_head; dev untouched" \
-        "discard the post-submit commits (git -C $wt_abs reset --hard $branch) then re-run coordinator merge-next; a submitted lease cannot be re-submitted — to land different work, release + re-claim a fresh lease"
+      if [ "$auto_rebased" -eq 1 ]; then
+        # Expected: we advanced the branch ref in --wait's auto-rebase; the claimant's worktree is
+        # intentionally left alone. Its uncommitted bytes are preserved by finish_merged_lease's
+        # safe_remove_worktree, so nothing is destroyed.
+        printf 'drift: %s worktree HEAD %s trails auto-rebased branch %s; uncommitted bytes will be preserved\n' "$slug" "${wt_head:0:12}" "${br_head:0:12}" >&2
+      else
+        fail "worktree drift for lease $slug: worktree HEAD $wt_head differs from submitted branch $branch tip $br_head; dev untouched" \
+          "discard the post-submit commits (git -C $wt_abs reset --hard $branch) then re-run coordinator merge-next; a submitted lease cannot be re-submitted — to land different work, release + re-claim a fresh lease"
+      fi
     fi
     loose=$(git -C "$wt_abs" status --porcelain 2>/dev/null | grep -v ' \.term/coordinator/state\.json$' | grep -c . || true)
     if [ "${loose:-0}" != "0" ]; then
@@ -1335,27 +1431,43 @@ do_merge_next() {
       "resolve in the claimant's worktree: git -C $wt_abs rebase $DEV_BRANCH, git -C $wt_abs add <resolved>, git -C $wt_abs rebase --continue, re-run 'bun run check' there, then coordinator merge-next"
   fi
 
-  # The merged tree is authoritative for shared counters: re-count the SPEC marker now and
-  # commit the re-count on the scratch branch, so no agent hand-bumps and the gate trusts it.
-  local spec_note="spec-check: not present in the merged tree; marker re-count skipped (non-repo fixture or no scripts/spec-check.ts)"
+  # Counts are computed by scripts/spec-check.ts at gate time; nothing is stored in SPEC.md, so
+  # there is no marker to re-count and no SPEC.md rewrite. Run the count probe as an early preflight.
+  local spec_note="spec-check: not present in the merged tree; count probe skipped (non-repo fixture or no scripts/spec-check.ts)"
   if [ "${COORDINATOR_SKIP_SPEC_WRITE:-0}" != "1" ] && command -v bun >/dev/null 2>&1 && [ -f "$merge_wt/scripts/spec-check.ts" ]; then
-    if (cd "$merge_wt" && bun scripts/spec-check.ts --write); then
-      if ! git -C "$merge_wt" diff --quiet HEAD -- SPEC.md; then
-        if git -C "$merge_wt" add SPEC.md && git -C "$merge_wt" commit -q -m "chore(spec): re-count marker on the merged tree"; then
-          spec_note="spec-check: SPEC.md marker re-counted and committed on $scratch"
-        else
-          fail "could not commit the SPEC re-count on $scratch; dev untouched" \
-            "inspect the merge worktree $merge_wt (git status), fix the cause, then re-run coordinator merge-next"
-        fi
-      else
-        spec_note="spec-check: SPEC.md marker already accurate on the merged tree"
-      fi
+    if (cd "$merge_wt" && bun scripts/spec-check.ts); then
+      spec_note="spec-check: counts computed at gate time on $scratch (no marker to re-count)"
     else
-      fail "spec-check --write failed in the merged tree (red suite or probe failure); dev untouched" \
+      fail "spec-check failed in the merged tree (red suite or probe failure); dev untouched" \
         "fix the branch so 'bun test' is green in the merged tree, then re-run coordinator merge-next"
     fi
   fi
   printf '%s\n' "$spec_note"
+
+  # Changelog notes live in per-slug pending files so parallel agents never race docs/changelog.html.
+  # Fold them into the shared page here and delete the pending files; docs-watch restamps afterwards.
+  local pending_dir="$merge_wt/.term/changelog-pending"
+  if [ "${COORDINATOR_SKIP_CHANGELOG_FOLD:-0}" != "1" ] && [ -d "$pending_dir" ]; then
+    local p folded=0
+    for p in "$pending_dir"/*.md; do
+      [ -f "$p" ] || continue
+      local note
+      note=$(cat "$p" 2>/dev/null || true)
+      [ -z "$note" ] && continue
+      printf '\n%s\n' "$note" >> "$merge_wt/docs/changelog.html"
+      rm -f "$p"
+      folded=1
+    done
+    if [ "$folded" -eq 1 ]; then
+      rmdir "$pending_dir" 2>/dev/null || true
+      if ! git -C "$merge_wt" add -A -- docs/changelog.html .term/changelog-pending ||
+         ! git -C "$merge_wt" commit -q -m "docs: fold changelog pending for $slug"; then
+        fail "could not commit the folded changelog on $scratch; dev untouched" \
+          "inspect the merge worktree $merge_wt (git status), fix the cause, then re-run coordinator merge-next"
+      fi
+      printf 'docs: folded changelog pending for %s on %s\n' "$slug" "$scratch"
+    fi
+  fi
 
   # The changelog is pipeline-owned too: regenerate it (and page stamps) on the merged tree and
   # commit the result on the scratch branch, so parallel agents never race docs/changelog.html.
@@ -1472,13 +1584,12 @@ do_merge_next() {
   # Post-merge health pass: a lightweight post-condition on the landed tree. The full gate already ran on the
   # merged result before the fast-forward; this checks that dev actually landed clean and the marker is present.
   # It reports problems but never undoes a successful merge.
-  local health_dirty health_marker
+  local health_dirty
   health_dirty=$(git -C "$MAIN_ROOT" status --porcelain 2>/dev/null | grep -v ' \.term/coordinator/state\.json$' | grep -v ' \.term/coordinator/\.' | grep -v -F " $WORKTREE_DIR/" | grep -c . || true)
-  health_marker=$(grep -o 'spec-check files=[0-9]* tests=[0-9]*' "$MAIN_ROOT/SPEC.md" 2>/dev/null | head -1 || true)
   if [ "${health_dirty:-0}" = "0" ]; then
-    printf 'post-merge: health ok (clean tracked tree; %s)\n' "${health_marker:-marker absent}"
+    printf 'post-merge: health ok (clean tracked tree; counts computed at gate time)\n'
   else
-    printf 'post-merge: WARNING: %s uncommitted change(s) on %s after landing%s\n' "$health_dirty" "$DEV_BRANCH" "${health_marker:+; $health_marker}" >&2
+    printf 'post-merge: WARNING: %s uncommitted change(s) on %s after landing\n' "$health_dirty" "$DEV_BRANCH" >&2
   fi
 
   # remove the merge worktree first, then delete the scratch branch (a branch checked out
@@ -1856,12 +1967,12 @@ do_doctor() {
   # 5. SPEC marker vs reality
   if [ -f "$MAIN_ROOT/scripts/spec-check.ts" ] && command -v bun >/dev/null 2>&1; then
     if (cd "$MAIN_ROOT" && bun scripts/spec-check.ts >/dev/null 2>&1); then
-      say_ok "spec-marker" "SPEC.md spec-check marker matches reality"
+      say_ok "spec-counts" "spec-check counts compute green at gate time"
     else
-      say_fail "spec-marker" "SPEC.md spec-check marker does not match reality (run: bun scripts/spec-check.ts --write)"
+      say_fail "spec-counts" "spec-check counts are not green (run: bun scripts/spec-check.ts)"
     fi
   else
-    say_warn "spec-marker-unavailable" "scripts/spec-check.ts not found; marker check skipped"
+    say_warn "spec-counts-unavailable" "scripts/spec-check.ts not found; count check skipped"
   fi
 
   # 6. merge lock health
@@ -1985,7 +2096,8 @@ show_help() {
   printf '  heartbeat                                           liveness check\n'
   printf '  submit [--force]                                    submit the current wt/<slug> claimed lease; commits are checked against the claimed paths (--force overrides, logged to the lease)\n'
   printf '  release <slug> [--force]                            release a claimed lease that will never be submitted (idle or abandoned): done, worktree removed, dirty bytes saved to a ref, a branch with commits kept\n'
-  printf '  merge-next [<slug>|--target <slug>] [--review] [--wait]  merge a submitted lease into $DEV_BRANCH via a dedicated merge worktree; --target names a lease from the main repo, --review stops before the fast-forward, --wait drains the merge lock first\n'
+  printf '  merge-next [<slug>|--target <slug>] [--review] [--wait] [--wait-for-turn] [--force]\n'
+  printf '                                                      --target names a lease from the main repo; merge FIFO via a dedicated worktree; --wait drains the lock then auto-rebases a stale target onto dev and re-runs the gate; --wait-for-turn waits for the queue head; --force overrides FIFO\n'
   printf '  merge-done <slug>                                   finish a --review merge after dev was fast-forwarded by hand\n'
   printf '  merge-abort <slug>                                  discard a --review merge (scratch branch deleted, lease stays submitted)\n'
   printf '  status [--json] [--all]                             submitted/done counts, or per-lease JSON for active leases (--all includes done) with summary/counts/dirty state\n'

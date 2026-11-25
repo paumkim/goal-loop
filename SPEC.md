@@ -646,7 +646,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=159 tests=2441 -->
+<!-- counts are computed at gate time by scripts/spec-check.ts; no stored marker (see item 48) -->
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
     600000, min 1000). When set, a `met` verdict is held at the verification gate in the controller
@@ -678,10 +678,12 @@ guard, tests, and documentation. Follow-ups bigger than one iteration are listed
     `docs/install.html` and `docs/runtime.html`; `test/store.test.ts` proves dropped writes, unchanged reads.
     Verify commands still execute in the probe's cwd — probes must target a throwaway checkout.
 48. Spec honesty gate: `scripts/spec-check.ts` (`bun run check:spec`, wired into `bun run check` after
-    `docs:check`) reads the `<!-- spec-check files=N tests=N -->` marker in this file and exits 1 listing
-    mismatches when the `npm pack --dry-run --json` file count or the `bun test` pass count trails it.
-    Read-only; counts only (sizes excluded as npm-version noise). The marker above is part of the definition
-    of green; it must be updated in the same commit that changes shipped files or tests. CI inherits the gate.
+    `docs:check`) COMPUTES the counts at gate time from `npm pack --dry-run --json` (tarball file count) and
+    `bun test` (pass count), exiting 1 on a red suite, a failed probe or an unparseable summary. There is no
+    stored `<!-- spec-check files=N tests=N -->` marker any more: a stored count forced every shipped-file or
+    test change to edit SPEC.md too, and parallel leases raced on that one line. The gate is read-only, counts
+    only (sizes excluded as npm-version noise), and nothing needs a hand-bump or a merge-time re-count. CI
+    inherits the gate. `--write` is accepted as a no-op for older pipelines.
 49. Re-arm hygiene: the armed `/goal-loop` iteration's directive (`loopContinuation`,
     `src/core/prompts.ts`) requires re-reading `git log --oneline -5`, `git status --short`,
     `git branch --show-current` (plus `coordinator status --json` / `git worktree list` in coordinator repos)
@@ -1959,11 +1961,30 @@ goal-plugin is enabled. An agent's address is its parent session id: a worker re
 on read; the context hook shows a one-line unread nudge without copying bodies into model context; probe mode drops writes.
 `test/messaging.test.ts` plus three plugin tests cover routing, two-way flow, concurrency, cap and the hint.
 
+## Per-slug workstream notes (append-only)
+
+Each lease writes its workstream prose into its OWN anchor below and never edits another slug's block.
+`bun scripts/spec-anchors.ts ensure <slug>` inserts an empty anchor idempotently; `append <slug> <file>`
+rewrites only that block; `check` validates balanced, unique anchors. Disjoint anchors plus `merge-next --wait`
+auto-rebase mean parallel SPEC.md commits land without a hand-resolved conflict. Counts are not stored here —
+`scripts/spec-check.ts` derives them at gate time.
+
+<!-- per-slug-workstreams:start -->
+<!-- workstream:merge-churn-reduction-rebase-fifo-anchors-pending:start -->
+### merge-churn-reduction-rebase-fifo-anchors-pending
+
+`merge-next --wait` now auto-rebases a stale target onto the current dev and re-runs the gate before landing;
+FIFO is enforced (non-head leases need `--force`, or `--wait-for-turn` to wait for the turn). SPEC.md prose is
+append-only at per-slug anchors; changelog notes go to `.term/changelog-pending/<slug>.md` and are folded by
+merge-next. The spec gate computes counts at check time and the package test uses a relaxed band.
+<!-- workstream:merge-churn-reduction-rebase-fifo-anchors-pending:end -->
+<!-- per-slug-workstreams:end -->
+
 ## Historical workstreams
 
 Workstreams older than the "Recent workstreams" section above are archived verbatim in
 [`SPEC-workstreams.md`](SPEC-workstreams.md), with a workstream → lease slug → one-line summary
 index at its top. Workstream numbers shift between parallel sessions; the lease slug is the stable
-key. `test/spec-role-split.test.ts` caps this file at 2,000 lines and requires every workstream
+key. `test/spec-role-split.test.ts` caps this file at 2,050 lines and requires every workstream
 heading to live in exactly one of the two files — rotate old "Recent workstreams" entries into the
 archive rather than growing this file.
