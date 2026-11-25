@@ -7236,6 +7236,17 @@
       "worktree": "worktree/wt-evaluator-internal-subagent-exclusion",
       "status": "claimed",
       "createdAt": "2026-11-25T05:16:57Z"
+    },
+    "tui-copy-report-helper": {
+      "agent": "build",
+      "paths": "src/tui.tsx,dist/tui.js,docs/changelog.html",
+      "branch": "wt/tui-copy-report-helper",
+      "worktree": "worktree/wt-tui-copy-report-helper",
+      "status": "done",
+      "createdAt": "2026-11-25T05:19:27Z",
+      "submittedAt": "2026-11-25T05:23:54Z",
+      "mergedAt": "2026-11-25T05:26:28Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
