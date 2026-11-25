@@ -7234,8 +7234,9 @@
       "paths": "src/runtime/background.ts,src/index.ts,test/controller.test.ts,test/plugin.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/evaluator-internal-subagent-exclusion",
       "worktree": "worktree/wt-evaluator-internal-subagent-exclusion",
-      "status": "claimed",
-      "createdAt": "2026-11-25T05:16:57Z"
+      "status": "submitted",
+      "createdAt": "2026-11-25T05:16:57Z",
+      "submittedAt": "2026-11-25T05:33:58Z"
     },
     "tui-copy-report-helper": {
       "agent": "build",
@@ -7246,6 +7247,17 @@
       "createdAt": "2026-11-25T05:19:27Z",
       "submittedAt": "2026-11-25T05:23:54Z",
       "mergedAt": "2026-11-25T05:26:28Z",
+      "mergedInto": "dev"
+    },
+    "dossier-find-doc-comments": {
+      "agent": "build",
+      "paths": "src/core/dossier.ts,src/core/find.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/dossier-find-doc-comments",
+      "worktree": "worktree/wt-dossier-find-doc-comments",
+      "status": "done",
+      "createdAt": "2026-11-25T05:26:50Z",
+      "submittedAt": "2026-11-25T05:31:25Z",
+      "mergedAt": "2026-11-25T05:34:00Z",
       "mergedInto": "dev"
     }
   },
