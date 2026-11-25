@@ -46,6 +46,7 @@ Index of `prompts/action/`. Copy a file's full contents and paste it as your ins
 Index of `prompts/audit/`. Copy a file's full contents and paste it as your instruction.
 
 - `bug-regression-audit.md` — use to audit recent changes for bugs/regressions in an isolated worktree and fix only proven defects.
+- `over-engineering-checklist.md` — use to scan the repo for over-engineering and messy code and record an evidence-backed checklist in `checklist/` for ongoing reference.
 - `security-review.md` — use to review code for security risks, prioritize confirmed findings, and fix issues with evidence.
 
 ## Coordinator prompts
