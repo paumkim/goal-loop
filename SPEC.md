@@ -1989,6 +1989,28 @@ completion condition agree. Agent-facing prompts now instruct the submitting age
 (`merge-status`, `merge-next --wait --target <slug>`, rebase/retry if dev moved) and to report completion only on
 `done` status with the worktree gone.
 <!-- workstream:evaluator-require-landing-evidence:end -->
+<!-- workstream:diagnostics-artifact-fixture-leak:start -->
+
+### diagnostics-artifact-fixture-leak — a fake Windows path no longer anchors diagnostics in this checkout
+
+`resolveProjectRoot()` walked up from its argument with `resolve()`, so a POSIX host treated the test fixture
+directory `C:/work/project` as a relative path under cwd and found this repository's `.git`. Every repo-scoped
+writer that anchors at the resolved root then wrote here: most visibly, repeated-failure escalation persisted
+`.term/goal-loop/diagnostics/*-repeated-failure.json` into the live checkout on every red test turn. The two
+historical naming schemes left 477 such artifacts behind (441 timestamped "same missing test evidence" files
+plus 29 per-turn "turn N still failing" files). The earlier `isWindowsDrivePathOnPosix` guard checked the
+*resolved* directory in `persistFailureDiagnosticArtifact`, so it never saw the fake path again after
+`resolveProjectRoot()` had mapped it onto this repo.
+
+The guard now lives in `resolveProjectRoot()` itself: a Windows drive path on a non-Windows host is returned
+unchanged instead of being resolved and walked up. Downstream writers keep their existing fixture guards and
+reject it, so no `.term` artifact is created and the escalation steer carries no diagnostic path for fixture
+sessions. Real subfolder anchoring, real-repo diagnostics and the learning journal are unchanged.
+
+Verification: `test/git.test.ts` pins that both slash variants of a Windows fixture path are returned verbatim
+instead of this checkout's root; `test/controller.test.ts` pins that a three-turn repeated-failure streak in the
+default fixture session still rotates strategy but cites no diagnostic artifact. Full `bun run check` green.
+<!-- workstream:diagnostics-artifact-fixture-leak:end -->
 <!-- per-slug-workstreams:end -->
 
 ## Workstream planner-reuse-builtin-session — arm-time planner reuses the built-in subagent session family (2026-11-25)

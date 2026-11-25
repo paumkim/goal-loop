@@ -12,6 +12,7 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-25 03:12 UTC</code></td><td>fix(core): stop Windows fixture paths from anchoring diagnostics in this checkout</td><td>commit</td></tr>
 <tr><td><code>2026-11-25 03:08 UTC</code></td><td>refactor(tui): unexport internal-only IntentVisual type</td><td>commit</td></tr>
 <tr><td><code>2026-11-25 03:02 UTC</code></td><td>fix(runtime): reuse the built-in subagent session family for the planner</td><td>commit</td></tr>
 <tr><td><code>2026-11-25 02:05 UTC</code></td><td>fix(evaluator): require landing evidence, not a submitted lease</td><td>commit</td></tr>
@@ -41,11 +42,10 @@
 <tr><td><code>2026-11-24 16:16 UTC</code></td><td>perf(runtime): carry verification cache key into queued checks</td><td>commit</td></tr>
 <tr><td><code>2026-11-24 16:16 UTC</code></td><td>refactor(core): share one record-attestation core across verify/reach/sign</td><td>commit</td></tr>
 <tr><td><code>2026-11-24 16:02 UTC</code></td><td>refactor(tui): share pill motion flags and dossier command prologue</td><td>commit</td></tr>
-<tr><td><code>2026-11-24 15:59 UTC</code></td><td>docs: correct evaluator.mode scope and drop stale spec section</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
-</div><footer class="foot"><div class="foot-credits">goal-loop — <a href="https://github.com/paumkim/goal-loop">https://github.com/paumkim/goal-loop</a><br>Originally derived from <a href="https://github.com/EL4CTEO/opencode-goal">opencode-goal</a> by EL4CTEO, now an independent project<br>Maintained by paumkim · Released under the <a href="../LICENSE">MIT License</a><br>© 2026 EL4CTEO (original work) · © 2026 paumkim (modifications and maintenance)</div>Last updated: <span class="stamp">2026-11-25 02:05 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer>
+</div><footer class="foot"><div class="foot-credits">goal-loop — <a href="https://github.com/paumkim/goal-loop">https://github.com/paumkim/goal-loop</a><br>Originally derived from <a href="https://github.com/EL4CTEO/opencode-goal">opencode-goal</a> by EL4CTEO, now an independent project<br>Maintained by paumkim · Released under the <a href="../LICENSE">MIT License</a><br>© 2026 EL4CTEO (original work) · © 2026 paumkim (modifications and maintenance)</div>Last updated: <span class="stamp">2026-11-25 03:12 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer>
 <script src="app.js"></script></body></html>
 
 <!-- behavior-change: XCIV loop indicator visible at every cap -->
@@ -117,3 +117,5 @@
 <!-- behavior-change: parallel-merge churn reduction — merge-next --wait now auto-rebases a stale target onto current dev in a throwaway worktree and re-runs bun run check before landing (conflict/red gate aborts with dev untouched); merge-next enforces FIFO (non-head leases refused unless --force, or --wait-for-turn to queue); SPEC.md prose is append-only at per-slug anchors via scripts/spec-anchors.ts; changelog notes move to .term/changelog-pending/<slug>.md folded by merge-next; scripts/spec-check.ts computes file/test counts at gate time with no stored marker (--write is a no-op); package-integrity test uses a relaxed tarball-count band. No runtime, config or command-line behavior changed. -->
 
 <!-- behavior-change: evaluator-require-landing-evidence — a submitted lease is only merge-ready, not completion evidence: the coordinator judge rubric now requires merge-next output or status --json showing the lease done with its worktree removed, the commit/landing evidence rule and bounded completion condition agree, and agent-facing prompts tell the submitting agent to drain the merge queue (merge-status, merge-next --wait --target, rebase/retry if dev moved) before reporting completion. -->
+
+<!-- behavior-change: diagnostics-artifact-fixture-leak — resolveProjectRoot() no longer walks a Windows drive path (POSIX fixture/foreign path) up into this checkout's .git; repeated-failure escalation in fixture sessions writes no .term/goal-loop/diagnostics artifact and cites no diagnostic path, while real-repo subfolder anchoring, diagnostics and learning journal are unchanged -->

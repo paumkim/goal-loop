@@ -2372,6 +2372,33 @@ describe("repeated failure-signature escalation", () => {
       await rm(dir, { recursive: true, force: true })
     }
   })
+
+  test("a Windows-style fixture directory writes no diagnostic artifact into this checkout", async () => {
+    // The default harness directory is "C:/work/project". On POSIX it is not a real path: anchoring it at
+    // the repo root made repeated-failure escalation write .term/goal-loop/diagnostics/ into this checkout.
+    const logs: Array<{ message: string; extra?: unknown }> = []
+    const h = harness({ log: {
+      info() {},
+      warn: (message: string, extra?: unknown) => void logs.push({ message, extra }),
+      error() {},
+    } })
+    await h.set("fix the failing tests")
+    h.verdicts.push(
+      { verdict: "not_met", reason: "same missing test evidence" },
+      { verdict: "not_met", reason: "same missing test evidence" },
+      { verdict: "not_met", reason: "same missing test evidence" },
+    )
+    await h.turn()
+    await h.turn()
+    await h.turn()
+
+    const escalation = logs.find((l) => l.message === "repeated failure signature escalated")
+    expect(escalation).toBeDefined()
+    expect(escalation!.extra).not.toHaveProperty("diagnostic")
+    const steer = h.calls.synthetic[2]!
+    expect(steer.text).toContain("<goal-strategy-escalation")
+    expect(steer.text).not.toContain("Diagnostic artifact:")
+  })
 })
 
 describe("parallel mixed /goal and /goal-loop sessions", () => {
