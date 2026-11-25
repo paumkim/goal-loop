@@ -14,6 +14,7 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-25 13:24 UTC</code></td><td>fix(tui): keep the pinned pill and activity badge inside the mount</td><td>commit</td></tr>
 <tr><td><code>2026-11-25 12:56 UTC</code></td><td>feat(runtime): auto-park a worker when its coordinator submit completes</td><td>commit</td></tr>
 <tr><td><code>2026-11-25 12:39 UTC</code></td><td>feat(runtime): park submitted agents and wake them on their coordinator merge turn</td><td>commit</td></tr>
 <tr><td><code>2026-11-25 12:31 UTC</code></td><td>fix(runtime): keep subagent reports for parents without a goal</td><td>commit</td></tr>
@@ -43,7 +44,6 @@
 <tr><td><code>2026-11-25 01:31 UTC</code></td><td>docs: fold changelog pending for merge-churn-reduction-rebase-fifo-anchors-pending</td><td>commit</td></tr>
 <tr><td><code>2026-11-25 01:26 UTC</code></td><td>refactor(coordinator): cut parallel-merge churn (auto-rebase/FIFO, per-slug anchors+pending changelog, gate-computed counts)</td><td>commit</td></tr>
 <tr><td><code>2026-11-25 01:07 UTC</code></td><td>fix(core): detect injected subagent reports in flat-text host shape</td><td>commit</td></tr>
-<tr><td><code>2026-11-25 01:01 UTC</code></td><td>docs(audit): add repeatable wiring audit and shadow-inspector report</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
