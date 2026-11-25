@@ -7156,6 +7156,19 @@ var intentForActivity = (activity) => {
   return newest === undefined ? undefined : activity.calls[newest];
 };
 var INTENT_TTL_MS = 4000;
+var fadeNotice = (map, sessionID) => {
+  const current = map[sessionID];
+  if (current === undefined || current.notice === undefined)
+    return map;
+  return {
+    ...map,
+    [sessionID]: {
+      calls: current.calls,
+      notice: undefined
+    }
+  };
+};
+var NOTICE_SIGNALS = new Set(["permission-asked", "execution-started", "execution-succeeded", "execution-failed", "tool-failed"]);
 var tui_default = Plugin.define({
   id: "goal-loop.tui",
   setup(context) {
@@ -7171,20 +7184,14 @@ var tui_default = Plugin.define({
       if (!sid)
         return;
       setActivity((previous) => applyIntentSignal(previous, signal));
+      if (!NOTICE_SIGNALS.has(signal.type))
+        return;
       const pending = intentTimers.get(sid);
       if (pending !== undefined)
         clearTimeout(pending);
       intentTimers.set(sid, setTimeout(() => {
         intentTimers.delete(sid);
-        setActivity((previous) => {
-          if (!(sid in previous))
-            return previous;
-          const next = {
-            ...previous
-          };
-          delete next[sid];
-          return next;
-        });
+        setActivity((previous) => fadeNotice(previous, sid));
       }, INTENT_TTL_MS));
     };
     const toolEventDisposers = [];
@@ -8506,11 +8513,13 @@ var tui_default = Plugin.define({
 export {
   AGENT_ICONS,
   INTENT_TTL_MS,
+  NOTICE_SIGNALS,
   NO_ACTIVITY,
   activityBadgeCells,
   activityWord,
   applyIntentSignal,
   tui_default as default,
+  fadeNotice,
   intentAccent,
   intentForActivity,
   intentGlyph,
