@@ -7313,12 +7313,11 @@
     },
     "agent-messaging": {
       "agent": "build",
-      "paths": "src/runtime/messaging.ts,src/index.ts,test/messaging.test.ts,test/plugin.test.ts,test/package-integrity.test.ts,SPEC.md,docs/changelog.html",
+      "paths": "src/runtime/messaging.ts,src/index.ts,test/messaging.test.ts,test/plugin.test.ts,test/package-integrity.test.ts,SPEC.md,SPEC-workstreams.md,docs/changelog.html",
       "branch": "wt/agent-messaging",
       "worktree": "worktree/wt-agent-messaging",
-      "status": "submitted",
-      "createdAt": "2026-11-25T06:27:57Z",
-      "submittedAt": "2026-11-25T06:36:14Z"
+      "status": "claimed",
+      "createdAt": "2026-11-25T06:42:53Z"
     },
     "mirror-disable-read-path": {
       "agent": "build",
@@ -7344,8 +7343,20 @@
       "paths": "src/index.ts,test/plugin.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/wake-loop-stale-id-guard-2",
       "worktree": "worktree/wt-wake-loop-stale-id-guard-2",
-      "status": "claimed",
-      "createdAt": "2026-11-25T06:38:24Z"
+      "status": "done",
+      "createdAt": "2026-11-25T06:38:24Z",
+      "submittedAt": "2026-11-25T06:43:34Z",
+      "mergedAt": "2026-11-25T06:46:16Z",
+      "mergedInto": "dev"
+    },
+    "mirror-comment-typo": {
+      "agent": "build",
+      "paths": "src/tui.tsx",
+      "branch": "wt/mirror-comment-typo",
+      "worktree": "worktree/wt-mirror-comment-typo",
+      "status": "submitted",
+      "createdAt": "2026-11-25T06:45:59Z",
+      "submittedAt": "2026-11-25T06:46:08Z"
     }
   },
   "mergeLock": null,
