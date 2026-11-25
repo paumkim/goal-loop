@@ -38,7 +38,7 @@ All findings from the audit have been fixed and removed; no completed items rema
 
 ## Recurring patterns / watch list
 
-- Long-lived orchestration files accrete branching and inline state: `src/tui.tsx` (1909 lines), `src/runtime/controller.ts` (3187), `src/index.ts` (1147), `packages/coordinator/bin/coordinator` (2149). Watch new guards for copy-paste drift and for new responsibilities added to `setup`/`evaluate`/`do_merge_next`.
+- Long-lived orchestration files still accrete branching and inline state: `src/tui.tsx` (1563), `src/runtime/controller.ts` (3285), `src/index.ts` (670), `packages/coordinator/bin/coordinator` (2160). Watch new guards for copy-paste drift and for new responsibilities added to `setup`/`evaluate`/`do_merge_next`; the extracted factories (`host-child`, `harness`, `hooks`, `tui-actions`, `tui-keymap`) are the intended home for new child/hook/action/keymap code.
 - The judge and planner child runtimes now share `src/host-child.ts`; a timeout/abort change should be made in that helper, not in one call site.
 - Wiring/invariant gates catch new config-field consumers; verify each new field still has a real consumer beyond the gate regex.
 - TUI bind/keybind plumbing is repeated across dialogs; watch for drift in the chord tables.
@@ -78,9 +78,26 @@ wiring-audit: 38/38 checks passed
 
 `git status --short` after baseline: clean (compile reproduced the committed `dist/tui.js` byte-for-byte).
 
+## Final verification
+
+Ran `bun run check` on the final tree (exit 0). Quoted output:
+
+```text
+ 2468 pass
+ 0 fail
+Ran 2468 tests across 114 files. [45.56s]
+ok: dist/tui.js matches a fresh build
+built dist/tui.js (367516 bytes)
+ok: loaded TUI plugin "goal-loop.tui"
+docs freshness check passed
+invariant-sweep: ok (no src/core|src/runtime behavior changes without SPEC.md and docs/changelog.html updates)
+spec-check: ok (165 files, 2468 tests — computed at gate time)
+wiring-audit: 38/38 checks passed
+```
+
 ## Verification / handoff
 
-- Re-run `bun run check` after writing this checklist; quote output.
-- `git diff --stat` must show only `checklist/over-engineering-checklist.md`.
-- Commit on `wt/over-engineering-audit`; `coordinator submit`; `coordinator merge-next --wait --target over-engineering-audit`; confirm lease `done` and worktree removed.
-- Residual risk: severity is a review judgment, not a measured defect rate; "high" is intentionally unused because no finding blocks correctness today. Hot-spot line spans are brace/method counted and can drift by a few lines with unrelated edits.
+- Every finding from the audit was fixed in `wt/fix-over-engineering-findings`, verified with `bun run check` after each fix, and deleted from this checklist. That lease landed on `dev` with `coordinator merge-next --wait --target fix-over-engineering-findings` and is `done`; its worktree is gone.
+- The audit's original `wt/over-engineering-audit` lease was the read-only finding pass; the fix lease above is the one that changed production files. `submit --force` recorded the broader scope because `claim` retained only the last `--paths` value.
+- Final `bun run check` output is quoted under **Final verification** below.
+- Residual risk: severity is a review judgment, not a measured defect rate; "high" is intentionally unused because no finding blocks correctness today. Hot-spot line spans are brace/method counted and drift with later edits; current sizes are recorded in **Recurring patterns / watch list**.
