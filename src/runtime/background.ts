@@ -56,7 +56,7 @@ export class BackgroundTracker implements BackgroundPort {
   sessionDeleted(sessionID: string) {
     this.running.delete(sessionID)
     this.parents.delete(sessionID)
-    this.internal.delete(sessionID)
+    this.forgetInternal(sessionID)
     for (const [id, owner] of this.shells) if (owner === sessionID) this.shells.delete(id)
   }
 
