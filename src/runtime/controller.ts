@@ -894,6 +894,11 @@ export class GoalController {
     this.armCheckin(record, runtime, { subagents: 0, shells: 0 })
   }
 
+  /** Fresh read of the planning window: async paths must re-check rather than trust a flag sampled before an await. */
+  private isPlanning(sessionID: string): boolean {
+    return this.runtimes.get(sessionID)?.planning === true
+  }
+
   /** User-visible notice for a present-but-invalid loop count suffix. Stated, never guessed; the default applies. */
   noteInvalidLoopCount(sessionID: string, invalidCount: string): void {
     const shown = sanitizeCountEcho(invalidCount)
@@ -2746,6 +2751,14 @@ export class GoalController {
     const epoch = runtime.epoch
     const work = await background.busy(record.sessionID).catch(() => previous)
     if (this.stale(record, runtime, epoch)) return
+    // A /goal planning window can open while the busy check is in flight. The top-of-function guard above saw
+    // planning=false; re-check before dispatching so a check-in resolved after the window opened is pushed out
+    // instead of steering the parent with the old (raw) goal while its replacement is being distilled.
+    if (this.isPlanning(record.sessionID)) {
+      runtime.lastCheckinAt = clock.now()
+      this.armCheckin(record, runtime, previous)
+      return
+    }
     record.checkins++
     runtime.lastCheckinAt = clock.now()
     const waitedMs = clock.now() - (runtime.deferredSince ?? clock.now())
@@ -2808,6 +2821,9 @@ export class GoalController {
 
   private async continueWith(record: GoalRecord, input: { text: string; description: string; turn: number }) {
     const runtime = this.runtime(record.sessionID)
+    // No steer of any kind may land in the parent while the arm-time planner owns the window. A new /goal will
+    // arm and deliver its own kickoff after planning ends; an older record's pending wake must not race it.
+    if (runtime.planning === true) return
     // Every completion event after this dispatch belongs to the execution the steer starts; a succeeded delivered
     // before its started is a straggler from the previous turn. Marked before the dispatch (not after) so a user
     // turn started during the dispatch wins the flag via onExecutionStarted and its succeeded is evaluated.

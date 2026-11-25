@@ -573,6 +573,9 @@ export default Plugin.define({
     // has to match the condition actually being judged. See planScopeFor.
     const armedPlanScopes = new Map<string, { condition: string; scope: "trivial" | "code" }>()
     const PLAN_TIMEOUT_MS = 30_000
+    // Hard ceiling on *waiting* for the child. The soft budget above only asks the host to cancel the child prompt;
+    // the caller must not receive the raw goal until the child's own stream reports a terminal event.
+    const PLAN_WAIT_CEILING_MS = 5 * 60_000
     const planGoal = async (sessionID: string, raw: string): Promise<PlannedGoal | undefined> => {
       // Unit tests mock the host but cannot deliver a planner child's completion; planning is a host-only step.
       if (probe || process.env.NODE_ENV === "test" || lifetime.signal.aborted || !raw.trim()) return undefined
@@ -616,44 +619,72 @@ export default Plugin.define({
       let childFailed = false
       const abort = new AbortController()
       let answer = ""
+      let childActive = false
       let finish!: () => void
       const done = new Promise<void>((resolve) => { finish = resolve })
-      const onAbort = () => { abort.abort(); finish() }
-      if (budget.aborted) onAbort()
-      else budget.addEventListener("abort", onAbort, { once: true })
+      // The soft budget asks the host to cancel the child prompt, but it is NOT a child outcome: releasing the
+      // caller on timeout used to deliver the raw goal while the planner was still working. Wait for the child's
+      // own terminal event instead. A dropped event stream re-subscribes; only the hard ceiling ends the wait.
+      let timedOut = false
+      const onBudgetAbort = () => {
+        if (lifetime.signal.aborted) { abort.abort(); finish(); return }
+        if (timedOut) return
+        timedOut = true
+        log.warn("goal planner exceeded its soft budget; waiting for the child to finish before sending the goal", { sessionID, child: id })
+        emit.notice({ sessionID, kind: "set", level: "warning", title: "goal-loop", message: "Goal planner is taking longer than expected; waiting for it to finish before sending the goal." })
+      }
+      if (budget.aborted) onBudgetAbort()
+      else budget.addEventListener("abort", onBudgetAbort, { once: true })
+      const ceiling = AbortSignal.any([lifetime.signal, AbortSignal.timeout(PLAN_WAIT_CEILING_MS)])
+      const onCeiling = () => { abort.abort(); finish() }
+      if (ceiling.aborted) onCeiling()
+      else ceiling.addEventListener("abort", onCeiling, { once: true })
       try {
         void (async () => {
-          try {
-            for await (const evt of ctx.event.subscribe({ signal: abort.signal })) {
-              const data = (evt as any).data ?? {}
-              if (data.sessionID !== id) continue
-              if (evt.type === "session.text.delta") answer += String(data.delta ?? "")
-              if (evt.type === "session.execution.succeeded") { finish(); return }
-              if (evt.type === "session.execution.failed") { childFailed = true; abort.abort(); finish(); return }
+          while (!abort.signal.aborted) {
+            try {
+              for await (const evt of ctx.event.subscribe({ signal: abort.signal })) {
+                const data = (evt as any).data ?? {}
+                if (data.sessionID !== id) continue
+                if (evt.type === "session.execution.started") childActive = true
+                if (evt.type === "session.text.delta") { childActive = true; answer += String(data.delta ?? "") }
+                // Only a terminal event from THIS generation ends the wait. Stale events from a reused child are
+                // ignored because no started/delta was seen after dispatch. `interrupted` is a real cancellation
+                // outcome: after the soft budget the host may stop the child that way instead of failing it.
+                if (!childActive) continue
+                if (evt.type === "session.execution.succeeded") { finish(); return }
+                if (evt.type === "session.execution.failed" || evt.type === "session.execution.interrupted") { childFailed = true; finish(); return }
+              }
+            } catch {
+              // Stream dropped: re-subscribe until the child itself reports a terminal event.
             }
-          } catch {
-            // Subscription closed (completion or abort); the text collected so far is the answer.
+            if (abort.signal.aborted) break
+            await sleep(500, abort.signal).catch(() => undefined)
           }
           finish()
         })()
-        await Promise.race([
-          ctx.session.prompt({ sessionID: id, text: planGoalRequest(raw), model: model as any } as any, { signal: budget }).catch(() => undefined),
-          done.then(() => undefined),
-        ])
+        const prompt = ctx.session.prompt({ sessionID: id, text: planGoalRequest(raw), model: model as any } as any, { signal: budget }).catch(() => {
+          // The host refused to admit the child prompt at all: there is no execution to wait for.
+          if (!childActive) { childFailed = true; finish() }
+          return undefined
+        })
         await done
+        void prompt
         // Do not admit a `<subagent>` synthetic: even queued with `resume: false`, a synthetic is durably admitted
         // to the parent's inbox, so the parent sees the planner's context and is pulled into a turn it never had to
         // take. The plan is consumed here from this child's own event stream; the planning notice, goal bar and
         // durable record carry the visible outcome. The reused child stays navigable after it finishes. Both the
         // command and prompt-hook callers await this function before delivering the user's kickoff, so that
-        // delivery happens only here — after the planner succeeded, failed or was aborted, never mid-plan.
+        // delivery happens only here — after the planner succeeded, failed, was interrupted or hit the hard
+        // ceiling, never mid-plan.
         return parsePlan(answer)
       } catch (error) {
         childFailed = true
         log.warn("goal planner failed", { error: String(error) })
         return undefined
       } finally {
-        budget.removeEventListener("abort", onAbort)
+        budget.removeEventListener("abort", onBudgetAbort)
+        ceiling.removeEventListener("abort", onCeiling)
         plannerChildren.delete(id)
         if ((childFailed || budget.aborted) && plannerChildBySession.get(sessionID) === id) {
           plannerChildBySession.delete(sessionID)

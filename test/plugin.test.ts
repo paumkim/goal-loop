@@ -1987,6 +1987,116 @@ describe("judge and planner child prompts must wake their own execution (CXLII P
   })
 })
 
+describe("the raw goal is delivered only after the planner is really done", () => {
+  test("a planner past its soft budget does not release the raw kickoff while its child still runs", async () => {
+    const directory = repository()
+    const { ctx, calls, storage } = context(directory, { model: "provider/model" })
+    const previousEnv = process.env.NODE_ENV
+    const originalTimeout = AbortSignal.timeout
+    process.env.NODE_ENV = "production" // planGoal deliberately skips under bun test; this pin needs the real path.
+    // Shorten only the 30s planner budget; the 5m wait ceiling stays real.
+    ;(AbortSignal as any).timeout = (ms: number) => originalTimeout.call(AbortSignal, ms === 30_000 ? 10 : ms)
+    try {
+      ;(ctx.session as any).get = async () => ({ id: "ses_1", model: { providerID: "provider", id: "model" }, tokens: {} })
+      ;(ctx.session as any).create = async (input: any) => ({ id: input.agent === PLANNER_AGENT_ID ? "ses_planner" : "ses_judge" })
+      const childCalls: any[] = []
+      ;(ctx.session as any).prompt = async (input: any) => {
+        if (input.sessionID === "ses_planner") childCalls.push(input)
+        else void calls.prompts.push(input)
+      }
+      let releasePlan!: () => void
+      const planGate = new Promise<void>((resolve) => { releasePlan = resolve })
+      const tick = () => new Promise((r) => setImmediate(r))
+      ;(ctx as any).event = {
+        subscribe: async function* () {
+          for (let i = 0; i < 1000 && !childCalls.some((c) => c.sessionID === "ses_planner"); i++) await tick()
+          await planGate
+          yield { type: "session.text.delta", data: { sessionID: "ses_planner", delta: JSON.stringify({ condition: "the refined condition", scope: "code" }) } }
+          yield { type: "session.execution.succeeded", data: { sessionID: "ses_planner" } }
+          for (let i = 0; i < 1000 && !storage.has("goal/v1/ses_1"); i++) await tick()
+          yield { type: "session.execution.started", data: { sessionID: "ses_1" } }
+          yield { type: "session.execution.succeeded", data: { sessionID: "ses_1" } }
+          for (let i = 0; i < 1000; i++) await tick()
+        },
+      }
+      const dispose = await (plugin as any).setup(ctx)
+      try {
+        const goal = calls.commands.find((command: any) => command.name === "goal")
+        const executing = goal.execute({ sessionID: "ses_1", prompt: { text: "raw pasted goal body" }, delivery: "steer" })
+        // The soft budget fires while the plan is gated. It is a cancellation request, not a child outcome.
+        await waitFor(() => calls.notices.some((n: any) => typeof n.message === "string" && n.message.includes("taking longer than expected")))
+        await new Promise((r) => setTimeout(r, 50))
+        expect(calls.prompts.filter((p: any) => p.sessionID === "ses_1")).toHaveLength(0)
+        expect(storage.has("goal/v1/ses_1")).toBe(false)
+        releasePlan()
+        await executing
+        expect((storage.get("goal/v1/ses_1") as any)?.condition).toBe("the refined condition")
+        expect(calls.prompts.filter((p: any) => p.sessionID === "ses_1")[0].text).toContain("the refined condition")
+        expect(calls.prompts.filter((p: any) => p.sessionID === "ses_1")[0].text).not.toContain("raw pasted goal body")
+      } finally {
+        await dispose?.()
+      }
+    } finally {
+      ;(AbortSignal as any).timeout = originalTimeout
+      if (previousEnv === undefined) delete process.env.NODE_ENV
+      else process.env.NODE_ENV = previousEnv
+    }
+  })
+
+  test("a dropped planner event stream re-subscribes instead of delivering the raw kickoff", async () => {
+    const directory = repository()
+    const { ctx, calls, storage } = context(directory, { model: "provider/model" })
+    const previousEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = "production"
+    try {
+      ;(ctx.session as any).get = async () => ({ id: "ses_1", model: { providerID: "provider", id: "model" }, tokens: {} })
+      ;(ctx.session as any).create = async (input: any) => ({ id: input.agent === PLANNER_AGENT_ID ? "ses_planner" : "ses_judge" })
+      const childCalls: any[] = []
+      ;(ctx.session as any).prompt = async (input: any) => {
+        if (input.sessionID === "ses_planner") childCalls.push(input)
+        else void calls.prompts.push(input)
+      }
+      let subscribers = 0
+      let releasePlan!: () => void
+      const planGate = new Promise<void>((resolve) => { releasePlan = resolve })
+      const tick = () => new Promise((r) => setImmediate(r))
+      ;(ctx as any).event = {
+        subscribe: async function* () {
+          const mine = ++subscribers
+          for (let i = 0; i < 1000 && !childCalls.some((c) => c.sessionID === "ses_planner"); i++) await tick()
+          if (mine === 1) {
+            // Stream drops mid-plan, before any terminal event. The old code treated this as completion.
+            yield { type: "session.text.delta", data: { sessionID: "ses_planner", delta: "{" } }
+            return
+          }
+          await planGate
+          yield { type: "session.text.delta", data: { sessionID: "ses_planner", delta: JSON.stringify({ condition: "the later condition", scope: "code" }) } }
+          yield { type: "session.execution.succeeded", data: { sessionID: "ses_planner" } }
+          for (let i = 0; i < 1000 && !storage.has("goal/v1/ses_1"); i++) await tick()
+          yield { type: "session.execution.started", data: { sessionID: "ses_1" } }
+          yield { type: "session.execution.succeeded", data: { sessionID: "ses_1" } }
+          for (let i = 0; i < 1000; i++) await tick()
+        },
+      }
+      const dispose = await (plugin as any).setup(ctx)
+      try {
+        const goal = calls.commands.find((command: any) => command.name === "goal")
+        const executing = goal.execute({ sessionID: "ses_1", prompt: { text: "raw pasted goal body" }, delivery: "steer" })
+        await waitFor(() => subscribers >= 2)
+        expect(calls.prompts.filter((p: any) => p.sessionID === "ses_1")).toHaveLength(0)
+        releasePlan()
+        await executing
+        expect((storage.get("goal/v1/ses_1") as any)?.condition).toBe("the later condition")
+      } finally {
+        await dispose?.()
+      }
+    } finally {
+      if (previousEnv === undefined) delete process.env.NODE_ENV
+      else process.env.NODE_ENV = previousEnv
+    }
+  })
+})
+
 describe("harness-owned child reports never reach the worker", () => {
   test("a live session drops a subagent report by internal child id even without agent metadata", async () => {
     const directory = repository()
