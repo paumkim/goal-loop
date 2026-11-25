@@ -7615,6 +7615,17 @@
       "submittedAt": "2026-11-25T14:58:44Z",
       "mergedAt": "2026-11-25T15:01:21Z",
       "mergedInto": "dev"
+    },
+    "dedupe-same-major-lockfile-versions": {
+      "agent": "orchestrator",
+      "paths": "package.json,bun.lock,docs/dependency-dedupe-audit.md",
+      "branch": "wt/dedupe-same-major-lockfile-versions",
+      "worktree": "worktree/wt-dedupe-same-major-lockfile-versions",
+      "status": "done",
+      "createdAt": "2026-11-25T15:56:35Z",
+      "submittedAt": "2026-11-25T16:03:38Z",
+      "mergedAt": "2026-11-25T16:06:08Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
