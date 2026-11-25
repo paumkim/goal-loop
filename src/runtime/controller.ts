@@ -1509,6 +1509,23 @@ export class GoalController {
       void this.commit(record)
       this.deps.log.info("goal evaluation deferred", { sessionID, abstention: result.abstain, reason: ABSTENTION_REASON[result.abstain] })
       this.emit(record)
+      // The judge was withheld because workers are still running. Arm the same deferral the busy gate uses, so
+      // their drain re-runs THIS turn's evaluation; otherwise the turn is dropped and the goal waits for a new
+      // parent prompt that may never arrive. Other abstentions have no work to drain and keep the old behavior.
+      if (result.abstain === "active-sessions") {
+        const work = await this.deps.background.busy(sessionID).catch(() => undefined)
+        if (this.stale(record, runtime, epoch)) return
+        if (!work) {
+          runtime.carriedToolCalls += tools
+          this.ensureDeferredState(record, runtime)
+          this.scheduleBusyRetry(record, runtime)
+        } else if (work.subagents + work.shells > 0) {
+          this.defer(record, runtime, work, tools)
+        } else {
+          // They drained between the gate and this check: judge the same turn now instead of waiting.
+          await this.evaluate(record, runtime, ++runtime.epoch, tools)
+        }
+      }
       return
     }
 

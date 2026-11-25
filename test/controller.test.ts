@@ -235,6 +235,38 @@ describe("GoalController", () => {
     expect(h.notices.some((n) => n.kind === "achieved" || n.kind === "failed")).toBe(false)
   })
 
+  test("an active-sessions abstention defers and resumes on drain instead of dropping the turn", async () => {
+    await h.set()
+    // Turn-end and acceptance-boundary checks are clean; workers show up at the judge gate, which abstains.
+    let checks = 0
+    h.setBusyFn(async () => (++checks === 3 ? { subagents: 2, shells: 0 } : { subagents: 0, shells: 0 }))
+    h.verdicts.push({
+      verdict: "not_met",
+      reason: "evaluation deferred: sessions are still active",
+      abstain: "active-sessions",
+    })
+    await h.turn()
+    const waiting = h.controller.get(SID)!
+    expect(waiting.turns).toBe(0)
+    expect(waiting.history).toHaveLength(0)
+    expect(waiting.verdict).toBeUndefined()
+    expect(waiting.pendingEvaluation).toBeUndefined()
+    expect(typeof waiting.waitingSince).toBe("number")
+    expect(h.changes.at(-1)?.waiting).toBeTrue()
+    expect(h.calls.synthetic).toHaveLength(0)
+
+    // No new parent prompt: the workers' drain re-runs this turn's evaluation.
+    h.setBusyFn(undefined)
+    h.verdicts.push(met("judged after drain"))
+    await h.controller.onBackgroundDrained()
+    await flush()
+    const after = h.controller.get(SID)!
+    expect(after.status).toBe("achieved")
+    expect(after.history).toHaveLength(1)
+    expect(after.reason).toContain("judged after drain")
+    expect(after.waitingSince).toBeUndefined()
+  })
+
   test("an impossible verdict is terminal: it does not re-arm the goal", async () => {
     await h.set()
     h.verdicts.push({ verdict: "impossible", reason: "the target cannot be built here" })
