@@ -7706,12 +7706,14 @@
     },
     "uip-error-vocabulary": {
       "agent": "build",
-      "paths": "src/prompter/util.ts",
+      "paths": "src/prompter/util.ts,docs/changelog.html",
       "branch": "wt/uip-error-vocabulary",
       "worktree": "worktree/wt-uip-error-vocabulary",
-      "status": "submitted",
-      "createdAt": "2026-11-25T17:57:06Z",
-      "submittedAt": "2026-11-25T17:59:10Z"
+      "status": "done",
+      "createdAt": "2026-11-25T18:04:32Z",
+      "submittedAt": "2026-11-25T18:06:42Z",
+      "mergedAt": "2026-11-25T18:09:07Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
