@@ -55,7 +55,7 @@ const DONE = "before the goal counts as done"
 const MET = "before the goal counts as met"
 const SLUG_BRANCH = "your wt/<slug> branch"
 /** The coordinator one-line rule for agent-facing prompts: byte-identical for suffix/prompt/checkin. */
-const coordinatorAgentRule = `Commit on ${SLUG_BRANCH} and submit ${DONE}.`
+const coordinatorAgentRule = `Commit on ${SLUG_BRANCH}, submit, land with \`coordinator merge-next --wait --target <slug>\`, and confirm the lease is done ${DONE}.`
 /** The direct-git rule body, without its trailing punctuation (callers append their own). */
 const directRuleBody = (branch: string) => `Commit the finished work to the \`${branch}\` branch ${DONE}`
 
@@ -79,11 +79,11 @@ const commitRuleSentence = (policy: CommitPolicy, kind: "suffix" | "prompt" | "c
       return coordinator ? coordinatorAgentRule : `${directRuleBody(branch)}, and show the commit output.`
     case "system":
       return coordinator
-        ? `Finished work has to be committed on ${SLUG_BRANCH} and submitted ${MET}.`
+        ? `Finished work has to be committed on ${SLUG_BRANCH}, submitted, and landed into \`${branch}\` by merge-next with the lease done ${MET}.`
         : `Finished work has to be committed to the \`${branch}\` branch ${MET}.`
     case "facts":
       return coordinator
-        ? `- This session runs inside a git repository managed by the coordinator. Finished work has to be committed on the agent's own \`wt/<slug>\` branch and submitted (merge into \`${branch}\` by the coordinator) ${MET}.`
+        ? `- This session runs inside a git repository managed by the coordinator. Finished work has to be committed on the agent's own \`wt/<slug>\` branch, submitted, and merged into \`${branch}\` by \`coordinator merge-next\` with the lease done (submitted alone is not completion) ${MET}.`
         : `- This session runs inside a git repository. Finished work has to be committed to the \`${branch}\` branch ${MET}.`
   }
 }
@@ -106,7 +106,10 @@ export function coordinatorFlow(policy: CommitPolicy): string {
   const bin = /\s/.test(policy.coordinatorBin) ? `"${policy.coordinatorBin}"` : policy.coordinatorBin
   return [
     `Coordinator repo. Before editing: claim first — run \`${bin} claim <goal-slug> --agent <you> --paths <scope>\`.`,
-    `Derive the slug from the goal, then \`cd <worktree>\` and work only there, commit on your wt/<slug> branch. When done, run \`submit\`.`,
+    `Derive the slug from the goal, then \`cd <worktree>\` and work only there, commit on your wt/<slug> branch.`,
+    `Landing is part of the task, not optional after submit: run \`${bin} submit\`, then drain the merge queue yourself — check \`${bin} merge-status\`, then run \`${bin} merge-next --wait --target <slug>\` from the main repo.`,
+    `If \`${target}\` moved while you worked, rebase \`wt/<slug>\` onto \`${target}\`, re-run the checks, and retry the merge. A submitted lease is only merge-ready, not done.`,
+    `Report completion only when \`${bin} status --json\` shows the lease done and \`worktree/wt-<slug>\` is gone.`,
     `Never commit to ${target}/main directly.`,
   ].join("\n")
 }
@@ -583,7 +586,7 @@ const VERDICTS = [
 const RULES = [
   `If the armed condition was already satisfied at HEAD before the turn began (fresh evidence this turn shows the work landed and gates green): clause-by-clause evidence must still show it satisfied now; state "Already satisfied at HEAD <sha>" in the reason when true, and do not credit narration. A re-proposed identical or materially equivalent condition must still name a concrete next gap on a "next:" line (novelty/no-duplicate: a bare already-satisfied met with no named next concrete gap is downgraded to not_met as duplicate-without-forward-pointer).`,
   `Defensive audit: scan visible evidence for stale, weakened, or self-contradictory state — evidence before last change, SPEC/docs contradicting tree, generated artifacts never committed, half-landed work, or claims contradicted by fresher output. If any bears on the condition or its evidence, verdict is "not_met" and the reason names it. A green gate bought by weakening a test is not green.`,
-  `Commit/submit evidence: when the condition or coordinator flow requires commits/submit/merge, treat missing or unverifiable commit hash/branch/submit/merge-next/status evidence as not_met (coordinator: commit on wt/<slug> plus submit/merge evidence; direct: commit on required branch).`,
+  `Commit/landing evidence: when the condition or coordinator flow requires commits/submit/merge, treat missing or unverifiable commit hash/branch/merge-next/status evidence as not_met (coordinator: commit on wt/<slug> plus merge-next output or status --json showing the lease done with its worktree removed; a bare submit output is only merge-ready, not completion evidence; direct: commit on required branch).`,
   `Verification matrix/profile: if required verification checks or check types are configured/applicable for the goal or a broad goal profile, each required check needs fresh executed command/output/exit evidence scoped to the claimed change; treat missing, unscoped, failing, timed-out, or unverifiable required checks as not_met and name the exact check and proof still needed.`,
   `Broad-condition verifier corroboration: for a broad or ambiguous condition, when a verifier command or configured required check is available (e.g. evaluator.verifyCommand or a required verification check), a "met" verdict must be corroborated by that command's fresh executed output scoped to the claimed change; transcript-only or generic green is insufficient for the broad claim. If a verifier command is configured but its fresh corroborating output is absent, unexecuted, or unscoped, the verdict is "not_met" and the reason names the missing verifier-command corroboration.`,
 ]
@@ -609,7 +612,7 @@ const COMPLETION_CONDITION = [
   `Bounded completion condition — the loop is complete only when ALL of these hold at current HEAD, each shown by fresh visible output:`,
   `  1. Every required check and verifier command for the goal passes with exit 0 and zero failures.`,
   `  2. The tracked tree is clean (git status --short shows no uncommitted source changes).`,
-  `  3. No active or submitted lease requires work that is ABSENT at HEAD, and the merge queue has no pending entry.`,
+  `  3. No active or submitted lease requires work that is ABSENT at HEAD, and the merge queue has no pending entry. Every lease for this goal must be done at HEAD with its worktree removed; a submitted-but-unmerged lease is not completion.`,
   `  4. The latest met verdict's "next:" pointer names no concrete gap whose required work is ABSENT at HEAD.`,
   VERIFIER_CLOSES_COMPLETION,
   `If any item is unproven or fails, the loop is NOT complete: arm the highest-priority unmet item. Speculative polish, speed or taste preferences are not gaps and never justify re-arming. "No gap" means exactly these four checks pass, not that the repository is perfect.`,
@@ -623,11 +626,12 @@ const COMPLETION_CONDITION = [
  * what "committed" looks like from the outside. Without this the evaluator would accept a finished, verified,
  * uncommitted job as met, which is the exact case the rule exists to catch.
  *
- * In coordinator mode the evidence is two-step: a commit hash on `wt/<slug>` plus a submit or merge step.
- * `submit` output showing the task submitted, `merge-next` output showing it merged into the target branch, or a
- * coordinator `status`/`queue` snapshot showing the lease submitted/done counts. A commit that lives only on the
- * target branch with no wt/ history proves the wrong path for a normal agent (only the coordinator may commit
- * there), so it is `not_met` unless the transcript shows the `coordinator` agent itself did it.
+ * In coordinator mode the evidence is three-step: a commit hash on `wt/<slug>`, `submit`, and a landing step.
+ * `submit` alone only makes the lease merge-ready; it is NOT completion evidence. Landing evidence is `merge-next`
+ * output showing the lease merged into the target branch, or `coordinator status --json` showing that lease `done`
+ * with its `worktree/wt-<slug>` removed. A commit that lives only on the target branch with no wt/ history proves
+ * the wrong path for a normal agent (only the coordinator may commit there), so it is `not_met` unless the
+ * transcript shows the `coordinator` agent itself did it.
  */
 function rubric(policy: CommitPolicy) {
   const lines = [BOUNDED_EFFORT, ...VERDICTS]
@@ -635,7 +639,8 @@ function rubric(policy: CommitPolicy) {
     if (policy.mode === "coordinator") {
       lines.push(
         ``,
-        `Commit rule (coordinator): the finished work has to be committed on the agent's own \`wt/<slug>\` branch and submitted. Evidence is a commit hash on \`wt/<slug>\` plus a \`submit\` or \`merge-next\` output showing it merged into \`${policy.branch}\`. Uncommitted work, a \`wt/<slug>\` commit never submitted, or a direct commit on \`${policy.branch}\` by a normal agent means "not_met"; only a direct commit shown by the \`coordinator\` agent itself counts.`,
+        `Commit rule (coordinator): the finished work has to be committed on the agent's own \`wt/<slug>\` branch and submitted. Commit evidence is a commit hash on \`wt/<slug>\` plus a \`submit\` output; uncommitted work, a \`wt/<slug>\` commit never submitted, or a direct commit on \`${policy.branch}\` by a normal agent means "not_met"; only a direct commit shown by the \`coordinator\` agent itself counts.`,
+        `Landing rule (coordinator): \`submit\` makes a lease merge-ready, not done. Do NOT judge a code task met on a submitted lease: require proof it landed into \`${policy.branch}\` — \`merge-next\` output showing the merge, or \`coordinator status --json\` showing that lease \`done\` and its \`worktree/wt-<slug>\` removed. If the lease is still \`claimed\`/\`submitted\`, or its worktree still exists, the verdict is "not_met" and the reason names the missing \`merge-next\`.`,
         `Lease-first rule (coordinator): a normal agent must claim a lease (\`coordinator claim <slug> --agent <you> --paths <scope>\`) and enter its worktree BEFORE the first edit — a prompt reminder alone is not enough, the workflow has to be visible. Evidence is the \`claim\` output plus a \`git branch --show-current\` showing \`wt/<slug>\` (or a worktree directory) ahead of the edits. If a turn edited files in the target checkout (\`${policy.branch}\` / main) without a prior claim, verdict "not_met" and name it: the work must be redone inside a claimed worktree, not merely committed there. Only the \`coordinator\` agent is exempt.`,
       )
     } else {
