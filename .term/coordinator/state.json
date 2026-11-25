@@ -7447,9 +7447,11 @@
       "paths": "src/core/git.ts,test/git.test.ts,test/controller.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/diagnostics-artifact-fixture-leak",
       "worktree": "worktree/wt-diagnostics-artifact-fixture-leak",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-25T08:58:29Z",
-      "submittedAt": "2026-11-25T08:58:29Z"
+      "submittedAt": "2026-11-25T08:58:29Z",
+      "mergedAt": "2026-11-25T09:18:29Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
