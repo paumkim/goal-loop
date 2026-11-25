@@ -1000,6 +1000,102 @@ describe("a terminal goal is inert in later context (LXVII)", () => {
   })
 })
 
+describe("host subagent reports cannot retrigger a finished goal", () => {
+  const line = (text: string) => ({ role: "user", content: [{ type: "text", text }] })
+  /** The shape the harness folds into context when a delegated child completes. */
+  const report = (id: string, body = "done") =>
+    line(`<background-result kind="subagent" sessionID="${id}" state="completed" description="evaluator">\n${body}\n</background-result>`)
+  const contextEvent = (messages: any[]) => ({ sessionID: "ses_1", agent: "build", model: {}, system: [] as any[], messages, tools: {}, options: {} })
+  const achieved = (directory: string) => ({
+    version: 1,
+    id: "goal_prior",
+    sessionID: "ses_1",
+    directory,
+    condition: "the parser is correct",
+    status: "achieved",
+    setAt: 1_000_000,
+    startedAt: 1_000_000,
+    endedAt: 2_000_000,
+    reason: "Loop complete after 1 iteration.",
+    turns: 3,
+    stall: 0,
+    retries: 0,
+    checkins: 0,
+    baseline: { cost: 0, input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
+    history: [],
+  })
+
+  test("terminal session: every injected subagent report is stripped from context", async () => {
+    const directory = repository()
+    const { ctx, hooks, storage } = context(directory)
+    storage.set("goal/v1/ses_1", achieved(directory))
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const own = line("the user's own line")
+      const event = contextEvent([own, report("ses_worker"), report("ses_worker_2", "another child")])
+      hooks.context!(event)
+      expect(event.messages).toEqual([own])
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("live session: a report is admitted on its first appearance", async () => {
+    const directory = repository()
+    const { ctx, calls, hooks } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const goal = calls.commands.find((command: any) => command.name === "goal")
+      await goal.execute({ sessionID: "ses_1", prompt: { text: "the parser is correct" }, delivery: "steer" })
+      const own = line("the user's own line")
+      const first = report("ses_worker")
+      const event = contextEvent([own, first])
+      hooks.context!(event)
+      expect(event.messages).toEqual([own, first])
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("live session: a duplicate injection of the same report id is dropped", async () => {
+    const directory = repository()
+    const { ctx, calls, hooks } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const goal = calls.commands.find((command: any) => command.name === "goal")
+      await goal.execute({ sessionID: "ses_1", prompt: { text: "the parser is correct" }, delivery: "steer" })
+      const own = line("the user's own line")
+      const first = report("ses_worker")
+      hooks.context!(contextEvent([own, first])) // admitted once
+      const replay = contextEvent([own, first, report("ses_worker")]) // same id twice — both copies dropped now
+      hooks.context!(replay)
+      expect(replay.messages).toEqual([own])
+      const fresh = report("ses_other", "a different child")
+      const next = contextEvent([own, fresh])
+      hooks.context!(next)
+      expect(next.messages).toEqual([own, fresh])
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("a subagent report is never re-added by the trailing-user repair", async () => {
+    const directory = repository()
+    const { ctx, hooks, storage } = context(directory)
+    storage.set("goal/v1/ses_1", achieved(directory))
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const own = line("real user task")
+      const event = contextEvent([own, report("ses_worker")]) // trailing message is the stripped report
+      hooks.context!(event)
+      expect(event.messages).toEqual([own])
+      expect((event.messages.at(-1) as any).role).toBe("user")
+    } finally {
+      await dispose?.()
+    }
+  })
+})
+
 describe("the generate hook makes evaluator replies text-only (empty-verdict root cause)", () => {
   test("tools are removed and output bounded only on the judge child, never on the working session", async () => {
     const directory = repository()

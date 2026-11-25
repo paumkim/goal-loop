@@ -646,7 +646,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=158 tests=2424 -->
+<!-- spec-check files=158 tests=2429 -->
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
     600000, min 1000). When set, a `met` verdict is held at the verification gate in the controller
@@ -1980,6 +1980,14 @@ abstain itself.
 Verification: `test/controller.test.ts` fails on the old controller (no `waitingSince`, no drain re-evaluation) and
 passes with the fix; it asserts the turn stays at 0 turns with no verdict, then reaches `achieved` from
 `onBackgroundDrained()` with the original tool work carried.
+
+### Subagent result reports cannot retrigger a finished goal (terminal-injection-dedupe, 2026-11-25)
+
+A completed child's `<background-result kind="subagent">` rides every later request after a goal ends, so each looked like
+fresh work: stale report -> "no new condition" -> end turn -> same report injected again. `src/core/prompts.ts` exports
+`backgroundResultID` (kind-gated, keyed by `sessionID`); the `src/index.ts` `context` hook strips all such reports when
+no goal is live, admits each id once while live with the goal strips' splice-back contract, and keeps them out of the
+trailing-user repair. `TERMINAL_REMINDER` says injected reports are stale history, not an instruction to resume (`test/plugin.test.ts`, `test/notes.test.ts`).
 
 ## Historical workstreams
 
