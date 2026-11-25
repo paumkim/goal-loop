@@ -371,6 +371,32 @@ export default Plugin.define({
       const id = backgroundResultID(message)
       return id !== undefined && background.internalAgentOf(id) !== undefined
     }
+    /**
+     * An injected wake is wake plumbing, not a user decision. While the goal-owning parent keeps moving, the
+     * harness admits each child completion report into its inbox and the plugin's own continuations arrive as
+     * synthetic steers; both can surface on the prompt hook. Treating either as a user prompt resumed a paused
+     * goal on every wake (and could re-arm a loop from a quoted directive). Accept both host shapes: a synthetic
+     * message type, a subagent/goal source tag, or a `<background-result>` body.
+     */
+    const isInjectedPrompt = (event: { readonly prompt?: unknown; readonly metadata?: unknown }): boolean => {
+      const prompt = event.prompt
+      const fields: unknown[] = [event.metadata, prompt]
+      if (prompt && typeof prompt === "object") {
+        const p = prompt as Record<string, unknown>
+        fields.push(p.metadata, p.type)
+        if (typeof p.text === "string") {
+          if (/<background-result\b/i.test(p.text)) return true
+        }
+      }
+      return fields.some((field) => {
+        if (typeof field === "string") return field.toLowerCase() === "synthetic"
+        if (!field || typeof field !== "object") return false
+        const source = (field as Record<string, unknown>).source
+        if (typeof source !== "string") return false
+        const tag = source.toLowerCase()
+        return tag === "subagent" || tag === "goal"
+      })
+    }
 
     /**
      * One generation on the working session's evaluator subagent child. The child is created on first use with the
@@ -914,14 +940,20 @@ export default Plugin.define({
       if (!resetPending.delete(event.sessionID)) return
       event.result = COLD_REPLAY as typeof event.result
     })
-    // Only real user prompts pass through this hook (synthetic continuations do not), so it is the resume signal.
-    // The hook also carries the /goal-loop directive: harnesses that do not know the `/goal-loop-<N>` spelling fall
-    // through to a plain prompt, and the plugin arms the loop right here — the host awaits this hook before the
-    // prompt is admitted, and the mutated text (directive stripped, count applied to this run only) is what the
-    // model sees. Unknown-count tokens (not 1..1000) are not guessed: a warning is shown and the default is used.
+    // The hook is the resume signal for a genuine user prompt. Injected wakes (child completion reports and
+    // synthetic continuations) can reach it too while the parent session is moving, so they are filtered below:
+    // a paused goal stays paused until the user actually speaks. The hook also carries the /goal-loop directive:
+    // harnesses that do not know the `/goal-loop-<N>` spelling fall through to a plain prompt, and the plugin arms
+    // the loop right here — the host awaits this hook before the prompt is admitted, and the mutated text (directive
+    // stripped, count applied to this run only) is what the model sees. Unknown-count tokens (not 1..1000) are not
+    // guessed: a warning is shown and the default is used.
     await ctx.session.hook("prompt", async (event) => {
-      // The planner child's own prompt is already complete (raw body + output contract). Never re-arm it.
-      if (plannerChildren.has(event.sessionID)) return
+      // Harness-owned children are prompted by the plugin itself (judge/planner generations), not by the user.
+      // Their prompts must never re-arm a goal or resume a paused one in that session.
+      if (plannerChildren.has(event.sessionID) || evaluatorChildren.has(event.sessionID)) return
+      // An injected wake is not a user decision: no arming, no resume, no check-in reset. Without this guard,
+      // every child report injected while the parent session was moving flipped a paused goal back to active.
+      if (isInjectedPrompt(event)) return
       // The judge is a harness-owned evaluator subagent child: its full rubric is built in `nativeVerdict`,
       // not here. No worker delegation prompt to enrich, so every other prompt is left untouched.
       const text = typeof event.prompt?.text === "string" ? event.prompt.text : ""

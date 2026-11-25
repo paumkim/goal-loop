@@ -858,6 +858,60 @@ describe("the context hook drops the evaluator's own self-echo (CXV use-and-forg
   })
 })
 
+describe("injected wakes never resume a paused goal", () => {
+  const pausedRecord = (directory: string) => ({
+    version: 1,
+    id: "goal_paused",
+    sessionID: "ses_1",
+    directory,
+    condition: "the parser is correct",
+    status: "paused",
+    setAt: 1_000_000,
+    startedAt: 1_000_000,
+    turns: 2,
+    stall: 2,
+    retries: 0,
+    checkins: 0,
+    baseline: { cost: 1, input: 100, output: 10, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
+    history: [],
+    pauseCause: "stall",
+    reason: "No progress: 2 turns in a row without tool use.",
+  })
+  const wake = (text: string, metadata: Record<string, unknown>) => ({
+    sessionID: "ses_1",
+    messageID: "msg_wake",
+    prompt: { text },
+    metadata,
+    delivery: "steer",
+  })
+
+  test("child completion reports and synthetic wakes keep a paused goal paused; a real user prompt resumes it", async () => {
+    const directory = repository()
+    const { ctx, hooks, storage } = context(directory)
+    storage.set("goal/v1/ses_1", pausedRecord(directory))
+    // The mock store's scan() is empty by default; restore adopts live records through scan.
+    ;(ctx.storage as any).scan = async () => ({ entries: [{ key: "goal/v1/ses_1", value: pausedRecord(directory) }] })
+    const dispose = await (plugin as any).setup(ctx)
+    // Restore is started without blocking setup; let it adopt the seeded paused record.
+    for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve))
+    try {
+      const report = '<background-result kind="subagent" sessionID="ses_child" state="completed">work done</background-result>'
+      await hooks.prompt!(wake(report, {}))
+      expect((storage.get("goal/v1/ses_1") as any).status).toBe("paused")
+
+      await hooks.prompt!(wake("Subagent completed without a text response", { source: "subagent", agent: "build", state: "completed" }))
+      expect((storage.get("goal/v1/ses_1") as any).status).toBe("paused")
+
+      const user = { sessionID: "ses_1", messageID: "msg_user", prompt: { text: "keep going" }, metadata: {}, delivery: "steer" }
+      await hooks.prompt!(user)
+      expect((storage.get("goal/v1/ses_1") as any).status).toBe("active")
+      expect((storage.get("goal/v1/ses_1") as any).pauseCause).toBeUndefined()
+    } finally {
+      await dispose?.()
+    }
+  })
+})
+
 describe("prompt-hook arming refusal restores the user's own line (XLV, XLVI pin)", () => {
   const promptEvent = (text: string) => ({
     sessionID: "ses_1",
