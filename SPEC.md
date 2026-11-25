@@ -646,7 +646,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=158 tests=2423 -->
+<!-- spec-check files=158 tests=2424 -->
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
     600000, min 1000). When set, a `met` verdict is held at the verification gate in the controller
@@ -1963,6 +1963,23 @@ orphaning it. Both are comment-only: no exported signature, condition or rendere
 
 Two comments in `src/core/outcome-telemetry.ts` described `normalizeReasonUncached` as six regex passes; the
 function has five `.replace()` calls. The wording now matches the code. No behavior or signature changes.
+
+## Active-sessions abstention arms the drain deferral (active-sessions-abstention-drain, 2026-11-25)
+
+A judge withheld by `evaluationAbstention({ activeSessions: true })` used to drop the turn: the controller deleted
+`pendingEvaluation`, emitted, and returned without any deferral state. `onBackgroundDrained()` skips runtimes with no
+`deferredSince`, so when the workers finished there was no re-evaluation — the goal waited for a parent prompt that
+might never come. That broke the same "defer until no subagents are running" contract the busy gate implements.
+
+The abstain branch now treats `active-sessions` like a busy deferral: it re-checks `busy()` and either arms `defer()`
+(workers still running), calls `scheduleBusyRetry()` (check failed), or judges the same turn again if the workers
+drained in between. The turn's tools are carried through each path. Other abstentions (`empty-condition`,
+`no-fresh-evidence`) keep the original wait-for-next-turn behavior; no verdict or turn state is mutated on the
+abstain itself.
+
+Verification: `test/controller.test.ts` fails on the old controller (no `waitingSince`, no drain re-evaluation) and
+passes with the fix; it asserts the turn stays at 0 turns with no verdict, then reaches `achieved` from
+`onBackgroundDrained()` with the original tool work carried.
 
 ## Historical workstreams
 
