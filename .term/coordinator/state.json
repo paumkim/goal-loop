@@ -7378,16 +7378,20 @@
       "paths": "src/core/prompts.ts,test/notes.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/wake-loop-flat-text-shape",
       "worktree": "worktree/wt-wake-loop-flat-text-shape",
-      "status": "claimed",
-      "createdAt": "2026-11-25T06:55:13Z"
+      "status": "submitted",
+      "createdAt": "2026-11-25T06:55:13Z",
+      "submittedAt": "2026-11-25T07:01:54Z"
     },
     "shadow-wiring-audit": {
       "agent": "build",
       "paths": "scripts/wiring-audit.ts,docs/wiring-audit.md",
       "branch": "wt/shadow-wiring-audit",
       "worktree": "worktree/wt-shadow-wiring-audit",
-      "status": "claimed",
-      "createdAt": "2026-11-25T06:57:45Z"
+      "status": "done",
+      "createdAt": "2026-11-25T06:57:45Z",
+      "submittedAt": "2026-11-25T07:04:42Z",
+      "mergedAt": "2026-11-25T07:07:28Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
