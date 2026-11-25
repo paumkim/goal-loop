@@ -7747,6 +7747,22 @@
       "submittedAt": "2026-11-25T18:58:37Z",
       "mergedAt": "2026-11-25T19:01:12Z",
       "mergedInto": "dev"
+    },
+    "tui-polish-pass": {
+      "agent": "build",
+      "paths": "src/tui.tsx,src/tui-history.tsx,src/tui-keymap.ts,src/tui-error.ts,src/tui-actions.ts,src/hud-card.tsx,src/status-dialog.tsx,src/affordance.tsx,src/core/hud.ts,src/core/dialog-keys.ts,dist/tui.js,test/tui-*.test.ts,test/tui-*.test.tsx,test/__snapshots__/tui-snapshots.test.tsx.snap,checklist/tui-polish-pass-1.md",
+      "branch": "wt/tui-polish-pass",
+      "worktree": "worktree/wt-tui-polish-pass",
+      "status": "done",
+      "createdAt": "2026-11-25T19:10:28Z",
+      "submittedAt": "2026-11-25T19:25:05Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-25T19:25:05Z",
+      "forcedScopeFiles": [
+        "test/tui-hud.test.tsx"
+      ],
+      "mergedAt": "2026-11-25T19:29:05Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
