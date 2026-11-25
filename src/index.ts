@@ -555,7 +555,10 @@ export default Plugin.define({
       controller.showPlanning(sessionID, raw.trim())
       const budget = AbortSignal.any([lifetime.signal, AbortSignal.timeout(PLAN_TIMEOUT_MS)])
       const model = await sessionModel(sessionID, budget).catch(() => undefined)
-      if (!model) return undefined
+      if (!model) {
+        controller.endPlanning(sessionID)
+        return undefined
+      }
       emit.notice({ sessionID, kind: "set", level: "info", title: "goal-loop", message: "Distilling goal into a concise condition…" })
       let id = plannerChildBySession.get(sessionID)
       if (!id) {
@@ -575,6 +578,7 @@ export default Plugin.define({
           plannerChildBySession.set(sessionID, id)
         } catch (error) {
           log.warn("goal planner child could not be created", { error: String(error) })
+          controller.endPlanning(sessionID)
           return undefined
         }
       }
@@ -628,6 +632,9 @@ export default Plugin.define({
         if ((childFailed || budget.aborted) && plannerChildBySession.get(sessionID) === id) {
           plannerChildBySession.delete(sessionID)
         }
+        // Lift the check-in suppression whether the planner landed, failed or timed out. A successful arm
+        // replaces the runtime anyway; a failed plan restores the still-live wait's schedule.
+        controller.endPlanning(sessionID)
       }
     }
 

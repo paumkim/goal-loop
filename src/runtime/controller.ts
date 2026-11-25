@@ -122,6 +122,8 @@ interface Runtime {
   dropStragglerSucceeded: boolean
   /** Set when this iteration deferred an evaluation because background work was running: background work is real work for the zero-tool not-progress guard. */
   iterationDeferred: boolean
+  /** True while the arm-time planner is distilling a fresh /goal. No new record exists yet, so a leftover wake timer must not fire into the parent while planning runs. */
+  planning?: boolean
   abort?: AbortController
   timer?: unknown
   deferredSince?: number
@@ -843,6 +845,17 @@ export class GoalController {
    */
   showPlanning(sessionID: string, condition: string): void {
     const now = this.deps.clock.now()
+    // A /goal arm runs this planner before arm() creates the new record. If the session already has a
+    // waiting goal, its idle check-in is still armed: clear it so it cannot fire into the parent while
+    // the planner is working. endPlanning() restores it if no replacement was armed.
+    const runtime = this.runtimes.get(sessionID)
+    if (runtime) {
+      runtime.planning = true
+      if (runtime.timer !== undefined) {
+        this.deps.clock.clearTimeout(runtime.timer)
+        runtime.timer = undefined
+      }
+    }
     const snapshot: GoalSnapshot = {
       version: 1,
       id: planningSnapshotId(sessionID),
@@ -864,6 +877,21 @@ export class GoalController {
       queued: true,
     }
     this.deps.emitter.changed(sessionID, snapshot)
+  }
+
+  /**
+   * The arm-time planner finished, failed or was aborted: lift the check-in suppression set by showPlanning().
+   * A successful arm resets the runtime, so this only restores a wait that was left live by a failed plan.
+   */
+  endPlanning(sessionID: string): void {
+    const runtime = this.runtimes.get(sessionID)
+    if (!runtime || runtime.planning !== true) return
+    runtime.planning = false
+    const record = this.goals.get(sessionID)
+    if (!record || record.status !== "active") return
+    if (runtime.deferredSince === undefined && record.waitingSince === undefined) return
+    runtime.lastCheckinAt = this.deps.clock.now()
+    this.armCheckin(record, runtime, { subagents: 0, shells: 0 })
   }
 
   /** User-visible notice for a present-but-invalid loop count suffix. Stated, never guessed; the default applies. */
@@ -2702,6 +2730,14 @@ export class GoalController {
       this.armCheckin(record, runtime, previous)
       return
     }
+    // An arm-time planner may have armed a check-in after showPlanning() cleared the previous one (a turn
+    // event landing mid-plan). Even then the wake must wait for the planner: push the check out by a full
+    // interval rather than consuming it, so the parent is never steered while its goal is being distilled.
+    if (runtime.planning === true) {
+      runtime.lastCheckinAt = clock.now()
+      this.armCheckin(record, runtime, previous)
+      return
+    }
     const epoch = runtime.epoch
     const work = await background.busy(record.sessionID).catch(() => previous)
     if (this.stale(record, runtime, epoch)) return
@@ -3030,7 +3066,7 @@ export class GoalController {
   private runtime(sessionID: string): Runtime {
     let runtime = this.runtimes.get(sessionID)
     if (!runtime) {
-      runtime = { sessionID, epoch: 0, toolCalls: 0, iterationToolCalls: 0, carriedToolCalls: 0, evaluating: false, awaitingExecution: false, dropStragglerSucceeded: false, iterationDeferred: false, heartbeating: false, waitingPaint: false }
+      runtime = { sessionID, epoch: 0, toolCalls: 0, iterationToolCalls: 0, carriedToolCalls: 0, evaluating: false, awaitingExecution: false, dropStragglerSucceeded: false, iterationDeferred: false, planning: false, heartbeating: false, waitingPaint: false }
       this.runtimes.set(sessionID, runtime)
     }
     return runtime
@@ -3050,6 +3086,7 @@ export class GoalController {
       awaitingExecution: false,
       dropStragglerSucceeded: false,
       iterationDeferred: false,
+      planning: false,
       heartbeating: previous?.heartbeating ?? false,
       waitingPaint: false,
     })
