@@ -9,6 +9,7 @@ import {
   readCoordinatorState,
   STANDBY_PREFIX,
   standbyKey,
+  standbySlugFromSubmitOutput,
   withStandbyActivity,
   type CoordinatorState,
 } from "../src/core/coordinator-wait.ts"
@@ -64,6 +65,16 @@ describe("coordinator standby", () => {
   test("a live merge lock defers the wake until it clears", () => {
     expect(isMergeTurn(state({ mergeLock: { holder: "other" } }), "earlier")).toBe(false)
     expect(isMergeTurn(state({ mergeLock: null }), "earlier")).toBe(true)
+  })
+
+  test("a successful coordinator submit output parks the submitting worker automatically", () => {
+    expect(standbySlugFromSubmitOutput({ output: "submitted wt/coordinator-wait-wake\n" })).toBe("coordinator-wait-wake")
+    expect(
+      standbySlugFromSubmitOutput({ content: [{ type: "text", text: "prelude\nsubmitted wt/my-slug" }] }),
+    ).toBe("my-slug")
+    expect(standbySlugFromSubmitOutput({ output: "error: no claimed lease" })).toBeUndefined()
+    expect(standbySlugFromSubmitOutput({ output: "discuss how to submit wt/other-slug later" })).toBeUndefined()
+    expect(standbySlugFromSubmitOutput(undefined)).toBeUndefined()
   })
 
   test("a parked session counts as active work, so the evaluator defers instead of calling it stale", async () => {

@@ -78,6 +78,26 @@ export function isMergeTurn(state: CoordinatorState, slug: string): boolean {
 }
 
 /**
+ * Recognize the coordinator's `submitted wt/<slug>` line in a completed shell result. This is the delegation
+ * flow's own signal: a worker that just submitted is the worker that has to stand by, whether or not it also
+ * called `goal_standby`. Only the exact submit output counts — a transcript mention or a failed call does not.
+ */
+export function standbySlugFromSubmitOutput(result: unknown): string | undefined {
+  if (!result || typeof result !== "object") return undefined
+  const { output, content } = result as { output?: unknown; content?: unknown }
+  const text =
+    typeof output === "string"
+      ? output
+      : Array.isArray(content)
+        ? content
+            .map((part) => (part && typeof part === "object" ? (part as { text?: unknown }).text : undefined))
+            .filter((part): part is string => typeof part === "string")
+            .join("\n")
+        : ""
+  return /\bsubmitted wt\/([a-z0-9][a-z0-9-]*)\b/.exec(text)?.[1]
+}
+
+/**
  * A parked agent is still active work, not a stale session: the goal is live and the agent is waiting on a
  * submitted lease, so the evaluator must abstain instead of judging mid-wait. `GoalController.isActive` is that
  * signal, and it reads `BackgroundPort.busy`, so standby contributes one virtual worker there. This wrapper is

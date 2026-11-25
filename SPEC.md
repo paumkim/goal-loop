@@ -1975,6 +1975,12 @@ Verification: `test/plugin.test.ts` and `test/notes.test.ts` regressions; full `
 
 A submitted agent no longer drains the coordinator queue inside its own turn. `goal_standby` parks a submitted lease in durable plugin storage (`goal/standby/v1/<sessionID>`) and the agent ends its turn. A cheap background tick in the plugin reads the coordinator's state file; when the parked lease becomes the FIFO head and no merge holds the lock, the watcher sends the agent one message through the existing functional message/session system and steers the session back into its merge turn with the slug and the `merge-next --wait --target` step. The wake is skipped while a turn is executing, and a failed activity/storage probe never produces a wake. `fifoHead` and `isMergeTurn` in `src/core/coordinator-wait.ts` mirror the coordinator's own FIFO key (`submittedAt // createdAt`), so the wake happens exactly when `merge-next` would accept the lease. A parked session is not a stale session: `withStandbyActivity` adds one virtual worker to the controller's activity port while the wait is live, so `isActive` stays true and the evaluator abstains until the merge lands. Coordinator agent prompts now tell submitting agents to stand by instead of polling `merge-status`.
 <!-- workstream:coordinator-wait-wake:end -->
+<!-- workstream:coordinator-standby-autopark:start -->
+
+### coordinator-standby-autopark — a successful submit parks the worker without a second tool call (2026-11-25)
+
+The explicit `goal_standby` tool is easy to forget, so the delegation flow now parks the submitting worker itself. A `ctx.tool.hook("execute.after")` reads the completed shell result and recognizes the coordinator's own `submitted wt/<slug>` line; a failed call or a transcript mention cannot park a session. It shares the same idempotent parking path as the tool, so both routes write one durable standby record and mark the session active for the evaluator's deferral check. `standbySlugFromSubmitOutput` keeps the parsing pure and tested for both `output` strings and `content` text parts.
+<!-- workstream:coordinator-standby-autopark:end -->
 <!-- per-slug-workstreams:end -->
 
 ## Historical workstreams
