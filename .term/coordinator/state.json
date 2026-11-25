@@ -7436,9 +7436,11 @@
       "paths": "src/tui.tsx,docs/changelog.html",
       "branch": "wt/maintenance-unit-intent-visual",
       "worktree": "worktree/wt-maintenance-unit-intent-visual",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-25T08:11:04Z",
-      "submittedAt": "2026-11-25T08:17:54Z"
+      "submittedAt": "2026-11-25T08:17:54Z",
+      "mergedAt": "2026-11-25T09:10:48Z",
+      "mergedInto": "dev"
     },
     "diagnostics-artifact-fixture-leak": {
       "agent": "build-primary",
