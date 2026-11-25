@@ -7217,6 +7217,25 @@
       "submittedAt": "2026-11-25T00:30:45Z",
       "mergedAt": "2026-11-25T00:33:35Z",
       "mergedInto": "dev"
+    },
+    "empty-condition-echo-fails-closed": {
+      "agent": "build",
+      "paths": "src/core/evaluator-agent.ts,test/core.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/empty-condition-echo-fails-closed",
+      "worktree": "worktree/wt-empty-condition-echo-fails-closed",
+      "status": "done",
+      "createdAt": "2026-11-25T05:10:38Z",
+      "submittedAt": "2026-11-25T05:16:17Z",
+      "mergedAt": "2026-11-25T05:18:50Z",
+      "mergedInto": "dev"
+    },
+    "evaluator-internal-subagent-exclusion": {
+      "agent": "build",
+      "paths": "src/runtime/background.ts,src/index.ts,test/controller.test.ts,test/plugin.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/evaluator-internal-subagent-exclusion",
+      "worktree": "worktree/wt-evaluator-internal-subagent-exclusion",
+      "status": "claimed",
+      "createdAt": "2026-11-25T05:16:57Z"
     }
   },
   "mergeLock": null,
