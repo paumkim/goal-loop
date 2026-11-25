@@ -7313,19 +7313,39 @@
     },
     "agent-messaging": {
       "agent": "build",
-      "paths": "src/runtime/messaging.ts,src/index.ts,test/messaging.test.ts,test/plugin.test.ts,SPEC.md,docs/changelog.html",
+      "paths": "src/runtime/messaging.ts,src/index.ts,test/messaging.test.ts,test/plugin.test.ts,test/package-integrity.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/agent-messaging",
       "worktree": "worktree/wt-agent-messaging",
-      "status": "claimed",
-      "createdAt": "2026-11-25T06:15:52Z"
+      "status": "submitted",
+      "createdAt": "2026-11-25T06:27:57Z",
+      "submittedAt": "2026-11-25T06:36:14Z"
     },
     "mirror-disable-read-path": {
       "agent": "build",
-      "paths": "src/tui.tsx",
+      "paths": "src/tui.tsx,dist/tui.js",
       "branch": "wt/mirror-disable-read-path",
       "worktree": "worktree/wt-mirror-disable-read-path",
+      "status": "done",
+      "createdAt": "2026-11-25T06:29:53Z",
+      "submittedAt": "2026-11-25T06:34:25Z",
+      "mergedAt": "2026-11-25T06:40:16Z",
+      "mergedInto": "dev"
+    },
+    "wake-loop-stale-id-guard": {
+      "agent": "build",
+      "paths": "src/index.ts,test/plugin.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/wake-loop-stale-id-guard",
+      "worktree": "worktree/wt-wake-loop-stale-id-guard",
       "status": "claimed",
-      "createdAt": "2026-11-25T06:25:38Z"
+      "createdAt": "2026-11-25T06:31:30Z"
+    },
+    "wake-loop-stale-id-guard-2": {
+      "agent": "build",
+      "paths": "src/index.ts,test/plugin.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/wake-loop-stale-id-guard-2",
+      "worktree": "worktree/wt-wake-loop-stale-id-guard-2",
+      "status": "claimed",
+      "createdAt": "2026-11-25T06:38:24Z"
     }
   },
   "mergeLock": null,
