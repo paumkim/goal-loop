@@ -7474,6 +7474,41 @@
       "submittedAt": "2026-11-25T09:50:50Z",
       "mergedAt": "2026-11-25T09:53:39Z",
       "mergedInto": "dev"
+    },
+    "over-engineering-audit": {
+      "agent": "build",
+      "paths": "checklist/",
+      "branch": "wt/over-engineering-audit",
+      "worktree": "worktree/wt-over-engineering-audit",
+      "status": "claimed",
+      "createdAt": "2026-11-25T10:13:25Z"
+    },
+    "waiting-for-subagent-indicator": {
+      "agent": "build",
+      "paths": "src/core/hud.ts,src/tui.tsx,dist/tui.js,test,SPEC.md",
+      "branch": "wt/waiting-for-subagent-indicator",
+      "worktree": "worktree/wt-waiting-for-subagent-indicator",
+      "status": "claimed",
+      "createdAt": "2026-11-25T10:23:29Z"
+    },
+    "timer-suppress-during-planning": {
+      "agent": "build",
+      "paths": "src/index.ts,src/runtime/controller.ts,test/controller.test.ts,test/plugin.test.ts,test/loop.test.ts,SPEC.md,SPEC-workstreams.md,docs/changelog.html,dist/",
+      "branch": "wt/timer-suppress-during-planning",
+      "worktree": "worktree/wt-timer-suppress-during-planning",
+      "status": "done",
+      "createdAt": "2026-11-25T10:27:15Z",
+      "submittedAt": "2026-11-25T10:48:01Z",
+      "mergedAt": "2026-11-25T10:51:30Z",
+      "mergedInto": "dev"
+    },
+    "resume-pause-guard": {
+      "agent": "build",
+      "paths": "src/runtime/controller.ts,src/index.ts,test,SPEC.md,docs/changelog.html",
+      "branch": "wt/resume-pause-guard",
+      "worktree": "worktree/wt-resume-pause-guard",
+      "status": "claimed",
+      "createdAt": "2026-11-25T10:37:34Z"
     }
   },
   "mergeLock": null,
