@@ -7414,9 +7414,11 @@
       "paths": "src/index.ts,test/plugin.test.ts,SPEC.md",
       "branch": "wt/planner-reuse-builtin-session",
       "worktree": "worktree/wt-planner-reuse-builtin-session",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-25T07:31:45Z",
-      "submittedAt": "2026-11-25T07:38:34Z"
+      "submittedAt": "2026-11-25T07:38:34Z",
+      "mergedAt": "2026-11-25T09:04:49Z",
+      "mergedInto": "dev"
     },
     "evaluator-require-landing-evidence": {
       "agent": "build-primary",
@@ -7428,6 +7430,24 @@
       "submittedAt": "2026-11-25T08:05:58Z",
       "mergedAt": "2026-11-25T08:10:27Z",
       "mergedInto": "dev"
+    },
+    "maintenance-unit-intent-visual": {
+      "agent": "build-primary",
+      "paths": "src/tui.tsx,docs/changelog.html",
+      "branch": "wt/maintenance-unit-intent-visual",
+      "worktree": "worktree/wt-maintenance-unit-intent-visual",
+      "status": "submitted",
+      "createdAt": "2026-11-25T08:11:04Z",
+      "submittedAt": "2026-11-25T08:17:54Z"
+    },
+    "diagnostics-artifact-fixture-leak": {
+      "agent": "build-primary",
+      "paths": "src/core/git.ts,test/git.test.ts,test/controller.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/diagnostics-artifact-fixture-leak",
+      "worktree": "worktree/wt-diagnostics-artifact-fixture-leak",
+      "status": "submitted",
+      "createdAt": "2026-11-25T08:58:29Z",
+      "submittedAt": "2026-11-25T08:58:29Z"
     }
   },
   "mergeLock": null,
