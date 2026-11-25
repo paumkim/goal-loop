@@ -7480,8 +7480,11 @@
       "paths": "checklist/",
       "branch": "wt/over-engineering-audit",
       "worktree": "worktree/wt-over-engineering-audit",
-      "status": "claimed",
-      "createdAt": "2026-11-25T10:13:25Z"
+      "status": "done",
+      "createdAt": "2026-11-25T10:13:25Z",
+      "submittedAt": "2026-11-25T12:23:27Z",
+      "mergedAt": "2026-11-25T12:28:39Z",
+      "mergedInto": "dev"
     },
     "waiting-for-subagent-indicator": {
       "agent": "build",
