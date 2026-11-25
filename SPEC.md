@@ -2044,10 +2044,9 @@ The arm-time planner's soft 30s budget cancels the child prompt but no longer en
 <!-- workstream:raw-kickoff-waits-for-planner:end -->
 <!-- workstream:fix-over-engineering-findings:start -->
 
-
 ### Follow-up (fix-over-engineering-findings) — dossier sections split by section
 
-`buildLoopDossier` composed the whole document in one long function. It now composes four section builders (`dossierHead`, `dossierIterations`, `dossierVerdictTrail`, `dossierTail`), each returning the same lines in the same order; byte output is unchanged. Verification: `test/dossier.test.ts` passes unchanged, full `bun run check` green with the invariant gate satisfied by this note and the changelog row.
+`buildLoopDossier` now composes four section builders (`dossierHead`, `dossierIterations`, `dossierVerdictTrail`, `dossierTail`) in the same order; the rendered document is byte-identical. `test/dossier.test.ts` passes unchanged and the full `bun run check` is green with the invariant gate satisfied by this note and the changelog row.
 <!-- workstream:fix-over-engineering-findings:end -->
 <!-- per-slug-workstreams:end -->
 

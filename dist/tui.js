@@ -930,10 +930,8 @@ var verifyLines = (goal) => {
   }
   return lines;
 };
-function buildLoopDossier(goal, nowMs) {
+function dossierHead(goal, isLoop, generatedAt) {
   const lines = [];
-  const isLoop = Boolean(goal.loopEnabled);
-  const generatedAt = isoOf(nowMs);
   lines.push(isLoop ? "# Goal loop dossier" : "# Goal dossier");
   lines.push("");
   lines.push(`_Generated ${generatedAt} from the goal-loop plugin's record. Everything below is the record's own bookkeeping; a measurement it does not carry renders as ${GAP}, never estimated. The session id is omitted on purpose._`);
@@ -975,6 +973,10 @@ function buildLoopDossier(goal, nowMs) {
     lines.push(...quote(goal.reason));
   }
   lines.push("");
+  return lines;
+}
+function dossierIterations(goal, isLoop) {
+  const lines = [];
   const entries = goal.loopHistory ?? [];
   const dropped = goal.loopHistoryDropped ?? 0;
   if (isLoop || entries.length > 0) {
@@ -993,6 +995,10 @@ function buildLoopDossier(goal, nowMs) {
       });
     }
   }
+  return lines;
+}
+function dossierVerdictTrail(goal) {
+  const lines = [];
   const history = goal.history ?? [];
   const historyDropped = goal.historyDropped ?? 0;
   const totalTrail = history.length + historyDropped;
@@ -1016,6 +1022,11 @@ function buildLoopDossier(goal, nowMs) {
     lines.push(...verdictProse(history));
     lines.push("");
   }
+  return lines;
+}
+function dossierTail(goal, nowMs) {
+  const lines = [];
+  const entries = goal.loopHistory ?? [];
   lines.push("## Boundary compaction");
   lines.push("");
   lines.push(...boundaryCompactLines(goal, nowMs));
@@ -1044,7 +1055,16 @@ function buildLoopDossier(goal, nowMs) {
   lines.push("");
   lines.push("---");
   lines.push("_goal-loop dossier \xB7 source: plugin record \xB7 nothing above was re-verified; it is the record's own bookkeeping._");
-  return lines.join(`
+  return lines;
+}
+function buildLoopDossier(goal, nowMs) {
+  const isLoop = Boolean(goal.loopEnabled);
+  return [
+    ...dossierHead(goal, isLoop, isoOf(nowMs)),
+    ...dossierIterations(goal, isLoop),
+    ...dossierVerdictTrail(goal),
+    ...dossierTail(goal, nowMs)
+  ].join(`
 `);
 }
 
