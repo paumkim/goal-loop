@@ -646,7 +646,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=158 tests=2421 -->
+<!-- spec-check files=158 tests=2423 -->
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
     600000, min 1000). When set, a `met` verdict is held at the verification gate in the controller
@@ -1838,6 +1838,26 @@ semantics are unchanged.
 Verification: `test/plugin.test.ts` pins both `ctx.session.create` calls as parent-linked, pins reuse across the
 verdict + summary + next-goal generations (one child created, three prompts), and keeps the no-report assertion for
 both agents; the planner test pins `parentID === "ses_1"`. Full `bun run check` green.
+
+### Goal-loop children excluded from the busy check (evaluator-internal-subagent-exclusion, 2026-11-24)
+
+Making the judge and planner parent-linked children of the goal owner also made them look like workers the owner
+delegated and is waiting on: `BackgroundTracker.busy()` counted every running descendant, so a still-running judge
+(reused across loop steps) or arm-time planner could self-defer the verdict it was created to produce. The earlier
+claim that judge and planner children are "parentless or evidence-only, so they cannot self-defer" no longer holds
+once those children carry `parentID: sessionID`.
+
+`BackgroundTracker` now keeps an explicit id → agent-identity registry for goal-loop-owned sessions. `noteInternal`
+is called at both child-creation sites in `src/index.ts` with `EVALUATOR_AGENT_ID` / `PLANNER_AGENT_ID` (idempotent
+for a reused child), and `busy()` omits registered sessions before counting descendants. The evaluator recognizes
+its own child by id, so its own in-flight verdict is never mistaken for background work; an ordinary worker session
+running the same agent stays counted. Deleting a session forgets its registration, and no timing or agent-name
+inference is involved — the plugin knows which children it spawned. Real delegated workers and shells still defer
+evaluation through the unchanged `defer()` / `onBackgroundDrained()` path.
+
+Verification: `test/controller.test.ts` pins that a registered judge and planner are excluded while a worker child
+still counts, that re-registering a reused child is idempotent, and that deletion forgets the identity;
+`test/plugin.test.ts` pins both `background.noteInternal(id, …)` call sites. Focused controller + plugin suites green.
 
 ### Clarity, consistency and performance cleanup (clarity-consistency-performance, 2026-11-24)
 

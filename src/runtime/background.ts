@@ -16,8 +16,30 @@ export class BackgroundTracker implements BackgroundPort {
   private readonly running = new Set<string>()
   private readonly shells = new Map<string, string>()
   private readonly parents = new Map<string, string | null>()
+  /**
+   * Sessions goal-loop itself spawned, keyed by session id with the agent identity as the value. Both the judge
+   * and the arm-time planner are parent-linked children of the goal owner, so without this registry `busy()` would
+   * count them as workers the parent delegated and is waiting on — the evaluator would defer on its own verdict
+   * child (or on the planner) instead of judging the finished turn. Registration is explicit and by id: a worker
+   * session that happens to run the same agent is still counted.
+   */
+  private readonly internal = new Map<string, string>()
 
   constructor(private readonly deps: BackgroundDeps) {}
+
+  /** Mark a session as goal-loop-owned machinery, not a delegated worker. Idempotent for a reused child. */
+  noteInternal(sessionID: string, agent: string): void {
+    this.internal.set(sessionID, agent)
+  }
+
+  forgetInternal(sessionID: string): void {
+    this.internal.delete(sessionID)
+  }
+
+  /** Agent identity of a goal-loop-owned session; undefined for a real worker session. */
+  internalAgentOf(sessionID: string): string | undefined {
+    return this.internal.get(sessionID)
+  }
 
   executionStarted(sessionID: string) {
     this.running.add(sessionID)
@@ -34,6 +56,7 @@ export class BackgroundTracker implements BackgroundPort {
   sessionDeleted(sessionID: string) {
     this.running.delete(sessionID)
     this.parents.delete(sessionID)
+    this.forgetInternal(sessionID)
     for (const [id, owner] of this.shells) if (owner === sessionID) this.shells.delete(id)
   }
 
@@ -73,7 +96,9 @@ export class BackgroundTracker implements BackgroundPort {
   async busy(sessionID: string): Promise<BackgroundWork> {
     let shells = 0
     for (const owner of this.shells.values()) if (owner === sessionID) shells++
-    const others = [...this.running].filter((id) => id !== sessionID)
+    // Exclude goal-loop's own children (judge, planner). They descend from the goal owner but are machinery,
+    // not background work the owner delegated and is waiting on; counting them self-defers the verdict.
+    const others = [...this.running].filter((id) => id !== sessionID && !this.internal.has(id))
     if (others.length === 0) return { subagents: 0, shells }
     const checks = await Promise.all(others.map((id) => this.descendsFrom(id, sessionID)))
     return { subagents: checks.filter(Boolean).length, shells }

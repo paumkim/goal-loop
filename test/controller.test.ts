@@ -1005,6 +1005,48 @@ describe("GoalController", () => {
   })
 })
 
+describe("background tracker", () => {
+  const startChild = (tracker: BackgroundTracker, id: string, parentID = SID) => {
+    tracker.sessionCreated(id, parentID)
+    tracker.executionStarted(id)
+  }
+
+  test("goal-loop's own judge and planner children do not count as delegated workers", async () => {
+    const tracker = new BackgroundTracker({ parentOf: async () => SID })
+    startChild(tracker, "judge")
+    startChild(tracker, "planner")
+    startChild(tracker, "worker")
+    // Before registration every running descendant is a subagent, judge and planner included.
+    expect(await tracker.busy(SID)).toEqual({ subagents: 3, shells: 0 })
+
+    // The plugin registers each internal child by id with its agent identity (the judge recognizes itself).
+    tracker.noteInternal("judge", "evaluator")
+    tracker.noteInternal("planner", "planner")
+    expect(await tracker.busy(SID)).toEqual({ subagents: 1, shells: 0 })
+    expect(tracker.internalAgentOf("judge")).toBe("evaluator")
+    expect(tracker.internalAgentOf("planner")).toBe("planner")
+    expect(tracker.internalAgentOf("worker")).toBeUndefined()
+
+    // A failed busy check would still fail closed; only the real worker keeps the verdict deferred.
+    tracker.executionEnded("worker")
+    expect(await tracker.busy(SID)).toEqual({ subagents: 0, shells: 0 })
+  })
+
+  test("re-registering a reused child is idempotent and deletion forgets its identity", async () => {
+    const tracker = new BackgroundTracker({ parentOf: async () => SID })
+    startChild(tracker, "judge")
+    tracker.noteInternal("judge", "evaluator")
+    tracker.noteInternal("judge", "evaluator") // same reused child on a later verdict / loop step
+    expect(await tracker.busy(SID)).toEqual({ subagents: 0, shells: 0 })
+
+    tracker.sessionDeleted("judge")
+    expect(tracker.internalAgentOf("judge")).toBeUndefined()
+    expect(await tracker.busy(SID)).toEqual({ subagents: 0, shells: 0 })
+    startChild(tracker, "judge")
+    expect(await tracker.busy(SID)).toEqual({ subagents: 1, shells: 0 })
+  })
+})
+
 describe("event router", () => {
   test("dedupes replayed events and routes shells/subagents to the tracker", async () => {
     const h = harness()
