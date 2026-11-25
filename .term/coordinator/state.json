@@ -7521,6 +7521,22 @@
       "submittedAt": "2026-11-25T11:05:03Z",
       "mergedAt": "2026-11-25T11:12:44Z",
       "mergedInto": "dev"
+    },
+    "raw-kickoff-waits-for-planner": {
+      "agent": "build",
+      "paths": "src/index.ts,src/runtime/controller.ts,test,SPEC.md,docs/changelog.html",
+      "branch": "wt/raw-kickoff-waits-for-planner",
+      "worktree": "worktree/wt-raw-kickoff-waits-for-planner",
+      "status": "done",
+      "createdAt": "2026-11-25T11:32:29Z",
+      "submittedAt": "2026-11-25T11:58:09Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-25T11:58:09Z",
+      "forcedScopeFiles": [
+        "SPEC-workstreams.md"
+      ],
+      "mergedAt": "2026-11-25T12:00:57Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
