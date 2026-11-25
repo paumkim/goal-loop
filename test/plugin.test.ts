@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import plugin from "../index.ts"
 import { EVALUATOR_AGENT_ID, EVALUATOR_SYSTEM_PROMPT } from "../src/core/evaluator-agent.ts"
+import { MESSAGE_WAKE_TEXT, PEER_PARENTS_HINT } from "../src/core/prompts.ts"
 import { PLANNER_AGENT_ID } from "../src/core/planner.ts"
 
 /** A throwaway git repository with a `dev` branch. */
@@ -2313,6 +2314,126 @@ describe("agent-to-agent messaging (enabled with the plugin)", () => {
       expect(after.system.some((s: any) => String(s.text).includes("unread agent message"))).toBe(false)
     } finally {
       await dispose()
+    }
+  })
+
+  /** Feed host events into the real event pump; the peer signal is derived from session.created. */
+  const withSessions = async (sessions: ReadonlyArray<{ id: string; parent?: string }>, fn: (world: ReturnType<typeof context>) => Promise<void>) => {
+    const world = context(repository())
+    const { ctx, sessionParents } = world
+    for (const s of sessions) if (s.parent) sessionParents.set(s.id, s.parent)
+    const pending: any[] = sessions.map((s) => ({ type: "session.created", data: { sessionID: s.id, parentID: s.parent } }))
+    let live = true
+    ;(ctx as any).event = {
+      subscribe: async function* () {
+        while (live) {
+          const next = pending.shift()
+          if (next) yield next
+          else await new Promise((r) => setImmediate(r))
+        }
+      },
+    }
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      for (let i = 0; i < 30; i++) await new Promise((r) => setImmediate(r))
+      await fn(world)
+    } finally {
+      live = false
+      await dispose()
+    }
+  }
+
+  test("a worker sees the messaging hint only when another parent is alive, with no message bodies", async () => {
+    const sessions = [
+      { id: "ses_parent_A" }, { id: "ses_worker_A", parent: "ses_parent_A" },
+      { id: "ses_parent_B" }, { id: "ses_worker_B", parent: "ses_parent_B" },
+    ]
+    await withSessions(sessions, async ({ calls, hooks }) => {
+      const send = calls.tools.find((tool: any) => tool.name === "goal_msg_send")
+      await send.execute({ to: "ses_parent_B", text: "secret body that must not ride context" }, toolContext("ses_worker_A"))
+      const event = { sessionID: "ses_worker_A", agent: "build", system: [] as any[], messages: [] as any[], model: {}, tools: {}, options: {} }
+      await hooks.context!(event)
+      const text = JSON.stringify(event.system)
+      expect(text).toContain(PEER_PARENTS_HINT)
+      expect(text).toContain("goal_msg_send")
+      expect(text).toContain("goal_msg_read")
+      // The unread nudge and the peer line are each a single static line; no body, no peer ids.
+      expect(text).not.toContain("secret body that must not ride context")
+      expect(text).not.toContain("ses_parent_B")
+    })
+    await withSessions(sessions.slice(0, 2), async ({ hooks }) => {
+      const event = { sessionID: "ses_worker_A", agent: "build", system: [] as any[], messages: [] as any[], model: {}, tools: {}, options: {} }
+      await hooks.context!(event)
+      expect(JSON.stringify(event.system)).not.toContain(PEER_PARENTS_HINT)
+    })
+  })
+
+  test("a message wakes an idle parent once, but not a busy one", async () => {
+    const { ctx, calls, sessionParents } = context(repository())
+    sessionParents.set("ses_worker_A", "ses_parent_A")
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const send = calls.tools.find((tool: any) => tool.name === "goal_msg_send")
+      expect(send).toBeDefined()
+      await send.execute({ to: "ses_parent_B", text: "first" }, toolContext("ses_worker_A"))
+      const wakes = calls.prompts.filter((p: any) => p.sessionID === "ses_parent_B")
+      expect(wakes).toHaveLength(1)
+      expect(wakes[0].text).toBe(MESSAGE_WAKE_TEXT)
+      expect(wakes[0].delivery).toBe("steer")
+      expect(wakes[0].text).not.toContain("first")
+
+      // A second message while the first is unread does not add another wake.
+      await send.execute({ to: "ses_parent_B", text: "second" }, toolContext("ses_worker_A"))
+      expect(calls.prompts.filter((p: any) => p.sessionID === "ses_parent_B")).toHaveLength(1)
+    } finally {
+      await dispose()
+    }
+  })
+
+  test("a message does not wake a parent that is already executing", async () => {
+    const { ctx, calls, sessionParents } = context(repository())
+    sessionParents.set("ses_worker_A", "ses_parent_A")
+    let live = true
+    const pending: any[] = [{ type: "session.execution.started", data: { sessionID: "ses_parent_B" } }]
+    ;(ctx as any).event = {
+      subscribe: async function* () {
+        while (live) {
+          const next = pending.shift()
+          if (next) yield next
+          else await new Promise((r) => setImmediate(r))
+        }
+      },
+    }
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      for (let i = 0; i < 30; i++) await new Promise((r) => setImmediate(r))
+      const send = calls.tools.find((tool: any) => tool.name === "goal_msg_send")
+      await send.execute({ to: "ses_parent_B", text: "busy" }, toolContext("ses_worker_A"))
+      expect(calls.prompts.filter((p: any) => p.sessionID === "ses_parent_B")).toHaveLength(0)
+    } finally {
+      live = false
+      await dispose()
+    }
+  })
+
+  test("probe mode stores no message and wakes no parent", async () => {
+    const previous = process.env.OPENCODE_GOAL_PROBE
+    process.env.OPENCODE_GOAL_PROBE = "1"
+    try {
+      const { ctx, calls, storage, sessionParents } = context(repository())
+      sessionParents.set("ses_worker_A", "ses_parent_A")
+      const dispose = await (plugin as any).setup(ctx)
+      try {
+        const send = calls.tools.find((tool: any) => tool.name === "goal_msg_send")
+        await send.execute({ to: "ses_parent_B", text: "hidden" }, toolContext("ses_worker_A"))
+        expect(storage.has("goal/msg/v1/ses_parent_B")).toBe(false)
+        expect(calls.prompts.filter((p: any) => p.sessionID === "ses_parent_B")).toHaveLength(0)
+      } finally {
+        await dispose()
+      }
+    } finally {
+      if (previous === undefined) delete process.env.OPENCODE_GOAL_PROBE
+      else process.env.OPENCODE_GOAL_PROBE = previous
     }
   })
 })

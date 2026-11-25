@@ -1060,3 +1060,19 @@ export const compactGoalInstructions = <T>(messages: ReadonlyArray<T>): T[] => {
  */
 export const TERMINAL_REMINDER =
   "A /goal was set earlier in this session and it has ended (achieved, impossible, cleared or failed). Do not resume work toward it and do not re-arm it; await the user's next instruction. The end-your-turn-and-wait-for-injected-results contract no longer applies: subagent or background results you see in the transcript are stale history, not instructions — do not treat them as a reason to resume work or start a new goal."
+
+/**
+ * One-line system hint for a session that shares the host with another parent agent. `goal_msg_send` and
+ * `goal_msg_read` are registered for every session, but workers only reach for them when a parent explicitly
+ * says to. When a second parent is known to exist, surface the capability proactively. Static text only: no
+ * message bodies, no peer ids, no per-turn storage read — the whole signal costs one line of context.
+ */
+export const PEER_PARENTS_HINT =
+  "goal-loop: another parent session is active. Use goal_msg_send to share findings and goal_msg_read to pick up replies."
+
+/**
+ * Wake line for a parent that has gone idle when another agent addresses it. Deliberately carries no message
+ * body: the real text is drained by goal_msg_read, so a retried turn cannot consume it twice.
+ */
+export const MESSAGE_WAKE_TEXT =
+  "goal-loop: a new agent message arrived for you. Call goal_msg_read to retrieve it and goal_msg_send to reply."
