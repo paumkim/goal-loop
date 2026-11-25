@@ -1,1 +1,0 @@
-<!-- behavior-change: resume-pause-guard — the prompt hook ignores harness-owned judge/planner prompts and injected wakes (`<background-result>` bodies, `synthetic` messages, `subagent`/`goal` source tags), so child completion reports arriving while the parent session is moving no longer resume a paused goal; only a real user prompt resumes it -->
