@@ -7654,8 +7654,11 @@
       "paths": "src/core/config.ts,src/core/evaluation-gate.ts,src/harness.ts,src/hooks.ts,src/index.ts,test/config-defaults.test.ts,test/plugin.test.ts,docs/changelog.html,SPEC.md,SPEC-workstreams.md",
       "branch": "wt/remove-nested-headless-evaluator",
       "worktree": "worktree/wt-remove-nested-headless-evaluator",
-      "status": "claimed",
-      "createdAt": "2026-11-25T17:26:54Z"
+      "status": "done",
+      "createdAt": "2026-11-25T17:26:54Z",
+      "submittedAt": "2026-11-25T17:41:07Z",
+      "mergedAt": "2026-11-25T17:42:46Z",
+      "mergedInto": "dev"
     },
     "proactive-parent-messaging": {
       "agent": "build",
@@ -7667,6 +7670,14 @@
       "submittedAt": "2026-11-25T17:24:48Z",
       "mergedAt": "2026-11-25T17:27:23Z",
       "mergedInto": "dev"
+    },
+    "universal-improvement-pass": {
+      "agent": "build",
+      "paths": "src/core/format.ts,src/core/learning-log.ts,src/core/outcome-telemetry.ts,src/runtime/controller.ts,test/core.test.ts",
+      "branch": "wt/universal-improvement-pass",
+      "worktree": "worktree/wt-universal-improvement-pass",
+      "status": "claimed",
+      "createdAt": "2026-11-25T17:39:29Z"
     }
   },
   "mergeLock": null,
