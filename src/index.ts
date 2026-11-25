@@ -18,7 +18,7 @@ import { findRepository, resolveCommitPolicy, resolveProjectRoot } from "./core/
 import { CLEAR_ALIASES, parseBool, parseGoalCommand, parseGoalLoopDirective } from "./core/parse.ts"
 import { PLANNER_AGENT_ID, PLANNER_AGENT_TITLE, PLANNER_SYSTEM_PROMPT, parsePlan, planGoalRequest, type PlannedGoal } from "./core/planner.ts"
 import { currentTurnStart, renderParentSummary, renderTranscript } from "./core/transcript.ts"
-import { carriesGoalGrammar, compactGoalInstructions, coordinatorFlow, directive as directivePrompt, nativeEvaluationRequest, systemReminder, stripGoalNotes, stripGoalContext, stripGoalEvaluations, isGoalEvaluationMessage, TERMINAL_REMINDER } from "./core/prompts.ts"
+import { backgroundResultID, carriesGoalGrammar, compactGoalInstructions, coordinatorFlow, directive as directivePrompt, nativeEvaluationRequest, systemReminder, stripGoalNotes, stripGoalContext, stripGoalEvaluations, isGoalEvaluationMessage, TERMINAL_REMINDER } from "./core/prompts.ts"
 import type { ModelRef, UsageSnapshot } from "./core/types.ts"
 import { createRpcHandlers } from "./rpc-handlers.ts"
 import { GoalRpc } from "./rpc.ts"
@@ -344,6 +344,10 @@ export default Plugin.define({
     // continuation steer. Tracked so the generate/context hooks can shape the child's generation without touching
     // worker sessions. Any host completion report is stripped from model-bound context below.
     const evaluatorChildren = new Set<string>()
+    /** Host subagent reports are wake signals, not instructions. Per session, admit each report id at most once
+     * while a goal is live; once the goal ends, drop them all. Without this a completed report rides every later
+     * request and retriggers a no-op wake cycle (stale report -> no edit -> turn ends -> same report injected). */
+    const seenBackgroundResults = new Map<string, Set<string>>()
     /** Defensive strip for `<subagent>` completion reports attributed to a judge or arm-time planner child. The
      * verdict / planned condition comes from the child's event stream, never from a report, so a stray report must
      * not teach the worker its own verdict or treat the planner's raw JSON as evidence (SPEC-workstreams.md CXLI).
@@ -986,6 +990,18 @@ export default Plugin.define({
         // working session. Keep the strip so a stray judge report (or the planner's queued completion) cannot teach
         // the worker the verdict it was supposed to earn on its own (SPEC-workstreams.md CXLI position inversion).
         kept = kept.filter((message) => !isPluginReport(message))
+        // Host subagent completions are wake signals, not instructions. Terminal sessions drop every one; live
+        // sessions admit a report the first time it appears and drop every later copy of the same id. Keep the
+        // splice-back contract with the strips above: the host holds the caller's array reference.
+        const seenReports = seenBackgroundResults.get(event.sessionID) ?? new Set<string>()
+        seenBackgroundResults.set(event.sessionID, seenReports)
+        kept = kept.filter((message) => {
+          const id = backgroundResultID(message)
+          if (id === undefined) return true
+          if (!live || seenReports.has(id)) return false
+          seenReports.add(id)
+          return true
+        })
         if (kept.length !== original.length) {
           // Never dispatch a request that does not end on a user turn: strict providers reject it ("The
           // last message must have role=user."), and after a landing compaction the trailing turn can be
@@ -995,7 +1011,13 @@ export default Plugin.define({
           const trailing = original[original.length - 1]
           // Never undo the use-and-forget strip by re-adding a trailing evaluation prompt merely to
           // satisfy the trailing-user repair — a working turn's trailing turn is its steer, not self-talk.
-          const repairable = trailing !== undefined && !isGoalEvaluationMessage(trailing) && !isPluginReport(trailing) ? trailing : undefined
+          const repairable =
+            trailing !== undefined &&
+            !isGoalEvaluationMessage(trailing) &&
+            !isPluginReport(trailing) &&
+            backgroundResultID(trailing) === undefined
+              ? trailing
+              : undefined
           const last = kept[kept.length - 1]
           const repaired = last?.role === "user" || repairable === undefined || last === repairable ? kept : [...kept, repairable]
           original.splice(0, original.length, ...repaired)
