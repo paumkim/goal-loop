@@ -7206,6 +7206,17 @@
       "submittedAt": "2026-11-25T00:06:41Z",
       "mergedAt": "2026-11-25T00:09:20Z",
       "mergedInto": "dev"
+    },
+    "rearm-audit-script": {
+      "agent": "build",
+      "paths": "scripts/rearm.ts,package.json,AGENTS.md,docs/runtime.html",
+      "branch": "wt/rearm-audit-script",
+      "worktree": "worktree/wt-rearm-audit-script",
+      "status": "done",
+      "createdAt": "2026-11-25T00:24:38Z",
+      "submittedAt": "2026-11-25T00:30:45Z",
+      "mergedAt": "2026-11-25T00:33:35Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
