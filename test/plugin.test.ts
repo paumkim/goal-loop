@@ -1394,6 +1394,10 @@ describe("verdicts are delegated to a first-class evaluator agent (CXXX)", () =>
     expect(code).toContain("plannerChildBySession.get(sessionID)")
     expect(code).toContain("evaluatorChildBySession.clear()")
     expect(code).toContain("plannerChildBySession.clear()")
+    // Both parent-linked children register their own id + agent identity with the background tracker, so a
+    // verdict or arm cannot self-defer behind the plugin's own machinery. Real delegated workers stay counted.
+    expect(code).toContain("background.noteInternal(id, EVALUATOR_AGENT_ID)")
+    expect(code).toContain("background.noteInternal(id, PLANNER_AGENT_ID)")
     // The judge belongs to the goal-owning parent only: no descendant completion spawns a verdict, so no
     // child session needs owner routing and no verdict admits a `<subagent>` completion into the parent inbox.
     expect(code).not.toContain("ownerSessionID")

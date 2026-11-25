@@ -377,6 +377,10 @@ export default Plugin.define({
         id = created.id
         evaluatorChildBySession.set(sessionID, id)
       }
+      // The judge is a parent-linked child of the goal owner. Register it by id and agent identity so the
+      // background tracker never counts this verdict child as a worker the parent delegated and is waiting on;
+      // otherwise a still-running judge (reused across loop steps) self-defers the next evaluation.
+      background.noteInternal(id, EVALUATOR_AGENT_ID)
       evaluatorChildren.add(id)
       const abort = new AbortController()
       let answer = ""
@@ -553,6 +557,9 @@ export default Plugin.define({
           return undefined
         }
       }
+      // Same as the judge child: the planner is goal-loop machinery parented to the goal owner, not a worker
+      // the owner delegated. Exclude it from busy() so arming a goal cannot self-defer its first evaluation.
+      background.noteInternal(id, PLANNER_AGENT_ID)
       plannerChildren.add(id)
       let childFailed = false
       const abort = new AbortController()
