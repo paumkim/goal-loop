@@ -26,6 +26,12 @@ bun run e2e <empty-dir> [provider/model]  # real server + live model ~10min; E2E
 - Bun only. TS strict + `verbatimModuleSyntax` + `noUncheckedIndexedAccess`; imports use `.ts` extensions (`from "./git.ts"`); types via `import type`.
 - `bun:test`, no runner config, no on-disk fixtures: fake repos = bare `.git/` dirs (HEAD + `refs/heads/*`, no git binary); `plugin.test.ts` mocks context; `e2e.ts` only suite needing real server/model.
 
+## Change scope
+
+- Smallest change that solves the task: plain control flow and existing helpers over new abstractions; leave every touched file simpler than found. Keep edits scoped to the goal — no drive-by cleanup or context bloat.
+- No one-caller abstractions, unused config/flags, future-proof wrappers, impossible-case handling, or comments that restate code.
+- Report what changed, what was omitted, and passing test output.
+
 ## How it works (non-obvious)
 
 - Never git / edits files: reads `.git`/`HEAD`/`refs`/`packed-refs` (`src/core/git.ts`), directs the *agent* to commit; evaluator sees only visible transcript evidence → commit output must be in conversation.
