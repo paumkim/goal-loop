@@ -7488,8 +7488,17 @@
       "paths": "src/core/hud.ts,src/tui.tsx,dist/tui.js,test,SPEC.md",
       "branch": "wt/waiting-for-subagent-indicator",
       "worktree": "worktree/wt-waiting-for-subagent-indicator",
-      "status": "claimed",
-      "createdAt": "2026-11-25T10:23:29Z"
+      "status": "done",
+      "createdAt": "2026-11-25T10:23:29Z",
+      "submittedAt": "2026-11-25T10:52:14Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-25T10:52:14Z",
+      "forcedScopeFiles": [
+        "src/core/types.ts",
+        "src/runtime/controller.ts"
+      ],
+      "mergedAt": "2026-11-25T11:04:28Z",
+      "mergedInto": "dev"
     },
     "timer-suppress-during-planning": {
       "agent": "build",
