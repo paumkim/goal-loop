@@ -7452,6 +7452,17 @@
       "submittedAt": "2026-11-25T08:58:29Z",
       "mergedAt": "2026-11-25T09:18:29Z",
       "mergedInto": "dev"
+    },
+    "diagnostics-summary-tool": {
+      "agent": "build-primary",
+      "paths": "scripts/diagnostics-summary.ts,test/diagnostics-summary.test.ts,package.json,SPEC.md,docs/changelog.html",
+      "branch": "wt/diagnostics-summary-tool",
+      "worktree": "worktree/wt-diagnostics-summary-tool",
+      "status": "done",
+      "createdAt": "2026-11-25T09:24:23Z",
+      "submittedAt": "2026-11-25T09:34:27Z",
+      "mergedAt": "2026-11-25T09:37:18Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
