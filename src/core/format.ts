@@ -1,4 +1,6 @@
 import stringWidth from "string-width"
+import { COMPACT_MISS_CAP } from "./types.ts"
+import type { GoalRecord, GoalStatus, UsageSnapshot } from "./types.ts"
 
 /**
  * Bounded single-argument memo for pure text transforms. One home for the hit path and the eviction
@@ -47,8 +49,6 @@ export const normalizeConditionText = memoizeBounded(
  * evicted string is simply recomputed, which yields the same number.
  */
 export const cellWidth = memoizeBounded((text: string): number => stringWidth(text), 4096)
-import { COMPACT_MISS_CAP } from "./types.ts"
-import type { GoalRecord, GoalStatus, UsageSnapshot } from "./types.ts"
 
 /** Grapheme clusters, so a truncation boundary never splits an emoji, a flag or a combining sequence. */
 const segmenter = new Intl.Segmenter("en", { granularity: "grapheme" })
@@ -117,7 +117,16 @@ export function wrapLines(text: string, width: number): number {
  * Tabs and newlines survive. Applied at the engine boundary (the verifier returns raw subprocess
  * output) before anything is stored on the record.
  */
+/**
+ * Exact fast-path guard for the bytes the chain below actually acts on: OSC/CSI/Fe use ESC (0x1B),
+ * lone C0 bytes and DEL are stripped, and CR is normalized. Tab (0x09) and LF (0x0A) are preserved
+ * by the chain, so ordinary multiline subprocess output has none of these bytes and skips all five
+ * regex passes and their string allocations. Dirty text pays one extra scan and is unchanged.
+ */
+const ACTIONABLE_BYTE = /[\u0000-\u0008\u000b-\u001f\u007f]/
+
 export function stripControls(text: string): string {
+  if (!ACTIONABLE_BYTE.test(text)) return text
   return text
     .replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g, "") // OSC ... BEL/ST
     .replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, "") // CSI ... final byte

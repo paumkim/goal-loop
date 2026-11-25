@@ -39,7 +39,8 @@ import { formatLearningsForPrompt } from "../core/outcome-telemetry.ts"
 import { FAILURE_SIGNATURE_REPEAT_THRESHOLD, failureEscalationReason, persistFailureDiagnosticArtifact, recognizeNoProgress, strategyForRepeat } from "../core/failure-signature.ts"
 import { resolveProjectRoot } from "../core/git.ts"
 import { isWindowsDrivePathOnPosix } from "../core/wire.ts"
-import { sameDirectory, type GoalStore } from "./store.ts"; import { stripUndefined } from "../core/wire.ts"
+import { sameDirectory, type GoalStore } from "./store.ts"
+import { stripUndefined } from "../core/wire.ts"
 import {
   inspectImprovementBacklog,
   normalizeDedupeKey,

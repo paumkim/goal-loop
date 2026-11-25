@@ -1,10 +1,9 @@
 import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync, readSync, statSync } from "node:fs"
 import { dirname } from "node:path"
 import { elideAtWordBoundary, formatDuration } from "./format.ts"
+import type { GoalRecord, GoalStatus, LoopEntry, UsageSnapshot, Verdict, VerdictEntry } from "./types.ts"
 
 const LEARNING_LOG_VERSION = 1 as const
-
-import type { GoalRecord, GoalStatus, LoopEntry, UsageSnapshot, Verdict, VerdictEntry } from "./types.ts"
 
 type LearningEntryKind = "goal_terminal" | "loop_iteration" | "turn_verdict" | "goal_armed" | "session_outcome"
 

@@ -1948,7 +1948,13 @@ A nested `opencode-headless` child can share its goal owner's working directory 
 <!-- workstream:proactive-parent-messaging:start -->
 
 Workers now surface `goal_msg_send` / `goal_msg_read` proactively when another parent session is alive. `BackgroundTracker.otherParentAddresses()` derives distinct peer parent ids from immutable `session.created` links (in-memory, read-only) and the context hook injects one static line — no message bodies, no peer ids, no storage scan. `goal_msg_send` wakes an idle recipient parent with a one-line `ctx.session.prompt` steer only on the empty-to-non-empty inbox transition, skipping a session with a turn executing or background work; a failed activity check fails closed. Durable per-parent inboxes and probe read-only behavior are unchanged.
-<!-- workstream:proactive-parent-messaging:end --><!-- per-slug-workstreams:end -->
+<!-- workstream:proactive-parent-messaging:end -->
+<!-- workstream:universal-improvement-pass:start -->
+
+### universal-improvement-pass — consistency and a measured hot path (2026-11-25)
+
+Import style is unified across the touched modules: imports sit at the top of `format.ts` and `learning-log.ts`, same-module imports are adjacent in `outcome-telemetry.ts`, and the two semicolon-joined imports in `controller.ts` are separate statements. No behavior changes from the import edits. `stripControls` now short-circuits when the text has none of the bytes its replacements act on (tab and LF are deliberately excluded because the chain preserves them); a clean subprocess tail skips five regex passes and five allocations. A 24 KB clean tail measured 28,119 ns/op before and 11,185 ns/op after (2.5x), with 2,000 fuzz cases byte-identical to the old chain; the new `stripControls` tests lock the clean-text identity and the legacy behavior.
+<!-- workstream:universal-improvement-pass:end --><!-- per-slug-workstreams:end -->
 
 ## Historical workstreams
 

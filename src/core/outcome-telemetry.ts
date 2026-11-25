@@ -6,10 +6,8 @@
  * malformed data — a missing/empty/all-garbage journal must never affect a goal run.
  * Telemetry is advisory context for prompts, not a gate on any verdict.
  */
-import { memoizeBounded } from "./format.ts"
-import { formatRecentLearnings, recentLearningsFromEntries } from "./learning-log.ts"
-import type { LearningEntry } from "./learning-log.ts"
-import { elideAtWordBoundary, formatDuration } from "./format.ts"
+import { elideAtWordBoundary, formatDuration, memoizeBounded } from "./format.ts"
+import { formatRecentLearnings, recentLearningsFromEntries, type LearningEntry } from "./learning-log.ts"
 import { isRecord } from "./wire.ts"
 
 /** A failure theme is flagged recurring once it is seen this many times. */
