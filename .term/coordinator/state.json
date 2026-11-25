@@ -7540,6 +7540,17 @@
       ],
       "mergedAt": "2026-11-25T12:00:57Z",
       "mergedInto": "dev"
+    },
+    "minimal-change-rule": {
+      "agent": "build",
+      "paths": "AGENTS.md",
+      "branch": "wt/minimal-change-rule",
+      "worktree": "worktree/wt-minimal-change-rule",
+      "status": "done",
+      "createdAt": "2026-11-25T12:43:51Z",
+      "submittedAt": "2026-11-25T12:46:03Z",
+      "mergedAt": "2026-11-25T12:48:29Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
