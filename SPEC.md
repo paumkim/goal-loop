@@ -1954,7 +1954,14 @@ Workers now surface `goal_msg_send` / `goal_msg_read` proactively when another p
 ### universal-improvement-pass — consistency and a measured hot path (2026-11-25)
 
 Import style is unified across the touched modules: imports sit at the top of `format.ts` and `learning-log.ts`, same-module imports are adjacent in `outcome-telemetry.ts`, and the two semicolon-joined imports in `controller.ts` are separate statements. No behavior changes from the import edits. `stripControls` now short-circuits when the text has none of the bytes its replacements act on (tab and LF are deliberately excluded because the chain preserves them); a clean subprocess tail skips five regex passes and five allocations. A 24 KB clean tail measured 28,119 ns/op before and 11,185 ns/op after (2.5x), with 2,000 fuzz cases byte-identical to the old chain; the new `stripControls` tests lock the clean-text identity and the legacy behavior.
-<!-- workstream:universal-improvement-pass:end --><!-- per-slug-workstreams:end -->
+<!-- workstream:universal-improvement-pass:end -->
+<!-- workstream:skip-internal-wake-evaluation:start -->
+
+### skip-internal-wake-evaluation — a harness child's completion wake is not a new turn (2026-11-25)
+
+The evaluator and arm-time planner run as parent-linked children of the goal owner. When either finishes, OpenCode injects a `<background-result kind="subagent">` into the owner and wakes its execution unconditionally. That wake turn carries no fresh work, yet its `session.execution.succeeded` ran `onExecutionSucceeded` and spawned a second verdict after the first had already landed, plus a continuation steer. The event router now caches `session.created` parent links synchronously and, when a harness-owned child completes, marks its owner as expecting an internal wake. The owner's next `session.execution.started` consumes that mark inside a five-second window; its succeeded is then dropped (background draining still runs). A failed or interrupted wake clears the mark so the next genuine user turn is judged. Real worker completions are unaffected: their wake turns still reach evaluation.
+<!-- workstream:skip-internal-wake-evaluation:end -->
+<!-- per-slug-workstreams:end -->
 
 ## Historical workstreams
 

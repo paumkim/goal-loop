@@ -35,11 +35,23 @@ class RecentIds {
   }
 }
 
+/**
+ * How long a harness child's completion may precede its owner's wake turn and still count as that wake.
+ * A user prompt arriving later is a real turn and must still be evaluated.
+ */
+const INTERNAL_WAKE_WINDOW_MS = 5_000
+
 /** Fans one server event out to the background tracker and the goal controller. */
 export function createRouter(input: { controller: GoalController; background: BackgroundTracker; log: Logger; compactor: AutoCompactor }) {
   const { controller, background, log, compactor } = input
   const recent = new RecentIds()
   const fail = (error: unknown) => log.error("goal event handler failed", { error: String(error) })
+  /** Parent links from `session.created`, read synchronously when a child completes (the host lookup is async). */
+  const childParents = new Map<string, string>()
+  /** Owner sessions whose harness child just completed, stamped so a late wake cannot consume a real turn. */
+  const wakePending = new Map<string, number>()
+  /** Owner sessions whose current execution is that injected wake: its succeeded is not a turn to judge. */
+  const wakeRunning = new Set<string>()
 
   /**
    * One safety rule for every handler, sync or async: a throwing handler is reported via `fail` and never
@@ -80,6 +92,14 @@ export function createRouter(input: { controller: GoalController; background: Ba
       case "session.execution.started":
         if (!sessionID) return
         return guard(() => {
+          // The host wakes a goal owner when one of its harness children completes. That turn is plumbing,
+          // not work: judging it spawned a second evaluator and a continuation steer after the verdict had
+          // already landed. Consume the pending wake only inside the window so a later user turn is judged.
+          const at = wakePending.get(sessionID)
+          if (at !== undefined) {
+            wakePending.delete(sessionID)
+            if (Date.now() - at <= INTERNAL_WAKE_WINDOW_MS) wakeRunning.add(sessionID)
+          }
           background.executionStarted(sessionID)
           controller.onExecutionStarted(sessionID)
         })
@@ -88,13 +108,23 @@ export function createRouter(input: { controller: GoalController; background: Ba
         return
       case "session.execution.succeeded":
         if (!sessionID) return
+        // A parent-linked evaluator/planner child finished. Its completion report will wake the owner;
+        // remember the owner now, from the cached parent link, before that wake's started event arrives.
+        if (background.internalAgentOf(sessionID) !== undefined) {
+          const owner = childParents.get(sessionID)
+          if (owner) wakePending.set(owner, Date.now())
+        }
         guard(() => background.executionEnded(sessionID))
         guard(() => compactor.maybeCompact(sessionID))
+        // The owner's wake turn carries no new work. Drop this one succeeded without judging a second verdict;
+        // the child's own succeeded above still routes normally and can drain a genuinely deferred evaluation.
+        if (wakeRunning.delete(sessionID)) return
         guard(() => controller.onExecutionSucceeded(sessionID))
         // Background work may have just ended — re-run any evaluation this session deferred on it.
         return guard(() => controller.onBackgroundDrained())
       case "session.execution.failed":
         if (!sessionID) return
+        wakeRunning.delete(sessionID)
         guard(() => {
           background.executionEnded(sessionID)
           controller.onExecutionFailed(sessionID, data.error as FailureInfo | undefined)
@@ -102,16 +132,24 @@ export function createRouter(input: { controller: GoalController; background: Ba
         return guard(() => controller.onBackgroundDrained())
       case "session.execution.interrupted":
         if (!sessionID) return
+        wakeRunning.delete(sessionID)
         guard(() => {
           background.executionEnded(sessionID)
           controller.onExecutionInterrupted(sessionID, String(data.reason ?? "user"))
         })
         return guard(() => controller.onBackgroundDrained())
       case "session.created":
-        if (sessionID) guard(() => background.sessionCreated(sessionID, typeof data.parentID === "string" ? data.parentID : undefined))
+        if (sessionID) {
+          const parent = typeof data.parentID === "string" ? data.parentID : undefined
+          if (parent) childParents.set(sessionID, parent)
+          guard(() => background.sessionCreated(sessionID, parent))
+        }
         return
       case "session.deleted":
         if (!sessionID) return
+        childParents.delete(sessionID)
+        wakePending.delete(sessionID)
+        wakeRunning.delete(sessionID)
         guard(() => {
           background.sessionDeleted(sessionID)
           controller.onSessionDeleted(sessionID)
