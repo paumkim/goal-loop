@@ -471,30 +471,36 @@ export const stripGoalNotes = <T>(messages: ReadonlyArray<T>): T[] => messages.f
  * from the reused judge/planner children share an id; only the first is admitted, which is safe because their
  * verdicts and plans come from the child's event stream, never from a report.
  */
-const backgroundResultIDFromText = (text: string): string | undefined => {
-  const tag = /<background-result\b[^>]*\bkind\s*=\s*["']subagent["'][^>]*>/i.exec(text)
-  if (!tag) return undefined
-  return /\bsessionid\s*=\s*["']([^"']+)["']/i.exec(tag[0])?.[1] ?? text
+const backgroundResultIDsFromText = (text: string): string[] => {
+  const ids: string[] = []
+  const tags = /<background-result\b[^>]*\bkind\s*=\s*["']subagent["'][^>]*>/gi
+  for (const tag of text.match(tags) ?? []) {
+    // A tag without a session id historically keyed on the whole text; keep that identity so a
+    // legacy report without an id is not re-admitted on every request.
+    ids.push(/\bsessionid\s*=\s*["']([^"']+)["']/i.exec(tag)?.[1] ?? text)
+  }
+  return ids
 }
 
-export const backgroundResultID = (message: unknown): string | undefined => {
-  if (typeof message !== "object" || message === null) return undefined
+/** All delegated-child ids in one message. A context hook that merges reports into one block must
+ * dedupe by the whole set: keying on the first id hides every child added by a later merge. */
+export const backgroundResultIDs = (message: unknown): readonly string[] => {
+  if (typeof message !== "object" || message === null) return []
   const m = message as NoteMessageLike & { text?: unknown }
-  if (typeof m.text === "string") {
-    const id = backgroundResultIDFromText(m.text)
-    if (id !== undefined) return id
-  }
+  const texts: string[] = []
+  if (typeof m.text === "string") texts.push(m.text)
   const content = m.content
-  if (!Array.isArray(content)) return undefined
-  for (const part of content) {
-    if (typeof part !== "object" || part === null) continue
-    const { type, text } = part as { type?: unknown; text?: unknown }
-    if (type !== "text" || typeof text !== "string") continue
-    const id = backgroundResultIDFromText(text)
-    if (id !== undefined) return id
+  if (Array.isArray(content)) {
+    for (const part of content) {
+      if (typeof part !== "object" || part === null) continue
+      const { type, text } = part as { type?: unknown; text?: unknown }
+      if (type === "text" && typeof text === "string") texts.push(text)
+    }
   }
-  return undefined
+  return texts.flatMap(backgroundResultIDsFromText)
 }
+
+export const backgroundResultID = (message: unknown): string | undefined => backgroundResultIDs(message)[0]
 
 /**
  * The evaluator's own voice echoed back into the transcript. Every judge child carries the `<goal-evaluation>`

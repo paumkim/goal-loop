@@ -10594,3 +10594,23 @@ first-arm bar then disappeared until the real arm landed. The guard now also sup
 
 Verification: `test/entries.test.ts` pins both sides — a post-placeholder live snapshot is admitted, a
 pre-placeholder one is suppressed; the focused suite is green and `dist/tui.js` is regenerated.
+### Subagent reports reach a parent with no goal (subagent-report-idle-delivery, 2026-11-25)
+
+The `context` hook used to strip every host-injected subagent completion whenever the session had no *live* goal.
+That conflated two different sessions: one whose goal had ended (where an injected report is a stale no-op wake
+signal) and a plain subagent that never armed a goal at all (where its children's reports are the evidence it must
+assemble for its own parent). The global `subagent-one-trip` plugin made the loss total: it folds all reports in
+the request into one `<subagents>` block whose inner `<background-result kind="subagent">` text still matched the
+strip matcher, so one filter removed every child at once. An idle parent was woken by its children, saw no new
+evidence, ended its turn, and never sent its final report upstream.
+
+The hook now distinguishes the two cases through `GoalController.hasRecord()`, which checks the in-memory record
+and falls back to durable storage (restart restores only live records). Reports are admitted when a goal is live
+or the session never had one, and stripped only for a session whose goal ended. For the folded shape, dedupe keys
+on every child id in the block instead of the first: a later block carrying one more completed child is fresh,
+while an unchanged block stays stale. `isInternalChildReport` checks the same full id set, so a harness child
+hidden in a folded block still cannot leak into the worker.
+
+Verification: `test/plugin.test.ts` pins a plain worker keeping its child's report, a folded block admitted on a
+new child and dropped when unchanged, and a folded block still stripped after a terminal goal;
+`test/notes.test.ts` pins multi-id extraction. Focused suites 104 pass / 0 fail, full `bun run check` green.

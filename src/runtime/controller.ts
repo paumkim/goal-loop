@@ -432,6 +432,14 @@ export class GoalController {
     return record && isLive(record.status) ? record : undefined
   }
 
+  /** Whether this session ever armed a goal, live or terminal. The durable read is needed after a restart,
+   * which adopts only live records; a plain subagent session has no record and must keep its children's
+   * completion reports, while a session whose goal ended must drop them as stale wake signals. */
+  async hasRecord(sessionID: string): Promise<boolean> {
+    if (this.goals.has(sessionID)) return true
+    return (await this.deps.store.load(sessionID)) !== undefined
+  }
+
   /**
    * True when this process adopted/created a terminal (achieved/impossible/cleared/failed) record for
    * the session: the goal ended here and must not re-establish itself. Used by the `context` hook to

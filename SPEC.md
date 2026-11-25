@@ -1961,6 +1961,14 @@ Import style is unified across the touched modules: imports sit at the top of `f
 
 The evaluator and arm-time planner run as parent-linked children of the goal owner. When either finishes, OpenCode injects a `<background-result kind="subagent">` into the owner and wakes its execution unconditionally. That wake turn carries no fresh work, yet its `session.execution.succeeded` ran `onExecutionSucceeded` and spawned a second verdict after the first had already landed, plus a continuation steer. The event router now caches `session.created` parent links synchronously and, when a harness-owned child completes, marks its owner as expecting an internal wake. The owner's next `session.execution.started` consumes that mark inside a five-second window; its succeeded is then dropped (background draining still runs). A failed or interrupted wake clears the mark so the next genuine user turn is judged. Real worker completions are unaffected: their wake turns still reach evaluation.
 <!-- workstream:skip-internal-wake-evaluation:end -->
+<!-- workstream:subagent-report-idle-delivery:start -->
+
+### subagent-report-idle-delivery — keep children's reports in a plain worker session (2026-11-25)
+
+The `context` hook used to strip every injected `<background-result kind="subagent">` from a session with no *live* goal. That also hit subagents that never armed a goal: their children's completion reports are the evidence they need to assemble a final report for their own parent, so an idle worker woke, saw nothing new, and went quiet. With `subagent-one-trip` enabled the loss was total — its `<subagents>` block still carries the inner tags the filter matched. The hook now admits reports when a goal is live **or the session never had one**, and strips only for a session whose goal ended (`GoalController.hasRecord()` reads memory, then storage). Dedupe keys on every child id in a folded block, so a later block with one more finished child is fresh; an unchanged block stays stale. Harness-child reports remain hidden by the same full id set.
+
+Verification: `test/plugin.test.ts` and `test/notes.test.ts` regressions; full `bun run check` green.
+<!-- workstream:subagent-report-idle-delivery:end -->
 <!-- per-slug-workstreams:end -->
 
 ## Historical workstreams

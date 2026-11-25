@@ -11,7 +11,7 @@ import type { AgentMessaging } from "./runtime/messaging.ts"
 import { CLEAR_ALIASES, parseGoalLoopDirective } from "./core/parse.ts"
 import { EVALUATOR_AGENT_ID } from "./core/evaluator-agent.ts"
 import { PLANNER_AGENT_ID } from "./core/planner.ts"
-import { backgroundResultID, carriesGoalGrammar, coordinatorFlow, directive as directivePrompt, PEER_PARENTS_HINT, systemReminder, TERMINAL_REMINDER } from "./core/prompts.ts"
+import { backgroundResultIDs, carriesGoalGrammar, coordinatorFlow, directive as directivePrompt, PEER_PARENTS_HINT, systemReminder, TERMINAL_REMINDER } from "./core/prompts.ts"
 import { compactGoalInstructions, stripGoalContext, stripGoalEvaluations, stripGoalNotes, isGoalEvaluationMessage } from "./core/prompts.ts"
 
 export interface HookDeps {
@@ -209,19 +209,23 @@ export async function registerHooks(deps: HookDeps): Promise<void> {
         // working session. Keep the strip so a stray judge report (or the planner's queued completion) cannot teach
         // the worker the verdict it was supposed to earn on its own (SPEC-workstreams.md CXLI position inversion).
         kept = kept.filter((message) => !isPluginReport(message))
-        // Host subagent completions are wake signals, not instructions. Terminal sessions drop every one; live
-        // sessions admit a report the first time it appears and drop every later copy of the same id. Keep the
-        // splice-back contract with the strips above: the host holds the caller's array reference.
+        // Host subagent completions are wake signals, not instructions. A session whose goal ended drops every
+        // one; a live session admits each report on first sight. A plain subagent session has no goal record at
+        // all — its children's reports are the evidence it must assemble for its own parent, so they stay.
+        // subagent-one-trip folds several reports into one block: the dedupe key is every child id in the block,
+        // so a later block carrying one more child is fresh instead of hiding behind the first child's id.
+        const hadGoal = await controller.hasRecord(event.sessionID)
         const seenReports = seenBackgroundResults.get(event.sessionID) ?? new Set<string>()
         seenBackgroundResults.set(event.sessionID, seenReports)
         kept = kept.filter((message) => {
-          const id = backgroundResultID(message)
-          if (id === undefined) return true
-          // Mark every id we see, even when we strip it: a report that rode a terminal session is stale forever,
+          const ids = backgroundResultIDs(message)
+          if (ids.length === 0) return true
+          // Mark every key we see, even when we strip it: a report that rode a terminal session is stale forever,
           // so re-arming a goal in the same session must not admit it as fresh (SPEC terminal-injection-dedupe).
-          const fresh = !seenReports.has(id)
-          seenReports.add(id)
-          return live && fresh && !isInternalChildReport(message)
+          const key = ids.join(",")
+          const fresh = !seenReports.has(key)
+          seenReports.add(key)
+          return (live || !hadGoal) && fresh && !isInternalChildReport(message)
         })
         if (kept.length !== original.length) {
           // Never dispatch a request that does not end on a user turn: strict providers reject it ("The
@@ -236,7 +240,7 @@ export async function registerHooks(deps: HookDeps): Promise<void> {
             trailing !== undefined &&
             !isGoalEvaluationMessage(trailing) &&
             !isPluginReport(trailing) &&
-            backgroundResultID(trailing) === undefined
+            backgroundResultIDs(trailing).length === 0
               ? trailing
               : undefined
           const last = kept[kept.length - 1]
