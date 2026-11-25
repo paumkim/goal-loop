@@ -7403,17 +7403,20 @@
       "paths": "package.json,.github/workflows/check.yml",
       "branch": "wt/wire-wiring-audit-into-check",
       "worktree": "worktree/wt-wire-wiring-audit-into-check",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-25T07:14:56Z",
-      "submittedAt": "2026-11-25T07:19:33Z"
+      "submittedAt": "2026-11-25T07:19:33Z",
+      "mergedAt": "2026-11-25T07:49:31Z",
+      "mergedInto": "dev"
     },
     "planner-reuse-builtin-session": {
       "agent": "orchestrator",
       "paths": "src/index.ts,test/plugin.test.ts,SPEC.md",
       "branch": "wt/planner-reuse-builtin-session",
       "worktree": "worktree/wt-planner-reuse-builtin-session",
-      "status": "claimed",
-      "createdAt": "2026-11-25T07:31:45Z"
+      "status": "submitted",
+      "createdAt": "2026-11-25T07:31:45Z",
+      "submittedAt": "2026-11-25T07:38:34Z"
     }
   },
   "mergeLock": null,
