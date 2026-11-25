@@ -107,7 +107,7 @@ export function coordinatorFlow(policy: CommitPolicy): string {
   return [
     `Coordinator repo. Before editing: claim first — run \`${bin} claim <goal-slug> --agent <you> --paths <scope>\`.`,
     `Derive the slug from the goal, then \`cd <worktree>\` and work only there, commit on your wt/<slug> branch.`,
-    `Landing is part of the task, not optional after submit: run \`${bin} submit\`, then drain the merge queue yourself — check \`${bin} merge-status\`, then run \`${bin} merge-next --wait --target <slug>\` from the main repo.`,
+    `Landing is part of the task, not optional after submit: run \`${bin} submit\`, then call \`goal_standby\` with your slug and end your turn — do not poll \`${bin} merge-status\` or the merge queue yourself. The system will send you a message when your merge turn arrives; on that wake, run \`${bin} merge-next --wait --target <slug>\` from the main repo.`,
     `If \`${target}\` moved while you worked, rebase \`wt/<slug>\` onto \`${target}\`, re-run the checks, and retry the merge. A submitted lease is only merge-ready, not done.`,
     `Report completion only when \`${bin} status --json\` shows the lease done and \`worktree/wt-<slug>\` is gone.`,
     `Never commit to ${target}/main directly.`,
@@ -1082,3 +1082,11 @@ export const PEER_PARENTS_HINT =
  */
 export const MESSAGE_WAKE_TEXT =
   "goal-loop: a new agent message arrived for you. Call goal_msg_read to retrieve it and goal_msg_send to reply."
+
+/**
+ * Wake line for a submitted agent whose lease has reached the coordinator's merge turn. Carries the slug so the
+ * resumed turn can act without first draining an inbox; the same text is also queued as a message, so a wake that
+ * lands twice still points at the right lease. Reverse only if standby resumes without a merge-step directive.
+ */
+export const mergeTurnWakeText = (slug: string, bin = "coordinator"): string =>
+  `goal-loop: it is your merge turn for lease ${slug}. Run \`${bin} merge-next --wait --target ${slug}\` from the main repo, then confirm the lease is done with \`${bin} status --json\`. A submitted lease is only merge-ready, not done.`
