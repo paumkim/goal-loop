@@ -1959,6 +1959,11 @@ Verification: `test/core.test.ts` pins both forms (strict JSON and JSON-ish fall
 The JSDoc for `FindSegment` in `src/core/find.ts` was separated from the interface by the `memoizeBounded` import,
 orphaning it. Both are comment-only: no exported signature, condition or rendered byte changes.
 
+### One comment-only pass-count correction (telemetry-pass-count-doc, 2026-11-24)
+
+Two comments in `src/core/outcome-telemetry.ts` described `normalizeReasonUncached` as six regex passes; the
+function has five `.replace()` calls. The wording now matches the code. No behavior or signature changes.
+
 ## Historical workstreams
 
 Workstreams older than the "Recent workstreams" section above are archived verbatim in

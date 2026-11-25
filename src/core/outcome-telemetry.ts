@@ -67,7 +67,7 @@ function asString(value: unknown): string | undefined {
 /**
  * `normalizeReason` is pure and the journal tail it scans is dominated by repeated reasons and
  * conditions (the same handful of failure themes and armed conditions recur across entries). Each call
- * runs six regex passes, so the repeated values were being normalized over and over. A bounded memo keyed
+ * runs five regex passes, so the repeated values were being normalized over and over. A bounded memo keyed
  * by the raw string turns a repeat into one lookup. The guard rejects blanks before the key, and the cache
  * is bounded so a long session cannot grow it without limit.
  */
@@ -77,7 +77,7 @@ export function normalizeReason(reason: string | undefined): string {
   return normalizeReasonMemo(reason)
 }
 
-/** The raw six-pass normalization, kept separate so `normalizeReason` is a thin cache lookup around it. */
+/** The raw five-pass normalization, kept separate so `normalizeReason` is a thin cache lookup around it. */
 function normalizeReasonUncached(reason: string | undefined): string {
   return (reason ?? "")
     .toLowerCase()
