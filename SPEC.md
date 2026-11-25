@@ -1969,6 +1969,12 @@ The `context` hook used to strip every injected `<background-result kind="subage
 
 Verification: `test/plugin.test.ts` and `test/notes.test.ts` regressions; full `bun run check` green.
 <!-- workstream:subagent-report-idle-delivery:end -->
+<!-- workstream:coordinator-wait-wake:start -->
+
+### coordinator-wait-wake — standby after submit, wake on merge turn (2026-11-25)
+
+A submitted agent no longer drains the coordinator queue inside its own turn. `goal_standby` parks a submitted lease in durable plugin storage (`goal/standby/v1/<sessionID>`) and the agent ends its turn. A cheap background tick in the plugin reads the coordinator's state file; when the parked lease becomes the FIFO head and no merge holds the lock, the watcher sends the agent one message through the existing functional message/session system and steers the session back into its merge turn with the slug and the `merge-next --wait --target` step. The wake is skipped while a turn is executing, and a failed activity/storage probe never produces a wake. `fifoHead` and `isMergeTurn` in `src/core/coordinator-wait.ts` mirror the coordinator's own FIFO key (`submittedAt // createdAt`), so the wake happens exactly when `merge-next` would accept the lease. A parked session is not a stale session: `withStandbyActivity` adds one virtual worker to the controller's activity port while the wait is live, so `isActive` stays true and the evaluator abstains until the merge lands. Coordinator agent prompts now tell submitting agents to stand by instead of polling `merge-status`.
+<!-- workstream:coordinator-wait-wake:end -->
 <!-- per-slug-workstreams:end -->
 
 ## Historical workstreams
