@@ -7637,6 +7637,17 @@
       "submittedAt": "2026-11-25T16:21:06Z",
       "mergedAt": "2026-11-25T16:23:46Z",
       "mergedInto": "dev"
+    },
+    "promote-todo-feeding-backlog-item": {
+      "agent": "build-agent",
+      "paths": "docs/improvement-backlog.json,docs/todo-comment-triage.md,docs/changelog.html",
+      "branch": "wt/promote-todo-feeding-backlog-item",
+      "worktree": "worktree/wt-promote-todo-feeding-backlog-item",
+      "status": "done",
+      "createdAt": "2026-11-25T16:28:04Z",
+      "submittedAt": "2026-11-25T16:31:59Z",
+      "mergedAt": "2026-11-25T16:34:22Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
