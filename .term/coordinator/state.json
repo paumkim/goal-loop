@@ -7378,9 +7378,11 @@
       "paths": "src/core/prompts.ts,test/notes.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/wake-loop-flat-text-shape",
       "worktree": "worktree/wt-wake-loop-flat-text-shape",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-25T06:55:13Z",
-      "submittedAt": "2026-11-25T07:01:54Z"
+      "submittedAt": "2026-11-25T07:01:54Z",
+      "mergedAt": "2026-11-25T07:12:20Z",
+      "mergedInto": "dev"
     },
     "shadow-wiring-audit": {
       "agent": "build",
