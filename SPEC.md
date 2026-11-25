@@ -2028,6 +2028,16 @@ same-signature collapse with counts, empty summaries, dominant-pattern ordering,
 timestamp formatting. Full `bun run check` green (2457 pass / 0 fail; spec-check counts computed at gate
 time; docs, invariant and wiring gates ok).
 <!-- workstream:diagnostics-summary-tool:end -->
+<!-- workstream:waiting-for-subagent-indicator:start -->
+
+### Follow-up (waiting-for-subagent-indicator) — the waiting pill names its subagents (2026-11-25)
+
+The ambient pill's `waiting` state was a hollow ring plus the bare word `waiting`: the parent had gone quiet for background work, but the indicator never said *what* it was waiting on. The deferral path already knows the answer — `background.busy()` reports the delegated subagent count — but that count never reached the read model.
+
+`GoalRecord` now carries an additive `waitingSubagents` twin beside `waitingSince`. `defer()` writes it before the record is committed/emitted, `clearDeferred()` drops it with the other deferral state, and later deferrals refresh it when the worker count changes. The count flows through `snapshotRecord` without further wiring because the record is cloned into every snapshot. `pillModel`'s state word uses it: one child reads `waiting for subagent`, several read `waiting for N subagents`; a shell-only wait or a restored legacy record with no count keeps the honest `waiting`.
+
+The TUI swaps the leading glyph to the existing `delegating` icon through the same `withIntentGlyph` swap used by live task tools, so the state icon and the activity icon are the same cell. The activity word is not painted here — the state word already carries the message — so the line stays inside its existing cell budget. A new `waitingOnSubagents` predicate in `src/core/hud.ts` owns the glyph-swap decision and is pinned by tests alongside the state-word forms and the persisted count in `test/intent-icons.test.ts` and `test/controller.test.ts`. Verdict gating, check-ins and loop advance are unchanged.
+<!-- workstream:waiting-for-subagent-indicator:end -->
 <!-- per-slug-workstreams:end -->
 
 ## Workstream timer-suppress-during-planning — a leftover check-in cannot wake the parent during the arm-time planner (2026-11-25)

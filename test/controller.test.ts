@@ -1466,14 +1466,18 @@ describe("background wait persists across a restart (Workstream XXVII)", () => {
     first.setWork({ subagents: 1, shells: 0 })
     await first.turn()
     expect(first.controller.snapshot(SID)?.waiting).toBeTrue()
+    expect(first.controller.snapshot(SID)?.waitingSubagents).toBe(1)
+    expect(first.changes.at(-1)?.waitingSubagents).toBe(1) // the TUI gets the count in the changed event
     await first.store.flush()
     const stored = storage.data.get(`goal/v1/${SID}`) as Record<string, unknown>
     expect(typeof stored.waitingSince).toBe("number")
+    expect(stored.waitingSubagents).toBe(1)
 
     // A fresh process: runtime state is gone, so only the record can paint the wait.
     const second = harness({}, storage)
     expect(await second.controller.restore()).toBe(1)
     expect(second.controller.snapshot(SID)?.waiting).toBeTrue()
+    expect(second.controller.snapshot(SID)?.waitingSubagents).toBe(1)
   })
 
   test("a restored wait flips to active on the first post-reload heartbeat, pushed as an immediate changed event", async () => {
@@ -1512,9 +1516,11 @@ describe("background wait persists across a restart (Workstream XXVII)", () => {
     await second.controller.onBackgroundDrained()
     expect(second.requests).toHaveLength(1)
     expect(second.controller.snapshot(SID)?.waiting).toBeFalse()
+    expect(second.controller.snapshot(SID)?.waitingSubagents).toBeUndefined()
     await second.store.flush()
     const stored = storage.data.get(`goal/v1/${SID}`) as Record<string, unknown>
     expect(stored.waitingSince).toBeUndefined()
+    expect(stored.waitingSubagents).toBeUndefined()
     // A third process sees no wait.
     const third = harness({}, storage)
     expect(await third.controller.restore()).toBe(1)

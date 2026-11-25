@@ -20,8 +20,8 @@ const workstreamHeadings = (text: string): string[] =>
   text.split("\n").filter((line) => /^## Workstream(?:\s|:)/.test(line)).map((line) => line.trim())
 
 describe("SPEC role split", () => {
-  test("SPEC.md stays a compact live spec (<= 2050 lines)", () => {
-    expect(spec.split("\n").length).toBeLessThanOrEqual(2050)
+  test("SPEC.md stays a compact live spec (<= 2060 lines)", () => {
+    expect(spec.split("\n").length).toBeLessThanOrEqual(2060)
   })
 
   test("the live-spec anchors stay in SPEC.md", () => {

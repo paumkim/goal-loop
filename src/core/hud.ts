@@ -73,18 +73,26 @@ export const compactMarker = (compact: LoopCompactState | undefined, ascii: bool
   return { text: "pending", tone: "pending" }
 }
 
-const stateWord = (goal: GoalSnapshot): string =>
-  goal.status === "paused"
-    ? "paused"
-    : goal.evaluating
-      ? "checking"
-      : goal.waiting
-        ? "waiting"
-        : goal.queued
-          ? "queued"
-          : isRetryStuck(goal)
-            ? "stuck"
-            : "active"
+/**
+ * The pill should wear the delegation icon when the parent is waiting on a delegated subagent. A shell-only
+ * wait (or a restored record without the additive count) keeps the plain hollow ring: nothing to attribute
+ * the wait to, so no borrowed icon. One source for the TUI's glyph swap and the tests that pin it.
+ */
+export const waitingOnSubagents = (goal: GoalSnapshot): boolean =>
+  goal.status === "active" && goal.waiting === true && (goal.waitingSubagents ?? 0) > 0
+
+const stateWord = (goal: GoalSnapshot): string => {
+  if (goal.status === "paused") return "paused"
+  if (goal.evaluating) return "checking"
+  if (goal.waiting) {
+    const count = goal.waitingSubagents ?? 0
+    // Name what the parent is waiting on. One child reads as "waiting for subagent"; more than one shows
+    // the count so the pill agrees with the host's subagent tally. Unknown/zero stays the honest "waiting".
+    return count > 1 ? `waiting for ${count} subagents` : count === 1 ? "waiting for subagent" : "waiting"
+  }
+  if (goal.queued) return "queued"
+  return isRetryStuck(goal) ? "stuck" : "active"
+}
 
 /**
  * May the HUD card arm right now? A goal must be eligible to paint (live record on disk or in cache),
