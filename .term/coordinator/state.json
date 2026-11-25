@@ -7689,6 +7689,17 @@
       "worktree": "worktree/wt-skip-internal-wake-evaluation",
       "status": "claimed",
       "createdAt": "2026-11-25T17:51:03Z"
+    },
+    "wake-resume-mapping": {
+      "agent": "build",
+      "paths": "AGENTS.md",
+      "branch": "wt/wake-resume-mapping",
+      "worktree": "worktree/wt-wake-resume-mapping",
+      "status": "done",
+      "createdAt": "2026-11-25T17:51:20Z",
+      "submittedAt": "2026-11-25T17:51:49Z",
+      "mergedAt": "2026-11-25T17:54:22Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
