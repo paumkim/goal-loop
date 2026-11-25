@@ -42,9 +42,11 @@ function coordinatorRepository(): string {
  * the plugin asked the host to do.
  */
 function context(directory: string, options: Record<string, unknown> = {}) {
-  const calls = { prompts: [] as any[], commands: [] as any[], notices: [] as any[], agents: [] as any[], compacts: [] as string[] }
+  const calls = { prompts: [] as any[], commands: [] as any[], notices: [] as any[], agents: [] as any[], tools: [] as any[], compacts: [] as string[] }
   const hooks: Record<string, (event: any) => any> = {}
   const storage = new Map<string, unknown>()
+  /** Tests can map a session id to its parent to exercise session-tagged message routing. */
+  const sessionParents = new Map<string, string>()
   const ctx = {
     options,
     location: { directory },
@@ -60,7 +62,10 @@ function context(directory: string, options: Record<string, unknown> = {}) {
     session: {
       prompt: async (input: any) => void calls.prompts.push(input),
       synthetic: async (input: any) => void calls.prompts.push(input),
-      get: async () => ({ id: "ses_1", parentID: undefined, tokens: {} }),
+      get: async (input: any) => {
+        const id = typeof input?.sessionID === "string" ? input.sessionID : "ses_1"
+        return { id, parentID: sessionParents.get(id), tokens: {} }
+      },
       compact: async (input: any) => void calls.compacts.push(input.sessionID),
       context: async () => [],
       hook: async (name: string, callback: (event: any) => any) => void (hooks[name] = callback),
@@ -70,6 +75,15 @@ function context(directory: string, options: Record<string, unknown> = {}) {
     },
     command: {
       transform: async (fn: (editor: any) => void) => fn({ add: (command: any) => calls.commands.push(command) }),
+    },
+    tool: {
+      transform: async (fn: (editor: any) => void) => fn({
+        add: (tool: any) => calls.tools.push(tool),
+        update: () => {},
+        remove: () => {},
+        list: () => calls.tools,
+        namespace: () => {},
+      }),
     },
     storage: {
       get: async (key: string) => storage.get(key),
@@ -83,7 +97,7 @@ function context(directory: string, options: Record<string, unknown> = {}) {
       },
     },
   }
-  return { ctx, calls, hooks, storage }
+  return { ctx, calls, hooks, storage, sessionParents }
 }
 
 /**
@@ -2006,5 +2020,82 @@ describe("restore cannot outlive plugin teardown", () => {
     await new Promise((r) => setTimeout(r, 50))
     // Without awaiting restore, adopt + resumePendingEvaluations commit after dispose's flush.
     expect(writes).toBe(writesAtTeardown)
+  })
+})
+
+describe("agent-to-agent messaging (enabled with the plugin)", () => {
+  const toolContext = (sessionID: string) => ({
+    sessionID,
+    agent: "goal-loop",
+    messageID: "msg_messaging",
+    id: "call_messaging",
+    signal: new AbortController().signal,
+    progress: async () => {},
+  })
+
+  test("the plugin registers both messaging tools while it is enabled", async () => {
+    const { ctx, calls } = context(repository())
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const names = calls.tools.map((tool: any) => tool.name)
+      expect(names).toContain("goal_msg_send")
+      expect(names).toContain("goal_msg_read")
+    } finally {
+      await dispose()
+    }
+  })
+
+  test("a worker sends as its parent and the recipient's parent reads and replies", async () => {
+    const { ctx, calls, sessionParents, storage } = context(repository())
+    sessionParents.set("ses_worker_A", "ses_parent_A")
+    sessionParents.set("ses_worker_B", "ses_parent_B")
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const send = calls.tools.find((tool: any) => tool.name === "goal_msg_send")
+      const read = calls.tools.find((tool: any) => tool.name === "goal_msg_read")
+      expect(send).toBeDefined()
+      expect(read).toBeDefined()
+
+      await send.execute({ to: "ses_parent_B", text: "question from A" }, toolContext("ses_worker_A"))
+      // The message lands in the recipient parent's inbox, tagged with the sender parent's id.
+      expect(storage.has("goal/msg/v1/ses_parent_B")).toBe(true)
+      expect(storage.has("goal/msg/v1/ses_parent_A")).toBe(false)
+
+      const forB = await read.execute({}, toolContext("ses_worker_B"))
+      expect(forB.content).toContain("question from A")
+      expect(forB.content).toContain("ses_parent_A")
+      // Reading drains: a second read sees nothing.
+      expect((await read.execute({}, toolContext("ses_worker_B"))).content).toContain("No messages")
+
+      await send.execute({ to: "ses_parent_A", text: "answer from B" }, toolContext("ses_worker_B"))
+      const forA = await read.execute({}, toolContext("ses_worker_A"))
+      expect(forA.content).toContain("answer from B")
+      expect(forA.content).toContain("ses_parent_B")
+    } finally {
+      await dispose()
+    }
+  })
+
+  test("the unread hint appears for the addressed parent and clears after a read", async () => {
+    const { ctx, calls, hooks, sessionParents } = context(repository())
+    sessionParents.set("ses_worker_B", "ses_parent_B")
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const send = calls.tools.find((tool: any) => tool.name === "goal_msg_send")
+      const read = calls.tools.find((tool: any) => tool.name === "goal_msg_read")
+      await send.execute({ to: "ses_parent_B", text: "ping" }, toolContext("ses_worker_A"))
+
+      const event = () => ({ sessionID: "ses_worker_B", agent: "goal-loop", system: [] as any[], messages: [] as any[], model: { providerID: "test" } })
+      const before = event()
+      await hooks.context!(before)
+      expect(before.system.some((s: any) => String(s.text).includes("unread agent message"))).toBe(true)
+
+      await read.execute({}, toolContext("ses_worker_B"))
+      const after = event()
+      await hooks.context!(after)
+      expect(after.system.some((s: any) => String(s.text).includes("unread agent message"))).toBe(false)
+    } finally {
+      await dispose()
+    }
   })
 })

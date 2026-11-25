@@ -30,6 +30,7 @@ import { createGoalMirror } from "./core/mirror.ts"
 import { createRouter, type ServerEvent } from "./runtime/events.ts"
 import { systemClock, type EmitterPort, type Logger, type SessionPort } from "./runtime/ports.ts"
 import { GoalStore } from "./runtime/store.ts"
+import { AgentMessaging } from "./runtime/messaging.ts"
 import { withFileSink } from "./core/file-log.ts"
 // Shared plain-language error formatter (the filename is historical: it was born in the TUI).
 import { userFacingError } from "./tui-error.ts"
@@ -661,6 +662,54 @@ export default Plugin.define({
     const probe = probeFlag(process.env.OPENCODE_GOAL_PROBE)
     if (probe) log.warn("probe mode: goal storage is read-only (OPENCODE_GOAL_PROBE); restore() will not persist anything")
     const store = new GoalStore(ctx.storage, (error) => log.error("goal storage write failed", { error: String(error) }), { readOnly: probe })
+
+    // Agent-to-agent messaging lives here, inside the plugin's setup(): the tools and the unread hint below exist
+    // only while the goal-plugin is enabled, and disappear with it. A worker's messages are tagged with the id of
+    // its parent session (the "parent agent"), so each parent is both sender and receiver across parallel tasks.
+    const messaging = new AgentMessaging(ctx.storage, systemClock, { readOnly: probe })
+    const agentIdFor = async (sessionID: string): Promise<string> => {
+      const info = await ctx.session.get({ sessionID }).catch(() => undefined) as { parentID?: unknown } | undefined
+      const parent = info?.parentID
+      return typeof parent === "string" && parent !== "" && parent !== sessionID ? parent : sessionID
+    }
+    await ctx.tool.transform((editor) => {
+      editor.add({
+        name: "goal_msg_send",
+        description: "Send a message to another session's parent agent (two-way parallel-work messaging). `to` is the recipient's parent session id (a `ses_...` id); `text` is the body. Your message is tagged with your own parent session id so the recipient can reply with goal_msg_send.",
+        input: {
+          type: "object",
+          properties: {
+            to: { type: "string", description: "Recipient parent session id" },
+            text: { type: "string", description: "Message body" },
+          },
+          required: ["to", "text"],
+        } as const,
+        async execute(input, toolContext) {
+          const to = typeof (input as { to?: unknown }).to === "string" ? (input as { to: string }).to.trim() : ""
+          const text = typeof (input as { text?: unknown }).text === "string" ? (input as { text: string }).text : ""
+          if (!to || !text.trim()) return { content: "goal_msg_send needs a non-empty `to` session id and `text`." }
+          const from = await agentIdFor(toolContext.sessionID)
+          const message = await messaging.send(from, to, text)
+          return { content: `Sent to ${to} from ${from} (id ${message.id}).` }
+        },
+      })
+      editor.add({
+        name: "goal_msg_read",
+        description: "Read and clear messages addressed to your parent agent's session id. Reply to a sender by passing its `from` id as `to` in goal_msg_send.",
+        input: {
+          type: "object",
+          properties: {},
+          required: [],
+        } as const,
+        async execute(_input, toolContext) {
+          const agent = await agentIdFor(toolContext.sessionID)
+          const messages = await messaging.drain(agent)
+          if (messages.length === 0) return { content: `No messages for ${agent}.` }
+          const body = messages.map((m) => `[${m.from}] ${m.text}`).join("\n")
+          return { content: `${messages.length} message(s) for ${agent}:\n${body}` }
+        },
+      })
+    })
     // The compactor and the controller need each other: the controller asks the compactor to compact at a loop boundary,
     // and the compactor asks the controller (and the background tracker) whether the session has work in flight.
     // The compactor is assigned before anything can call it, so the deferred closure is safe.
@@ -937,7 +986,7 @@ export default Plugin.define({
     // cleared / failed) — the counter-instruction to a compaction summary that quotes the expired
     // `<goal>` kickoff. The first two are no-ops while no goal work is armed; the third is gated on the
     // request still carrying goal text, so it never becomes a session-long stale system line.
-    await ctx.session.hook("context", (event) => {
+    await ctx.session.hook("context", async (event) => {
       // CXXXVIII trims the judge's system prefix to its own identity so a ~7k-token AGENTS.md/SPEC.md block cannot
       // drown the rubric on small models (it caused foreign verdicts on 9router-go/KiloCode-Free). The trim is NOT
       // safe for the built-in `opencode` provider: that gateway rejects a trimmed judge in ~6ms with
@@ -1032,6 +1081,18 @@ export default Plugin.define({
       // the session — it is not injected.
       const stillCarriesGoal = Array.isArray(event.messages) ? carriesGoalGrammar(event.messages) : false
       if (!live && stillCarriesGoal && controller.hasTerminalRecord(event.sessionID)) event.system.push({ type: "text", text: TERMINAL_REMINDER })
+      // Unread hint for agent-to-agent messages. A one-line nudge tells the recipient to pull its inbox with
+      // goal_msg_read; the messages themselves are not copied into context, so a retried generation cannot
+      // consume them twice. Judge/planner children never get the hint (they have no tools and no mailbox).
+      if (agentID !== EVALUATOR_AGENT_ID && agentID !== PLANNER_AGENT_ID) {
+        const unread = await messaging.count(await agentIdFor(event.sessionID)).catch(() => 0)
+        if (unread > 0) {
+          event.system.push({
+            type: "text",
+            text: `goal-loop: ${unread} unread agent message(s). Call goal_msg_read to retrieve and clear them.`,
+          })
+        }
+      }
     })
 
     // ---- event pump with reconnect

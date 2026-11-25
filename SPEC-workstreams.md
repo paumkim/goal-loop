@@ -23,6 +23,8 @@ there.
 | Workstream | Lease slug | Summary |
 | --- | --- | --- |
 | CCIII | `proactive-strategy-escalation` | proactive strategy escalation replaces the repeated-failure pause |
+| CCIV | `bounded-failure-diagnostics` | one diagnostic artifact per failure streak (stable per-session signature path) |
+| CCV | `universal-no-progress-recognition` | one universal no-progress recognizer shared by plain goals and loops |
 | CXCV | `the-live-pill-counts-evaluated-turns` | the live pill counts evaluated turns |
 | CXCVI | `copy-free-steady-state-in-the-snapshot-cache` | copy-free steady state in the snapshot cache |
 | CXCVII | `a-bounded-objective-completion-condition-for-the-loop` | a bounded, objective completion condition for the loop |
@@ -10430,3 +10432,40 @@ self-resuming `resume: true` steer, strategy rotation across five repeats, the c
 and no `paused` notice. Focused suite: 315 pass / 0 fail, 178043 expect() calls. Full `bun run check`
 green after artifact regeneration; marker re-counted, no shipped file added or removed.
 
+## Workstream CCIV — one diagnostic artifact per failure streak (bounded-failure-diagnostics) (2026-11-23)
+
+CCIII made escalation proactive, which means it now fires on every not_met turn of a stuck streak instead
+of pausing after the third. The diagnostic writer still used a timestamped filename, so a single recurring
+signature produced a new JSON file on every turn — 433 artifacts accumulated for one repeated signature in
+this repository, and a proactive loop would keep growing that set without bound. Artifact names are now
+keyed by `(sessionID, SHA-256 prefix of the full signature)`, so the set is capped at one file per distinct
+signature per session; each escalation overwrites that file with the latest count, turn, and timestamp, and
+the steer cites a stable path. Pre-existing timestamped files are never deleted. The escalation reason text
+also dropped its now-stale "send a message to resume" instruction and states that the goal stays active
+while the next turn rotates strategy automatically.
+
+Verification: new regression in `test/failure-signature.test.ts` writes 12 escalations of one signature and
+3 of another and pins an independent oracle of exactly 2 files, the latest count/turn in the overwritten
+artifact, and path stability on repeat. Focused suite: 130 pass / 0 fail, 689 expect() calls. Full
+`bun run check` green after artifact regeneration; marker re-counted, no shipped file added or removed.
+
+## Workstream CCV — one universal no-progress recognizer (universal-no-progress-recognition) (2026-11-23)
+
+CCIII's escalation still keyed on a single repeated *identical* failure signature, so alternating gaps —
+the "no evidence of work ... zero tool calls this turn" downgrade recurring beside other reasons — could
+keep a goal stuck without ever matching. The trigger is now one pure recognizer,
+`recognizeNoProgress()` in `src/core/failure-signature.ts`, which reads six independent signals in one pass:
+`repeated_signature`, `diverse_failure` (three not_met turns with *different* signatures), `zero_tool_turn`,
+`retry_streak`, `stall`, and `loop_not_progress`. Any signal produces one escalation; the streak is the max
+across signals, rotation keeps advancing, and every recognized signal is named in the steer
+("Recognized no-progress signals: ..."). The result is a single self-recognizing mechanism for every stuck
+shape instead of a special case per guard, and it still routes through the proactive, non-pausing path from
+CCIII — loops and plain goals alike. `detectRepeatedFailureSignature` remains the low-level primitive; the
+controller calls only the recognizer.
+
+Verification: six new pure regressions in `test/failure-signature.test.ts` use independent oracles for
+alternating signatures, dual signals, zero-tool turns below threshold, scalar retry/stall/loop signals,
+non-stuck states, and verification-kind parity; `test/controller.test.ts` now pins that different
+signatures produce a `diverse_failure` escalation instead of evading it; `test/core.test.ts` pins the
+visible signal list. Focused suite: 322 pass / 0 fail, 178078 expect() calls. Full `bun run check` green after
+artifact regeneration; marker re-counted, no shipped file added or removed.
