@@ -617,7 +617,7 @@ export default Plugin.define({
 
     // `OPENCODE_GOAL_MIRROR=0` disables the mirror on BOTH sides. The server plugin already stops writing when the
     // flag is set (index.ts); without this guard the TUI would still read a mirror left behind by an earlier run
-    // and paint that stale snapshot over a wedgedRPC — so the "off" state only half-worked. Honor the same flag
+    // and paint that stale snapshot over a wedged RPC — so the "off" state only half-worked. Honor the same flag
     // here, where the read lives, so no mirror bytes (the user's condition text) are consumed when disabled.
     const goalMirror = process.env.OPENCODE_GOAL_MIRROR === "0" ? undefined : createGoalMirror()
 
