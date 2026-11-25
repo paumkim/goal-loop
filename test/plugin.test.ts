@@ -1079,6 +1079,28 @@ describe("host subagent reports cannot retrigger a finished goal", () => {
     }
   })
 
+  test("a report seen while terminal stays stale after the session re-arms", async () => {
+    const directory = repository()
+    const { ctx, calls, hooks } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const own = line("the user's own line")
+      const stale = report("ses_worker")
+      hooks.context!(contextEvent([own, stale])) // no goal: stripped and marked as seen
+      const goal = calls.commands.find((command: any) => command.name === "goal")
+      await goal.execute({ sessionID: "ses_1", prompt: { text: "the parser is correct" }, delivery: "steer" })
+      const rearmed = contextEvent([own, stale])
+      hooks.context!(rearmed)
+      expect(rearmed.messages).toEqual([own]) // stale id is not admitted on re-arm
+      const fresh = report("ses_new", "a fresh child")
+      const next = contextEvent([own, fresh])
+      hooks.context!(next)
+      expect(next.messages).toEqual([own, fresh])
+    } finally {
+      await dispose?.()
+    }
+  })
+
   test("a subagent report is never re-added by the trailing-user repair", async () => {
     const directory = repository()
     const { ctx, hooks, storage } = context(directory)

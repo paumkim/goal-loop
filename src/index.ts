@@ -998,9 +998,11 @@ export default Plugin.define({
         kept = kept.filter((message) => {
           const id = backgroundResultID(message)
           if (id === undefined) return true
-          if (!live || seenReports.has(id)) return false
+          // Mark every id we see, even when we strip it: a report that rode a terminal session is stale forever,
+          // so re-arming a goal in the same session must not admit it as fresh (SPEC terminal-injection-dedupe).
+          const fresh = !seenReports.has(id)
           seenReports.add(id)
-          return true
+          return live && fresh
         })
         if (kept.length !== original.length) {
           // Never dispatch a request that does not end on a user turn: strict providers reject it ("The
