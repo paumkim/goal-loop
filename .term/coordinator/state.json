@@ -7551,6 +7551,37 @@
       "submittedAt": "2026-11-25T12:46:03Z",
       "mergedAt": "2026-11-25T12:48:29Z",
       "mergedInto": "dev"
+    },
+    "fix-over-engineering-findings": {
+      "agent": "build",
+      "paths": "docs/changelog.html",
+      "branch": "wt/fix-over-engineering-findings",
+      "worktree": "worktree/wt-fix-over-engineering-findings",
+      "status": "done",
+      "createdAt": "2026-11-25T12:52:32Z",
+      "submittedAt": "2026-11-25T13:52:34Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-25T13:52:34Z",
+      "forcedScopeFiles": [
+        "SPEC.md",
+        "checklist/over-engineering-checklist.md",
+        "dist/tui.js",
+        "packages/coordinator/bin/coordinator",
+        "scripts/wiring-audit.ts",
+        "src/core/dossier.ts",
+        "src/harness.ts",
+        "src/hooks.ts",
+        "src/host-child.ts",
+        "src/index.ts",
+        "src/runtime/controller.ts",
+        "src/tui-actions.ts",
+        "src/tui-keymap.ts",
+        "src/tui.tsx",
+        "test/plugin.test.ts",
+        "test/tui-error-surface.test.ts"
+      ],
+      "mergedAt": "2026-11-25T13:55:15Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
