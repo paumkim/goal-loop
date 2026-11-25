@@ -13,8 +13,9 @@
  * or negative input clamps rather than throwing.
  */
 
-/** One piece of a line, flagged for the paint. Segments always tile the original text in order. */
 import { memoizeBounded } from "./format.ts"
+
+/** One piece of a line, flagged for the paint. Segments always tile the original text in order. */
 interface FindSegment {
   readonly text: string
   readonly match: boolean
