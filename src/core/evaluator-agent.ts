@@ -35,6 +35,8 @@ const ECHO_KEYS_PATTERN = /"(?:condition|condition_echo|echo|goal)"\s*:\s*"((?:[
 /**
  * Pull the echoed condition out of a verdict body. The host's request asks for a `condition` field; tolerate the
  * common aliases and a JSON-ish (strict parse failed) body so a well-behaved judge is not rejected on syntax.
+ * `undefined` means the field is absent; an explicitly present but empty field returns `""` so the verdict gate
+ * can reject it as stale instead of scoring a harness-injected bare request as this turn's verdict.
  */
 export function echoedCondition(body: string): string | undefined {
   let value: unknown
@@ -43,11 +45,11 @@ export function echoedCondition(body: string): string | undefined {
   if (value && typeof value === "object") {
     for (const key of keys) {
       const v = (value as Record<string, unknown>)[key]
-      if (typeof v === "string" && v.trim()) return v.trim()
+      if (typeof v === "string") return v.trim()
     }
   }
   const match = ECHO_KEYS_PATTERN.exec(body)
-  return match?.[1] ? match[1].replace(/\\n/g, "\n").replace(/\\"/g, '"') : undefined
+  return match?.[1] !== undefined ? match[1].replace(/\\n/g, "\n").replace(/\\"/g, '"') : undefined
 }
 
 /**
@@ -100,9 +102,10 @@ const bodyPreview = (body: string): string => body.slice(0, MAX_BODY_PREVIEW)
 /**
  * Turn a native report into the verdict. A failed, unreadable or stale-condition report *throws* so
  * `Evaluator.evaluate` fails closed with `not_met`, rather than scoring a dead or wrong-goal judge as a `met`.
- * When `expectedCondition` is supplied, an echo that is present must match it; a judge that omits the echo (small
- * models often follow the worker's shorter contract) is still accepted — rejecting every echo-less verdict stalled
- * the loop with `not_met` on every turn, which is worse than a bounded staleness risk.
+ * When `expectedCondition` is supplied, an echo that is present must match it — including an explicitly empty one
+ * (a harness-injected bare request), which now fails closed. A judge that omits the echo field altogether is still
+ * accepted — rejecting every echo-less verdict stalled the loop with `not_met` on every turn, which is worse than a
+ * bounded staleness risk.
  */
 export function verdictFromNativeReport(candidate: NativeReportCandidate, expectedCondition?: string) {
   if (candidate.state === "error") throw new Error(`evaluator subagent failed: ${bodyPreview(candidate.body)}`)
