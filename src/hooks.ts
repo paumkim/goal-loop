@@ -11,7 +11,7 @@ import type { AgentMessaging } from "./runtime/messaging.ts"
 import { CLEAR_ALIASES, parseGoalLoopDirective } from "./core/parse.ts"
 import { EVALUATOR_AGENT_ID } from "./core/evaluator-agent.ts"
 import { PLANNER_AGENT_ID } from "./core/planner.ts"
-import { backgroundResultID, carriesGoalGrammar, coordinatorFlow, directive as directivePrompt, systemReminder, TERMINAL_REMINDER } from "./core/prompts.ts"
+import { backgroundResultID, carriesGoalGrammar, coordinatorFlow, directive as directivePrompt, PEER_PARENTS_HINT, systemReminder, TERMINAL_REMINDER } from "./core/prompts.ts"
 import { compactGoalInstructions, stripGoalContext, stripGoalEvaluations, stripGoalNotes, isGoalEvaluationMessage } from "./core/prompts.ts"
 
 export interface HookDeps {
@@ -22,6 +22,8 @@ export interface HookDeps {
   /** Nested headless children are workers: a `/goal-loop` directive becomes plain work text, never a new goal. */
   readonly nestedHeadless: boolean
   readonly messaging: AgentMessaging
+  /** Read-only view of the other parent agents known to be alive (no storage reads, no message bodies). */
+  readonly background: { readonly otherParentAddresses: (exclude: string) => readonly string[] }
   readonly agentIdFor: (sessionID: string) => Promise<string>
   readonly handleBareLoop: (sessionID: string) => Promise<"update" | "status">
   readonly planGoal: (sessionID: string, raw: string) => Promise<PlannedGoal | undefined>
@@ -37,7 +39,7 @@ export interface HookDeps {
 }
 
 export async function registerHooks(deps: HookDeps): Promise<void> {
-  const { ctx, config, controller, evaluator, nestedHeadless, messaging, agentIdFor, handleBareLoop, planGoal, armedPlanScopes, resetPending, isInjectedPrompt, plannerChildren, evaluatorChildren, seenBackgroundResults, isPluginReport, isInternalChildReport, coldReplay } = deps
+  const { ctx, config, controller, evaluator, nestedHeadless, messaging, background, agentIdFor, handleBareLoop, planGoal, armedPlanScopes, resetPending, isInjectedPrompt, plannerChildren, evaluatorChildren, seenBackgroundResults, isPluginReport, isInternalChildReport, coldReplay } = deps
     // ---- hooks
     // OpenCode's own compaction prompt always summarizes the conversation, so an instruction from the user to carry
     // nothing over cannot change its output. /reset-context marks the session; setting `result` here makes the host
@@ -249,16 +251,22 @@ export async function registerHooks(deps: HookDeps): Promise<void> {
       // the session — it is not injected.
       const stillCarriesGoal = Array.isArray(event.messages) ? carriesGoalGrammar(event.messages) : false
       if (!live && stillCarriesGoal && controller.hasTerminalRecord(event.sessionID)) event.system.push({ type: "text", text: TERMINAL_REMINDER })
-      // Unread hint for agent-to-agent messages. A one-line nudge tells the recipient to pull its inbox with
-      // goal_msg_read; the messages themselves are not copied into context, so a retried generation cannot
-      // consume them twice. Judge/planner children never get the hint (they have no tools and no mailbox).
+      // Unread hint and peer-parent signal for agent-to-agent messages. The unread nudge tells the recipient
+      // to pull its inbox with goal_msg_read; the peer line surfaces goal_msg_send/read proactively when
+      // another parent is alive, so workers coordinate without waiting to be told. Neither copies a message
+      // body into context, so a retried generation cannot consume one twice. Judge/planner children get
+      // neither (no tools, no mailbox).
       if (agentID !== EVALUATOR_AGENT_ID && agentID !== PLANNER_AGENT_ID) {
-        const unread = await messaging.count(await agentIdFor(event.sessionID)).catch(() => 0)
+        const address = await agentIdFor(event.sessionID)
+        const unread = await messaging.count(address).catch(() => 0)
         if (unread > 0) {
           event.system.push({
             type: "text",
             text: `goal-loop: ${unread} unread agent message(s). Call goal_msg_read to retrieve and clear them.`,
           })
+        }
+        if (background.otherParentAddresses(address).length > 0) {
+          event.system.push({ type: "text", text: PEER_PARENTS_HINT })
         }
       }
     })

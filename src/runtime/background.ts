@@ -80,6 +80,25 @@ export class BackgroundTracker implements BackgroundPort {
     this.shells.delete(id)
   }
 
+  /**
+   * Addresses of other parent agents known to be alive, i.e. the parent session id of every session that is
+   * not in this session's own family. An address is the session's parent id (`agentIdFor` in the plugin), or
+   * the session id itself for a root. Goal-loop's own children (judge, planner) are machinery, not peers.
+   *
+   * Read-only and in-memory: derived from immutable `parentID` links delivered by `session.created` and
+   * removed by `session.deleted`. No storage scan, no message bodies, no host calls — a probe instance can
+   * surface the same hint without writing anything.
+   */
+  otherParentAddresses(exclude: string): readonly string[] {
+    const out = new Set<string>()
+    for (const [id, parent] of this.parents) {
+      if (id === exclude || this.internal.has(id)) continue
+      const address = parent && parent !== id ? parent : id
+      if (address !== exclude) out.add(address)
+    }
+    return [...out]
+  }
+
   /** Ancestor session ids, nearest first. Cached links are immutable; depth is capped like `descendsFrom`. */
   async ancestorsOf(sessionID: string): Promise<readonly string[]> {
     const ancestors: string[] = []

@@ -7648,6 +7648,25 @@
       "submittedAt": "2026-11-25T16:31:59Z",
       "mergedAt": "2026-11-25T16:34:22Z",
       "mergedInto": "dev"
+    },
+    "remove-nested-headless-evaluator": {
+      "agent": "build",
+      "paths": "src/core/config.ts,src/core/evaluation-gate.ts,src/harness.ts,src/hooks.ts,src/index.ts,test/config-defaults.test.ts,test/plugin.test.ts,docs/changelog.html,SPEC.md,SPEC-workstreams.md",
+      "branch": "wt/remove-nested-headless-evaluator",
+      "worktree": "worktree/wt-remove-nested-headless-evaluator",
+      "status": "claimed",
+      "createdAt": "2026-11-25T17:26:54Z"
+    },
+    "proactive-parent-messaging": {
+      "agent": "build",
+      "paths": "src/index.ts,src/hooks.ts,src/runtime/background.ts,src/core/prompts.ts,test,SPEC.md,SPEC-workstreams.md,docs/changelog.html",
+      "branch": "wt/proactive-parent-messaging",
+      "worktree": "worktree/wt-proactive-parent-messaging",
+      "status": "done",
+      "createdAt": "2026-11-25T17:11:13Z",
+      "submittedAt": "2026-11-25T17:24:48Z",
+      "mergedAt": "2026-11-25T17:27:23Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,

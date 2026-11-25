@@ -17,6 +17,7 @@ import { isNestedHeadless, resolveConfig } from "./core/config.ts"
 import { EVALUATOR_AGENT_ID, EVALUATOR_SYSTEM_PROMPT } from "./core/evaluator-agent.ts"
 import { findRepository, resolveCommitPolicy, resolveProjectRoot } from "./core/git.ts"
 import { parseBool, parseGoalCommand } from "./core/parse.ts"
+import { MESSAGE_WAKE_TEXT } from "./core/prompts.ts"
 import { PLANNER_AGENT_ID, PLANNER_AGENT_TITLE, PLANNER_SYSTEM_PROMPT } from "./core/planner.ts"
 import { renderTranscript } from "./core/transcript.ts"
 import type { UsageSnapshot } from "./core/types.ts"
@@ -420,7 +421,24 @@ export default Plugin.define({
           const text = typeof (input as { text?: unknown }).text === "string" ? (input as { text: string }).text : ""
           if (!to || !text.trim()) return { content: "goal_msg_send needs a non-empty `to` session id and `text`." }
           const from = await agentIdFor(toolContext.sessionID)
+          // Wake only on the empty -> non-empty transition: a burst of messages addressed to a parked parent
+          // produces one nudge, not one turn per message. Probe mode writes nothing, so it wakes nothing.
+          const hadUnread = await messaging.count(to).catch(() => 0)
           const message = await messaging.send(from, to, text)
+          if (!probe && hadUnread === 0) {
+            // "Idle" = no turn executing and no background work delegated. A failed activity check counts as
+            // active (fail closed) so a storage/host hiccup cannot park a session behind an unread message.
+            const active = controller.isExecuting(to) || await controller.isActive(to).catch(() => true)
+            if (!active) {
+              await ctx.session.prompt({
+                sessionID: to,
+                text: MESSAGE_WAKE_TEXT,
+                delivery: "steer",
+              } as Parameters<typeof ctx.session.prompt>[0]).catch((error) => {
+                log.warn("goal message wake failed", { sessionID: to, error: String(error) })
+              })
+            }
+          }
           return { content: `Sent to ${to} from ${from} (id ${message.id}).` }
         },
       })
@@ -632,6 +650,7 @@ export default Plugin.define({
       evaluator,
       nestedHeadless,
       messaging,
+      background,
       agentIdFor,
       handleBareLoop,
       planGoal,
