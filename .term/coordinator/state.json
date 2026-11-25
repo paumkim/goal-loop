@@ -7731,8 +7731,11 @@
       "paths": "src/core/coordinator-wait.ts,src/index.ts,src/core/prompts.ts,test/coordinator-wait.test.ts,SPEC.md,docs/changelog.html,packages/coordinator/README.md",
       "branch": "wt/coordinator-wait-wake",
       "worktree": "worktree/wt-coordinator-wait-wake",
-      "status": "claimed",
-      "createdAt": "2026-11-25T18:26:35Z"
+      "status": "done",
+      "createdAt": "2026-11-25T18:26:35Z",
+      "submittedAt": "2026-11-25T18:41:19Z",
+      "mergedAt": "2026-11-25T18:43:52Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
