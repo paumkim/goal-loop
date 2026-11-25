@@ -5,7 +5,7 @@
  */
 import { describe, expect, test } from "bun:test"
 import stringWidth from "string-width"
-import { AGENT_ICONS, INTENT_TTL_MS, NO_ACTIVITY, activityBadgeCells, activityWord, applyIntentSignal, intentAccent, intentForActivity, intentGlyph, resolveToolIntent, withIntentGlyph, type AgentIntent, type ActivityMap, type IntentSignal } from "../src/tui.tsx"
+import { AGENT_ICONS, INTENT_TTL_MS, NO_ACTIVITY, NOTICE_SIGNALS, activityBadgeCells, activityWord, applyIntentSignal, fadeNotice, intentAccent, intentForActivity, intentGlyph, resolveToolIntent, withIntentGlyph, type AgentIntent, type ActivityMap, type IntentSignal } from "../src/tui.tsx"
 import { pillModel, waitingOnSubagents } from "../src/core/hud.ts"
 import type { GoalSnapshot } from "../src/core/types.ts"
 
@@ -213,6 +213,72 @@ describe("live tool-use lifecycle", () => {
     const state = fold([input("c1", "read")])
     const staleSuccess = applyIntentSignal(state, { type: "tool-success", sessionID: SID, callID: "never-started" })
     expect(staleSuccess).toBe(state)
+  })
+})
+
+describe("tool-result-timed icons", () => {
+  const SID = "ses_preparing"
+  const fold = (signals: readonly IntentSignal[]): ActivityMap =>
+    signals.reduce<ActivityMap>((state, signal) => applyIntentSignal(state, signal), {})
+
+  test("only notices arm the fade timer — an in-flight tool has no local expiry", () => {
+    for (const type of ["permission-asked", "execution-started", "execution-succeeded", "execution-failed", "tool-failed"]) {
+      expect(NOTICE_SIGNALS.has(type as IntentSignal["type"])).toBe(true)
+    }
+    for (const type of ["tool-input", "tool-progress", "tool-success", "permission-replied", "execution-interrupted"]) {
+      expect(NOTICE_SIGNALS.has(type as IntentSignal["type"])).toBe(false)
+    }
+  })
+
+  test("a delegated task keeps its icon across expiry beats while the child prepares", () => {
+    let activity = fold([
+      { type: "execution-started", sessionID: SID },
+      { type: "tool-input", sessionID: SID, callID: "task-1", name: "task" },
+    ])
+    expect(intentForActivity(activity[SID])).toBe("delegating")
+    // Every TTL beat is a no-op: no tool result has been emitted yet, so the pill must not fall back
+    // to the goal-active breath. This is the screenshot case — a still-preparing delegated child.
+    for (let beat = 0; beat < 100; beat++) {
+      const faded = fadeNotice(activity, SID)
+      expect(faded).toBe(activity)
+      expect(intentForActivity(faded[SID])).toBe("delegating")
+    }
+    // The host's tool result is what retires the icon, not the clock.
+    activity = applyIntentSignal(activity, { type: "tool-success", sessionID: SID, callID: "task-1" })
+    expect(intentForActivity(activity[SID])).toBeUndefined()
+  })
+
+  test("an expiry beat fades a notice but leaves other tools visible", () => {
+    const withNotice = fold([
+      { type: "tool-input", sessionID: SID, callID: "c1", name: "read" },
+      { type: "tool-input", sessionID: SID, callID: "c2", name: "write" },
+      { type: "tool-failed", sessionID: SID, callID: "c1" },
+    ])
+    expect(intentForActivity(withNotice[SID])).toBe("error") // notice outranks the running tool
+    const faded = fadeNotice(withNotice, SID)
+    expect(faded[SID]?.notice).toBeUndefined()
+    expect(faded[SID]?.calls).toEqual({ c2: "writing" })
+    expect(intentForActivity(faded[SID])).toBe("writing")
+    expect(fadeNotice(faded, SID)).toBe(faded) // idempotent
+  })
+
+  test("no session or no notice means the expiry beat does not allocate a map", () => {
+    const calls = fold([{ type: "tool-input", sessionID: SID, callID: "c1", name: "bash" }])
+    expect(fadeNotice(calls, SID)).toBe(calls)
+    expect(fadeNotice(calls, "ses_other")).toBe(calls)
+  })
+
+  test("a preparing delegation swaps the rotating goal-active ring for the delegating glyph", () => {
+    const preparing = goal({ sessionID: SID })
+    // Phase 2 is the breath crest (◎): the face the screenshot caught rotating on an active goal.
+    const text = pillModel(preparing, 60_000, false, 80, 2)!.text
+    expect(text.slice(0, 1)).toBe("\u25CE")
+    expect(text).toContain("goal active")
+    const activity = fold([{ type: "tool-input", sessionID: SID, callID: "task-1", name: "task" }])
+    const swapped = withIntentGlyph(text, intentForActivity(activity[SID])!)
+    expect(swapped.glyph).toBe(AGENT_ICONS.delegating.nerd)
+    expect(swapped.rest).toContain("goal active") // the state word is untouched
+    expect(stringWidth(swapped.glyph + swapped.rest)).toBe(stringWidth(text))
   })
 })
 

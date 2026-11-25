@@ -266,11 +266,32 @@ export const intentForActivity = (activity: ToolActivity | undefined): AgentInte
 }
 
 /**
- * How long a tool's intent rides the pill after its last event before the glyph falls back to the breath.
- * Long enough to read a fast burst of tool calls as a sequence of live intents; short enough that an idle
- * turn reads as thinking again instead of freezing on the last tool it happened to call.
+ * How long a transient outcome notice (thinking / done / error / approval) rides the pill before it fades.
+ * An in-flight tool is NOT on this timer: its icon lives on the host's tool-result lifecycle instead —
+ * armed by `tool-input` and retired by `tool-success` / `tool-failed`. A delegated `task` can stay pending
+ * for minutes while its child prepares, and the pill must keep naming that work instead of falling back
+ * to the "goal active" breath before a single tool result has been emitted.
  */
 export const INTENT_TTL_MS = 4_000
+
+/**
+ * Fade a session's transient notice without touching its in-flight calls. Pure so the timer contract is
+ * testable headlessly: a delegated call's icon survives every expiry beat until its actual result lands.
+ */
+export const fadeNotice = (map: ActivityMap, sessionID: string): ActivityMap => {
+  const current = map[sessionID]
+  if (current === undefined || current.notice === undefined) return map
+  return { ...map, [sessionID]: { calls: current.calls, notice: undefined } }
+}
+
+/** Signals that arm a transient notice. Everything else describes a call that lives until its own result. */
+export const NOTICE_SIGNALS: ReadonlySet<IntentSignal["type"]> = new Set([
+  "permission-asked",
+  "execution-started",
+  "execution-succeeded",
+  "execution-failed",
+  "tool-failed",
+])
 
 export default Plugin.define({
   id: "goal-loop.tui",
@@ -287,25 +308,22 @@ export default Plugin.define({
     // Live tool activity, keyed by session — the icon that rides the ambient pill's leading cell. This is
     // view-local like the pin registry: no server state, no RPC, no mirror write. The host's typed event
     // stream is the only source of truth (`session.tool.called` has no tool name; `session.tool.input.started`
-    // does), and every signal is folded through the pure reducer above. A per-session timer expires the icon
-    // back to the breath when the agent goes quiet, so a stale "editing" never freezes on the pill after the
-    // turn has moved on; progress beats refresh it so a long-running tool keeps its icon while it runs.
+    // does), and every signal is folded through the pure reducer above. In-flight calls retire on the host's
+    // tool-result events, the same stream that drives the host's own tool output: a delegated `task` keeps its
+    // delegating icon through the child's whole "preparing" phase instead of timing out into the breath.
+    // Only outcome notices get a local fade timer, since no result event ever clears them.
     const [activity, setActivity] = createSignal<ActivityMap>({})
     const intentTimers = new Map<string, ReturnType<typeof setTimeout>>()
     const noteSignal = (signal: IntentSignal): void => {
       const sid = signal.sessionID
       if (!sid) return
       setActivity((previous) => applyIntentSignal(previous, signal))
+      if (!NOTICE_SIGNALS.has(signal.type)) return
       const pending = intentTimers.get(sid)
       if (pending !== undefined) clearTimeout(pending)
       intentTimers.set(sid, setTimeout(() => {
         intentTimers.delete(sid)
-        setActivity((previous) => {
-          if (!(sid in previous)) return previous
-          const next = { ...previous }
-          delete next[sid]
-          return next
-        })
+        setActivity((previous) => fadeNotice(previous, sid))
       }, INTENT_TTL_MS))
     }
     const toolEventDisposers: Array<() => void> = []
