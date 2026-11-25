@@ -7463,6 +7463,17 @@
       "submittedAt": "2026-11-25T09:34:27Z",
       "mergedAt": "2026-11-25T09:37:18Z",
       "mergedInto": "dev"
+    },
+    "over-eng-checklist": {
+      "agent": "pauk",
+      "paths": "prompts/audit/over-engineering-checklist.md,prompts/README.md",
+      "branch": "wt/over-eng-checklist",
+      "worktree": "worktree/wt-over-eng-checklist",
+      "status": "done",
+      "createdAt": "2026-11-25T09:44:31Z",
+      "submittedAt": "2026-11-25T09:50:50Z",
+      "mergedAt": "2026-11-25T09:53:39Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
