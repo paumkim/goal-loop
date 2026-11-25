@@ -535,10 +535,32 @@ describe("pinSuffix", () => {
 })
 
 describe("pinBudget", () => {
-  test("subtracts the pill text, the pin prefix and one cell of breathing room", () => {
-    expect(pinBudget(80, "p".repeat(40))).toBe(80 - 40 - " · pin: ".length - 1)
+  test("subtracts the pill text, the pin prefix, the caret, the right margin and extra reserved cells", () => {
+    expect(pinBudget(80, "p".repeat(40))).toBe(80 - 40 - " · pin: ".length - 1 - 2)
     // Wide (East Asian) glyphs in the pill text budget by cells, not code units: 20 glyphs × 2 cells = 40 cells
-    expect(pinBudget(80, "世".repeat(20))).toBe(80 - 40 - stringWidth(" · pin: ") - 1)
+    expect(pinBudget(80, "世".repeat(20))).toBe(80 - 40 - stringWidth(" · pin: ") - 1 - 2)
+    // A live activity word is a separate node on the same row; its cells come out of the pin too.
+    expect(pinBudget(80, "p".repeat(40), 10)).toBe(80 - 40 - " · pin: ".length - 1 - 2 - 10)
+    expect(pinBudget(80, "p".repeat(40), Number.NaN)).toBe(pinBudget(80, "p".repeat(40)))
+  })
+
+  test("a pinned pill keeps its caret and right margin at the 80-column floor, with or without an activity badge", () => {
+    // The real composition: model text (budgeted for the badge) + pinSuffix (budgeted again for it),
+    // then the badge text node and the trailing " ▾" the accordion paints. Before the caret and badge
+    // were reserved in pinBudget the row measured width+1 (or more with a badge), clipping the caret.
+    const width = 80
+    const goal = loopedGoal({ condition: "keep the terminal tui display beautiful and legible across every history view", turns: 31 })
+    // No badge: the pin still paints, truncated with an ellipsis, and the caret keeps its margin.
+    const state = pillModel(goal, 2_520_000, false, Math.max(8, width - 1 - 2), 2).text
+    const pinned = state + pinSuffix(goal.condition, pinBudget(width, state), false)
+    expect(pinned).not.toBe(state)
+    expect(pinned.endsWith("…")).toBe(true)
+    // With a badge: the whole row fits; the pin's degradation ladder may drop the pin rather than clip the badge.
+    for (const badge of [9, 11]) {
+      const badgedState = pillModel(goal, 2_520_000, false, Math.max(8, width - 1 - 2 - badge), 2).text
+      const badgedPinned = badgedState + pinSuffix(goal.condition, pinBudget(width, badgedState, badge), false)
+      expect(badge + stringWidth(badgedPinned) + stringWidth(" ▾")).toBeLessThanOrEqual(width - 1)
+    }
   })
 })
 
