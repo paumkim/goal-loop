@@ -7278,8 +7278,19 @@
       "paths": "src/runtime/controller.ts,test/controller.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/active-sessions-abstention-drain",
       "worktree": "worktree/wt-active-sessions-abstention-drain",
+      "status": "done",
+      "createdAt": "2026-11-25T05:45:57Z",
+      "submittedAt": "2026-11-25T05:57:02Z",
+      "mergedAt": "2026-11-25T05:59:38Z",
+      "mergedInto": "dev"
+    },
+    "planner-no-premature-delivery": {
+      "agent": "build",
+      "paths": "src/index.ts,test/plugin.test.ts",
+      "branch": "wt/planner-no-premature-delivery",
+      "worktree": "worktree/wt-planner-no-premature-delivery",
       "status": "claimed",
-      "createdAt": "2026-11-25T05:45:57Z"
+      "createdAt": "2026-11-25T05:53:59Z"
     }
   },
   "mergeLock": null,
