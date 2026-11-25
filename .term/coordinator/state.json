@@ -7267,8 +7267,19 @@
       "paths": "src/core/outcome-telemetry.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/telemetry-pass-count-doc",
       "worktree": "worktree/wt-telemetry-pass-count-doc",
+      "status": "done",
+      "createdAt": "2026-11-25T05:37:42Z",
+      "submittedAt": "2026-11-25T05:44:45Z",
+      "mergedAt": "2026-11-25T05:47:17Z",
+      "mergedInto": "dev"
+    },
+    "active-sessions-abstention-drain": {
+      "agent": "build",
+      "paths": "src/runtime/controller.ts,test/controller.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/active-sessions-abstention-drain",
+      "worktree": "worktree/wt-active-sessions-abstention-drain",
       "status": "claimed",
-      "createdAt": "2026-11-25T05:37:42Z"
+      "createdAt": "2026-11-25T05:45:57Z"
     }
   },
   "mergeLock": null,
