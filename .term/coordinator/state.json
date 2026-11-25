@@ -7417,6 +7417,17 @@
       "status": "submitted",
       "createdAt": "2026-11-25T07:31:45Z",
       "submittedAt": "2026-11-25T07:38:34Z"
+    },
+    "evaluator-require-landing-evidence": {
+      "agent": "build-primary",
+      "paths": "src/core/prompts.ts,test/commit-rule.test.ts,SPEC.md,docs/changelog.html,README.md",
+      "branch": "wt/evaluator-require-landing-evidence",
+      "worktree": "worktree/wt-evaluator-require-landing-evidence",
+      "status": "done",
+      "createdAt": "2026-11-25T07:50:29Z",
+      "submittedAt": "2026-11-25T08:05:58Z",
+      "mergedAt": "2026-11-25T08:10:27Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
