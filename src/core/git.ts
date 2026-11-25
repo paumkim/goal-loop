@@ -12,6 +12,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs"
 import { dirname, isAbsolute, join, resolve } from "node:path"
 import type { CommitPolicy, CommitRequest } from "./types.ts"
+import { isWindowsDrivePathOnPosix } from "./wire.ts"
 
 export interface Repository {
   /** The directory that holds the repository. */
@@ -43,6 +44,11 @@ export function findRepository(start: string): Repository | undefined {
  * into nested folders.
  */
 export function resolveProjectRoot(directory: string): string {
+  // A Windows drive path on a POSIX host is a foreign/test-fixture path, not a directory we can inspect.
+  // Resolving it relative to cwd walks into this checkout's .git, so every repo-scoped writer that anchors
+  // here (failure diagnostics, learning journal, scaffold) lands in the host repository instead. Return the
+  // path untouched: the downstream fixture guards reject it, and no .term artifact leaks into the host repo.
+  if (isWindowsDrivePathOnPosix(directory)) return directory
   return findRepository(directory)?.root ?? resolve(directory)
 }
 

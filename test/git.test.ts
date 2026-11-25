@@ -62,6 +62,14 @@ describe("resolveProjectRoot", () => {
     const plain = scratch()
     expect(resolveProjectRoot(plain)).toBe(plain)
   })
+  test("a Windows-style fixture path on POSIX never anchors at this checkout", () => {
+    // resolve("C:/work/project") is relative to cwd on POSIX, so walking up from it finds this
+    // repo's .git. Every repo-scoped writer would then drop artifacts here instead of nowhere.
+    for (const fake of ["C:/work/project", "D:\\work\\project"]) {
+      expect(resolveProjectRoot(fake)).toBe(fake)
+      expect(resolveProjectRoot(fake)).not.toBe(process.cwd())
+    }
+  })
 })
 
 describe("currentBranch", () => {
