@@ -11,7 +11,7 @@ import type { PlannedGoal } from "./core/planner.ts"
 import { ABSTENTION_REASON, evaluationAbstention } from "./core/evaluation-gate.ts"
 import { EVALUATOR_AGENT_ID, EVALUATOR_AGENT_TITLE, isEvaluatorReport, verdictFromNativeReport } from "./core/evaluator-agent.ts"
 import { PLANNER_AGENT_ID, PLANNER_AGENT_TITLE, parsePlan, planGoalRequest } from "./core/planner.ts"
-import { backgroundResultID, nativeEvaluationRequest, stripGoalEvaluations } from "./core/prompts.ts"
+import { backgroundResultIDs, nativeEvaluationRequest, stripGoalEvaluations } from "./core/prompts.ts"
 import { currentTurnStart, renderParentSummary } from "./core/transcript.ts"
 import { spawnHostChild, type ChildEvent } from "./host-child.ts"
 
@@ -69,10 +69,8 @@ export function createHarness(deps: HarnessDeps) {
     /** A host completion from a harness-owned child is wake plumbing, never worker evidence. `isPluginReport` catches
      * the agent-tagged shape; this catches a report whose metadata is absent or renamed by the child id registered
      * with the background tracker — so restoring the planner's parent link cannot put its raw plan in the worker. */
-    const isInternalChildReport = (message: unknown) => {
-      const id = backgroundResultID(message)
-      return id !== undefined && background().internalAgentOf(id) !== undefined
-    }
+    const isInternalChildReport = (message: unknown) =>
+      backgroundResultIDs(message).some((id) => background().internalAgentOf(id) !== undefined)
     /**
      * An injected wake is wake plumbing, not a user decision. While the goal-owning parent keeps moving, the
      * harness admits each child completion report into its inbox and the plugin's own continuations arrive as
