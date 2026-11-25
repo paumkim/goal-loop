@@ -646,7 +646,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=158 tests=2420 -->
+<!-- spec-check files=158 tests=2421 -->
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
     600000, min 1000). When set, a `met` verdict is held at the verification gate in the controller
@@ -1909,6 +1909,8 @@ replaced by a placeholder and still sent to the judge. Both moved goal state on 
 three signals coexist — `nativeVerdict` (`src/index.ts`), before the judge child is spawned, so no verdict text
 is generated at all. `evaluationAbstention({ condition, hasFreshEvidence, activeSessions })` returns
 `empty-condition`, `no-fresh-evidence` or `active-sessions`, in that order; any other input is judged normally.
+The `condition` input is optional: a harness-injected bare request that omits the field entirely abstains as
+`empty-condition` rather than throwing a `TypeError` that would fail closed and pause the goal.
 `GoalController.evaluate` repeats the cheap signals before writing its pending marker (`isActive` wraps
 `background.busy`, fail-closed on a failed check), and on a returned abstention deletes that marker and settles
 nothing: no turn, history, verdict, terminal state or continuation steer changes. `Evaluator.evaluate` passes

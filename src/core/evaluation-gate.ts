@@ -16,8 +16,11 @@
 export type EvaluationAbstention = "empty-condition" | "no-fresh-evidence" | "active-sessions"
 
 export interface EvaluationGateInput {
-  /** The text inside <condition>; the only goal a verdict may judge. */
-  readonly condition: string
+  /**
+   * The text inside <condition>; the only goal a verdict may judge. A harness-injected bare request can omit the
+   * field entirely, so it is optional: a missing condition abstains exactly like an empty one instead of throwing.
+   */
+  readonly condition?: string
   /**
    * Fresh evidence from the just-finished turn: a non-empty parent summary. Omitted by the controller's
    * early guard, where the digest is not yet available; only the explicit `false` from nativeVerdict abstains.
@@ -39,7 +42,7 @@ export const ABSTENTION_REASON: Readonly<Record<EvaluationAbstention, string>> =
  * also empty of evidence or active, because it is the root cause of a harness-injected bare request.
  */
 export function evaluationAbstention(input: EvaluationGateInput): EvaluationAbstention | undefined {
-  if (!input.condition.trim()) return "empty-condition"
+  if (!input.condition?.trim()) return "empty-condition"
   if (input.hasFreshEvidence === false) return "no-fresh-evidence"
   if (input.activeSessions) return "active-sessions"
   return undefined
