@@ -7673,11 +7673,22 @@
     },
     "universal-improvement-pass": {
       "agent": "build",
-      "paths": "src/core/format.ts,src/core/learning-log.ts,src/core/outcome-telemetry.ts,src/runtime/controller.ts,test/core.test.ts",
+      "paths": "src/core/format.ts,src/core/learning-log.ts,src/core/outcome-telemetry.ts,src/runtime/controller.ts,test/core.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/universal-improvement-pass",
       "worktree": "worktree/wt-universal-improvement-pass",
+      "status": "done",
+      "createdAt": "2026-11-25T17:44:10Z",
+      "submittedAt": "2026-11-25T17:48:27Z",
+      "mergedAt": "2026-11-25T17:51:03Z",
+      "mergedInto": "dev"
+    },
+    "skip-internal-wake-evaluation": {
+      "agent": "build-agent",
+      "paths": "src/runtime/events.ts,test/internal-wake.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/skip-internal-wake-evaluation",
+      "worktree": "worktree/wt-skip-internal-wake-evaluation",
       "status": "claimed",
-      "createdAt": "2026-11-25T17:39:29Z"
+      "createdAt": "2026-11-25T17:51:03Z"
     }
   },
   "mergeLock": null,
