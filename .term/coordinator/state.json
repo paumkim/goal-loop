@@ -7604,6 +7604,17 @@
       "submittedAt": "2026-11-25T14:38:43Z",
       "mergedAt": "2026-11-25T14:41:17Z",
       "mergedInto": "dev"
+    },
+    "pill-icons-tool-result-timer": {
+      "agent": "build",
+      "paths": "src/tui.tsx,src/core/hud.ts,src/core/types.ts,src/runtime/controller.ts,test/intent-icons.test.ts,dist/tui.js,SPEC.md,docs/changelog.html",
+      "branch": "wt/pill-icons-tool-result-timer",
+      "worktree": "worktree/wt-pill-icons-tool-result-timer",
+      "status": "done",
+      "createdAt": "2026-11-25T14:41:48Z",
+      "submittedAt": "2026-11-25T14:58:44Z",
+      "mergedAt": "2026-11-25T15:01:21Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
