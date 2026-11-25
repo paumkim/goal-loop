@@ -12,6 +12,7 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-25 07:21 UTC</code></td><td>refactor: shrink setup, share host-child lifecycle, split dossier sections</td><td>commit</td></tr>
 <tr><td><code>2026-11-25 05:57 UTC</code></td><td>fix(runtime): never send the raw goal before the planner is done</td><td>commit</td></tr>
 <tr><td><code>2026-11-25 05:10 UTC</code></td><td>docs: fold changelog pending for resume-pause-guard</td><td>commit</td></tr>
 <tr><td><code>2026-11-25 05:06 UTC</code></td><td>fix(runtime): keep paused goals paused across injected parent wakes</td><td>commit</td></tr>
@@ -41,7 +42,6 @@
 <tr><td><code>2026-11-24 23:21 UTC</code></td><td>refactor(tui): share one clipboard-copy helper across report actions</td><td>commit</td></tr>
 <tr><td><code>2026-11-24 23:14 UTC</code></td><td>fix(evaluator): fail closed on an explicit empty condition echo</td><td>commit</td></tr>
 <tr><td><code>2026-11-24 18:28 UTC</code></td><td>feat(scripts): add bun run rearm read-only HEAD audit</td><td>commit</td></tr>
-<tr><td><code>2026-11-24 18:04 UTC</code></td><td>fix(evaluator): abstain when the verdict request omits &lt;condition&gt;</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
