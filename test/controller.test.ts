@@ -588,6 +588,30 @@ describe("GoalController", () => {
     expect(h.calls.synthetic).toHaveLength(1)
   })
 
+  test("a check-in resolving after the planning window opened does not steer the parent with the old goal", async () => {
+    await h.set()
+    h.setWork({ subagents: 1, shells: 0 })
+    await h.turn()
+    expect(h.clock.pending).toBe(1)
+
+    // The timer fires and checkin() is waiting on the busy check when a fresh /goal opens the planning window.
+    let releaseBusy!: (work: BackgroundWork) => void
+    h.setBusyFn(() => new Promise<BackgroundWork>((resolve) => { releaseBusy = resolve }))
+    await h.clock.advance(30 * 60_000)
+    h.controller.showPlanning(SID, "raw objective")
+    releaseBusy({ subagents: 1, shells: 0 })
+    h.setBusyFn(undefined)
+    await flush()
+
+    expect(h.calls.synthetic).toHaveLength(0)
+    expect(h.notices.some((n) => n.kind === "checkin")).toBeFalse()
+    // The check was pushed out, not lost: once planning fails the old wait keeps its schedule.
+    h.controller.endPlanning(SID)
+    expect(h.clock.pending).toBe(1)
+    await h.clock.advance(30 * 60_000)
+    expect(h.calls.synthetic).toHaveLength(1)
+  })
+
   test("a deferred goal flips to active on session heartbeats and back to waiting when the session goes quiet — instantly, with no clock tick", async () => {
     await h.set()
     h.setWork({ subagents: 1, shells: 0 })

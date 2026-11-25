@@ -2038,15 +2038,11 @@ The ambient pill's `waiting` state was a hollow ring plus the bare word `waiting
 
 The TUI swaps the leading glyph to the existing `delegating` icon through the same `withIntentGlyph` swap used by live task tools, so the state icon and the activity icon are the same cell. The activity word is not painted here — the state word already carries the message — so the line stays inside its existing cell budget. A new `waitingOnSubagents` predicate in `src/core/hud.ts` owns the glyph-swap decision and is pinned by tests alongside the state-word forms and the persisted count in `test/intent-icons.test.ts` and `test/controller.test.ts`. Verdict gating, check-ins and loop advance are unchanged.
 <!-- workstream:waiting-for-subagent-indicator:end -->
+<!-- workstream:raw-kickoff-waits-for-planner:start -->
+
+The arm-time planner's soft 30s budget cancels the child prompt but no longer ends the wait: planGoal releases the caller only on the child's own terminal event (succeeded / failed / interrupted), re-subscribing if the event stream drops, with a 5-minute hard ceiling. Stale terminal events from a reused child are ignored until a started/delta event proves this generation is live. A /goal opening mid-check-in re-checks the planning window after the busy check, and no continuation steer is dispatched while planning is active, so the original raw goal is delivered only after the planner is really done (or failed).
+<!-- workstream:raw-kickoff-waits-for-planner:end -->
 <!-- per-slug-workstreams:end -->
-
-## Workstream timer-suppress-during-planning — a leftover check-in cannot wake the parent during the arm-time planner (2026-11-25)
-
-`timer-wait-for-completion` made a deferred check-in wait for a judge (and the loop planner after a met verdict), but a fresh `/goal <context>` still had a gap. The arm-time planner distils the raw condition into a child session before `arm()` creates the new record; an idle check-in left over from the goal being replaced stayed armed through that window. When it came due while the planner was running, `checkin()` had no `evaluating` flag to hide behind and dispatched a `resume: true` steer that woke the working session mid-plan.
-
-`showPlanning()` now marks the runtime as planning and disarms a pending check-in at planning start. `endPlanning()` — called on every planner exit — lifts the mark and restores a fresh check-in only when no replacement was armed and the earlier wait is still live. A check-in re-armed by a turn event landing mid-plan is pushed out by a full interval instead of consuming a wake. No verdict, retry, backoff or planning-scope behavior changed.
-
-Verification: `test/controller.test.ts` pins that no synthetic wake or check-in notice lands while the planner is in flight past the old due time, that a failed plan restores the wait's check-in, and that a mid-plan re-arm still waits. Full `bun run check` green (counts computed at gate time).
 
 ## Historical workstreams
 
