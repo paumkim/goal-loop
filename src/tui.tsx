@@ -106,7 +106,7 @@ export type AgentIntent =
   | "error"
   | "delegating"
 
-export interface IntentVisual {
+interface IntentVisual {
   readonly nerd: string
   readonly ascii: string
   readonly label: string
