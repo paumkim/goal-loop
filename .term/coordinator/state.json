@@ -7316,9 +7316,11 @@
       "paths": "src/runtime/messaging.ts,src/index.ts,test/messaging.test.ts,test/plugin.test.ts,test/package-integrity.test.ts,SPEC.md,SPEC-workstreams.md,docs/changelog.html",
       "branch": "wt/agent-messaging",
       "worktree": "worktree/wt-agent-messaging",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-25T06:42:53Z",
-      "submittedAt": "2026-11-25T06:46:34Z"
+      "submittedAt": "2026-11-25T06:46:34Z",
+      "mergedAt": "2026-11-25T06:58:55Z",
+      "mergedInto": "dev"
     },
     "mirror-disable-read-path": {
       "agent": "build",
@@ -7362,6 +7364,30 @@
       "submittedAt": "2026-11-25T06:46:08Z",
       "mergedAt": "2026-11-25T06:50:07Z",
       "mergedInto": "dev"
+    },
+    "merge-churn-reduction-rebase-fifo-anchors-pending": {
+      "agent": "build-primary",
+      "paths": "packages/coordinator/bin/coordinator,scripts/spec-check.ts,scripts/spec-anchors.ts,test/spec-check.test.ts,test/spec-anchors.test.ts,test/package-integrity.test.ts,test/coordinator.test.ts,test/coordinator-lease-races.test.ts,test/coordinator-merge-safety.test.ts,test/spec-role-split.test.ts,SPEC.md,docs/changelog.html,docs/parallel-work.md,docs/config.html,docs/runtime.html,.term/changelog-pending/**",
+      "branch": "wt/merge-churn-reduction-rebase-fifo-anchors-pending",
+      "worktree": "worktree/wt-merge-churn-reduction-rebase-fifo-anchors-pending",
+      "status": "claimed",
+      "createdAt": "2026-11-25T06:51:40Z"
+    },
+    "wake-loop-flat-text-shape": {
+      "agent": "build",
+      "paths": "src/core/prompts.ts,test/notes.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/wake-loop-flat-text-shape",
+      "worktree": "worktree/wt-wake-loop-flat-text-shape",
+      "status": "claimed",
+      "createdAt": "2026-11-25T06:55:13Z"
+    },
+    "shadow-wiring-audit": {
+      "agent": "build",
+      "paths": "scripts/wiring-audit.ts,docs/wiring-audit.md",
+      "branch": "wt/shadow-wiring-audit",
+      "worktree": "worktree/wt-shadow-wiring-audit",
+      "status": "claimed",
+      "createdAt": "2026-11-25T06:57:45Z"
     }
   },
   "mergeLock": null,
