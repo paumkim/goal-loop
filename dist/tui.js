@@ -7540,6 +7540,13 @@ var tui_default = Plugin.define({
         toastError("copy failed", error, sessionID);
       }
     };
+    const copyReport = (report) => {
+      try {
+        return context.renderer.copyToClipboardOSC52(report);
+      } catch {
+        return false;
+      }
+    };
     const exportDossier = (sessionID, goal) => {
       if (!goal || !sessionID)
         return;
@@ -7563,12 +7570,7 @@ var tui_default = Plugin.define({
         const directory = process.cwd();
         const verification = verifyRecord(goal, gitCatFileProbe(directory));
         const report = verifyReportMarkdown(goal, verification, Date.now(), directory);
-        let copied = false;
-        try {
-          copied = context.renderer.copyToClipboardOSC52(report);
-        } catch {
-          copied = false;
-        }
+        const copied = copyReport(report);
         const summary = verifySummaryLine(verification);
         const title = verification.missing > 0 ? "record does not verify" : verification.unknown > 0 ? "record unverifiable" : verification.unique === 0 ? "nothing to verify" : "record verified";
         const variant = verification.missing > 0 ? "error" : verification.unknown > 0 ? "warning" : "success";
@@ -7592,12 +7594,7 @@ var tui_default = Plugin.define({
         const directory = process.cwd();
         const reach = reachRecord(goal, gitAncestorProbe(directory));
         const report = reachReportMarkdown(goal, reach, Date.now(), directory);
-        let copied = false;
-        try {
-          copied = context.renderer.copyToClipboardOSC52(report);
-        } catch {
-          copied = false;
-        }
+        const copied = copyReport(report);
         const summary = reachSummaryLine(reach);
         const title = reach.unreached > 0 ? "record does not reach HEAD" : reach.unknown > 0 ? "record unverifiable" : reach.unique === 0 ? "nothing to place" : "record reaches HEAD";
         const variant = reach.unreached > 0 || reach.unknown > 0 ? "warning" : "success";
@@ -7621,12 +7618,7 @@ var tui_default = Plugin.define({
         const directory = process.cwd();
         const sign = signRecord(goal, gitSignProbe(directory));
         const report = signReportMarkdown(goal, sign, Date.now(), directory);
-        let copied = false;
-        try {
-          copied = context.renderer.copyToClipboardOSC52(report);
-        } catch {
-          copied = false;
-        }
+        const copied = copyReport(report);
         const summary = signSummaryLine(sign);
         const title = sign.unverified > 0 ? "record not under seal" : sign.unknown > 0 ? "record unverifiable" : sign.unique === 0 ? "nothing to attest" : "record under seal";
         const variant = sign.unverified > 0 || sign.unknown > 0 ? "warning" : "success";
@@ -7699,12 +7691,7 @@ var tui_default = Plugin.define({
           return;
         }
         const report = attestationReportMarkdown(result, Date.now(), directory, newest);
-        let copied = false;
-        try {
-          copied = context.renderer.copyToClipboardOSC52(report);
-        } catch {
-          copied = false;
-        }
+        const copied = copyReport(report);
         const summary = attestSummaryLine(result);
         const title = result.regressed > 0 ? "attestation drifted" : result.unknown > 0 ? "attestation unverifiable" : result.unique === 0 ? "nothing to attest" : "attestation holds";
         const variant = result.regressed > 0 || result.unknown > 0 ? "warning" : "success";
