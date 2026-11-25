@@ -1,23 +1,8 @@
 # Universal Improvement Pass
 
-> **Leverage:** a few targeted edits can produce a large behavioral shift — e.g., changing 7 embedding rows reframed a whole system. Prefer precise minimal changes over broad rewrites.
+Improve clarity, consistency, and performance in this project without changing intended behavior unless tests or specification require it. Treat this as the canonical method for the improvement-pass family. Map the layout, modules, hot paths, dependencies, docs, and configuration first, then identify the build and test commands and any project rules. Work in small, scoped units, run the checks after each one, and keep generated artifacts current. Choose the smallest safe fix when something is ambiguous, and record follow-ups rather than pausing.
 
-Improve clarity, consistency, and performance in the current repository without changing intended behavior unless tests or specification require it. Canonical method for the improvement-pass family (see `goal-loop/goal-repo-improvement-pass.md` for the plugin specialization and `maintenance/autonomous-maintainer.md` for the single-unit variant).
-
-## Before acting
-- Map layout, modules, hot paths, deps, docs, and configuration; identify build/test commands, toolchain, and branching/coordinator/release rules.
-- Identify sources of truth (spec, maintainer docs, doc rules) and keep generated/live state files uncommitted as the repo requires.
-- For a single small fix, skip the full inventory and go straight to the smallest verifiable change.
-
-## Method (in order)
-1. **Remove bloat:** delete proven dead/unreachable/redundant items in small, independently mergeable changes.
-2. **Unify:** standardize error/notice vocabularies, config parsing, logging, and import/style; keep code/docs/spec aligned.
-3. **Optimize:** reduce renders/writes/recomputation, bound histories/context, avoid sync hot-path I/O. Show before/after evidence — no "feels faster" claims.
-4. **Guardrails:** no public API/behavior change without spec + tests; add regression tests for risky changes; preserve load-bearing guards (epoch/abort/verify/probe); never skip, weaken, or delete tests.
-
-## Process
-- Work in small scoped units; run required checks per unit and after integration; keep generated artifacts current and the tree clean.
-- If risky or ambiguous, choose the smallest safe fix and record follow-ups; do not pause mid-run.
-
-## Output
-Per unit: scope/slug/paths, changes (`file:line`), deletions, before/after evidence, check/merge result. Final: files removed, LOC delta, artifact/test-count deltas, pasted check output.
+- Remove proven dead or redundant items in small, independently mergeable changes.
+- Unify error and logging vocabularies, config parsing, and import style across modules.
+- Optimize measured hot paths with before and after evidence, not guesses.
+- Preserve load-bearing guards and never skip, weaken, or delete tests.

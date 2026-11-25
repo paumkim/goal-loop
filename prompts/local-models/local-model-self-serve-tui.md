@@ -1,32 +1,12 @@
-# Fully Self-Serve Local Models in TUI
+# Make Local Models Fully Self-Serve in the TUI
 
-> **Leverage:** a few targeted edits can produce a large behavioral shift — e.g., changing 7 embedding rows reframed a whole system. Prefer precise minimal changes over broad rewrites.
+Make the local-model experience fully usable from the TUI with no terminal commands or jargon. A user should be able to discover, install, configure, run, switch, and repair local models entirely through clickable in-app settings.
 
-Make the local-model experience fully usable from the TUI with no terminal or jargon required.
+- Discover models by scanning chosen folders, showing name, size, format, and status, with folders added through a picker.
+- Install from a catalog where feasible, with size and fit guidance, progress, cancel, and recommended options.
+- Detect hardware automatically, suggest safe defaults in plain language, and warn when a model will not fit.
+- Load, unload, and switch with one click, honest progress, and plain-language failures offering one fix.
+- Expose human-meaningful memory, speed, and quality controls that persist per model.
+- Repair common runtime, port, and missing-file problems, and hide technical detail behind Advanced disclosures.
 
-## Outcome
-A user can discover, install, configure, run, switch, and repair local models entirely through clickable in-app settings.
-
-## Discover current implementation
-- Inspect existing settings UI, model discovery/scanning, server/runtime lifecycle, metadata readers, config surface, API/routes/handlers, and framework adapters.
-- Preserve architecture boundaries, persistence conventions, and project rules (no generated/vendored/temp edits, respect naming/IDs, follow branch/worktree/commit workflow).
-
-## Required capabilities (all in TUI)
-1. **Discover:** scan default folders and show models with name, size, format, and status (Ready/Loading/Error). Add/remove folders via UI picker, not typed paths.
-2. **Install:** search/download from a catalog (where feasible), show size/fit guidance, progress/cancel, and recommended quantization/options.
-3. **Fit assist:** detect hardware/resources automatically and suggest safe defaults in plain language; warn when too large and offer alternatives.
-4. **Run & switch:** one-click load/unload/switch with honest progress/cancel; failures explained plainly with a single suggested fix action.
-5. **Tune:** expose human-meaningful controls (memory/speed/quality tradeoffs) mapped to technical flags internally; persist per-model settings.
-6. **Repair:** detect common breakages (runtime/server issues, port conflicts, missing/moved files, memory errors) and offer one-click fixes where possible.
-7. **Explain:** beginner-friendly labels and help; hide technical detail behind Advanced disclosures.
-
-## UX principles
-- Mouse-first; keyboard as courtesy.
-- No jargon in default flow; every action has immediate feedback and is reversible.
-- Errors state what happened and offer a way forward.
-
-## Definition of done
-- A fresh non-technical user can complete the full flow by clicks only: add folder, find/install model, check fit, load/chat, adjust, switch, and recover from failure.
-- Tests cover discovery, fit/config derivation, state transitions, empty states, and error paths.
-- Relevant typecheck, lint, focused tests, and smoke/build checks pass with quoted evidence.
-- Report "landed" only with commit hash or quoted output.
+Keep it mouse-first, reversible, with immediate feedback. Add tests for discovery, fit derivation, state transitions, empty states, and error paths.

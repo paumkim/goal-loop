@@ -1,156 +1,113 @@
 # Prompt Library
 
-> **Leverage:** a few targeted edits can produce a large behavioral shift — e.g., changing 7 embedding rows reframed a whole system. Prefer precise minimal changes over broad rewrites.
+Pick a prompt, copy its whole contents, and paste it as your instruction in an
+agent session started in the project you want to change. Every prompt assumes the
+current directory is that project. Replace `<placeholder>` values before you
+paste.
 
-Focused, copy-paste prompts for common development workflows.
+Each prompt states an outcome. It does not prescribe steps. Start from a vague
+goal and let the agent discover the project's commands, conventions, and checks.
 
-## How to use
-1. Open a terminal in your preferred project directory.
-2. Start your CLI/agent session from that directory.
-3. Copy the full contents of a prompt file and paste it as your instruction.
-4. Do not run from the wrong directory: prompts assume the current working directory is the target repository unless stated otherwise.
+## Action
 
-## Organization
-- `action/` — hands-on execution: boot, build, generate, wire up, and verify real artifacts
-- `audit/` — codebase audits, regression hunting, and review passes
-- `coordinator/` — claim/submit/merge coordinator workflows
-- `development/` — daily development workflows: implementation, debugging, review, refactors, upgrades, and orientation
-- `docs/` — documentation systems and maintainer docs
-- `goal-loop/` — goal-driven improvement loops
-- `local-models/` — local model setup, routing, and UX
-- `maintenance/` — cleanup, consistency, dependency health, and upkeep
-- `planning/` — scope, break down, and de-risk work before coding
-- `project/` — bootstrap and project-lifecycle setup
-- `release/` — verification, promotion, landing, and rebuild flows
-- `tui/` — terminal UI fixes, polish, features, and debugging
+Build or run a real artifact and show that it works.
 
-## Action prompts
+- [Add a CLI command](action/add-cli-command.md): add and exercise a new CLI command.
+- [Add an end-to-end test](action/add-end-to-end-test.md): drive a real user flow through the app.
+- [Apply a database migration](action/apply-database-migration.md): author, apply, and roll back a schema change.
+- [Automate a repetitive task](action/automate-repetitive-task.md): turn a repeated manual step into a verified command.
+- [Boot and smoke test the app](action/boot-and-smoke-test-app.md): take a clean checkout to a live request.
+- [Build a release artifact](action/build-release-artifact.md): build and smoke test the distributable.
+- [Containerize the app](action/containerize-app.md): add an image build and serve a request from it.
+- [Generate an API client](action/generate-api-client.md): regenerate client code and types from the spec.
+- [Generate reference docs](action/generate-reference-docs.md): generate docs from code and check freshness.
+- [Seed local data](action/seed-local-data.md): add deterministic seed data and prove two runs match.
+- [Set up a CI check](action/set-up-ci-check.md): add a CI job that enforces a real check.
+- [Wire a feature flag](action/wire-feature-flag.md): add a flag with a safe default and tests for both states.
 
-Index of `prompts/action/`. Copy a file's full contents and paste it as your instruction. These prompts make the agent do concrete work — run, build, generate, wire up, and verify — not just analyze.
+## Audit
 
-- `add-cli-command.md` — use to add a CLI command or subcommand end-to-end with help, tests, and a real invocation.
-- `add-end-to-end-test.md` — use to write and run an E2E test that drives the real app through a user-facing flow.
-- `apply-database-migration.md` — use to author, apply, and roll back a schema migration against a local database.
-- `automate-repetitive-task.md` — use to turn a repeated manual task into a documented, verified command.
-- `boot-and-smoke-test-app.md` — use to take a clean checkout to a running app and prove it responds to a real request.
-- `build-release-artifact.md` — use to build the real distributable and smoke-test the artifact itself, not the dev server.
-- `containerize-app.md` — use to add a container build and prove the image serves a real request.
-- `generate-api-client.md` — use to regenerate an API client/SDK/types from the repo's spec and verify it matches the contract.
-- `generate-reference-docs.md` — use to generate reference docs from code/annotations and verify freshness.
-- `seed-local-data.md` — use to create deterministic local seed data and prove two runs are identical.
-- `set-up-ci-check.md` — use to add a CI job that enforces a real check, verified locally before handoff.
-- `wire-feature-flag.md` — use to add a feature flag with a safe default, code guards, and tests for both states.
+Find problems and prove them before changing code.
 
-## Audit prompts
+- [Bug regression audit](audit/bug-regression-audit.md): audit recent changes and fix only proven defects.
+- [Over-engineering checklist](audit/over-engineering-checklist.md): record an evidence-backed checklist of bloat and messy code.
+- [Security review](audit/security-review.md): triage security risks and fix confirmed findings.
 
-Index of `prompts/audit/`. Copy a file's full contents and paste it as your instruction.
+## Coordinator
 
-- `bug-regression-audit.md` — use to audit recent changes for bugs/regressions in an isolated worktree and fix only proven defects.
-- `over-engineering-checklist.md` — use to scan the repo for over-engineering and messy code and record an evidence-backed checklist in `checklist/` for ongoing reference.
-- `security-review.md` — use to review code for security risks, prioritize confirmed findings, and fix issues with evidence.
+Work through a claim and merge workflow.
 
-## Coordinator prompts
+- [Drain the merge queue](coordinator/drain-merge-queue.md): validate and integrate queued work.
+- [Implement a coordinator](coordinator/implement-coordinator.md): design a claim, worktree, submit, and merge flow.
 
-Index of `prompts/coordinator/`. Copy a file's full contents and paste it as your instruction.
+## Development
 
-- `drain-merge-queue.md` — use to clear a coordinator merge queue by validating, integrating, and reporting queued work.
-- `implement-coordinator.md` — use to design or implement a CLI-independent coordinator system in a repository.
-- `single-agent-coordinator.md` — use to run coordinator-style isolated work as a single agent following the repo's workflow.
+Daily work: implement, debug, review, and upgrade.
 
-## Development prompts
+- [Address review feedback](development/address-review-feedback.md): resolve each review comment with evidence.
+- [Check an API contract](development/api-contract-check.md): verify producers and consumers agree, then regenerate derived files.
+- [Upgrade a dependency](development/dependency-upgrade.md): upgrade one dependency with a clean revert path.
+- [Review the current diff](development/diff-self-review.md): catch defects, scope leaks, and missing tests before handoff.
+- [Audit error handling](development/error-handling-audit.md): fix swallowed failures and inconsistent error vocabulary.
+- [Fix failing checks](development/fix-failing-checks.md): find the root cause of each red check and fix it.
+- [Orient in a new repo](development/fresh-repo-orientation.md): map layout, commands, config, and contribution gates.
+- [Implement a feature](development/implement-feature.md): deliver a requested feature end to end in a small slice.
+- [Investigate performance](development/performance-investigation.md): profile a symptom, fix the measured bottleneck, and show before and after.
+- [Reproduce and minimize a bug](development/reproduce-and-minimize-bug.md): get to a minimal reproduction, root cause, and regression test.
+- [Refactor safely](development/safe-refactor.md): restructure code without changing behavior.
+- [Write tests](development/write-tests.md): add focused tests for existing behavior and edge cases.
 
-Index of `prompts/development/`. Copy a file's full contents and paste it as your instruction; run one at a time and verify after each.
+## Docs
 
-- `address-review-feedback.md` — use to work through review comments systematically with an explicit disposition and evidence for each.
-- `api-contract-check.md` — use to verify producers and consumers of an API or config contract still agree, then regenerate derived files.
-- `change-summary-and-pr-description.md` — use to write a short, accurate change summary or PR description from the final diff.
-- `dependency-upgrade.md` — use to upgrade one dependency through the package manager with a clean revert path and full checks.
-- `diff-self-review.md` — use before committing or handing off to review the current diff for defects, scope leaks, and missing tests.
-- `error-handling-audit.md` — use to find and fix swallowed failures, missing handling, and inconsistent error vocabulary.
-- `fix-failing-checks.md` — use to diagnose and fix failing build, lint, typecheck, test, or CI checks without hiding the root cause.
-- `fresh-repo-orientation.md` — use to map an unfamiliar repo's layout, commands, config, and contribution gates without guessing.
-- `implement-feature.md` — use to implement a requested feature end-to-end with scoped changes, tests, and verification.
-- `performance-investigation.md` — use to profile a real performance symptom, fix the measured bottleneck, and prove before/after improvement.
-- `reproduce-and-minimize-bug.md` — use to turn a vague bug report into a minimal reproduction, a stated root cause, and a regression test.
-- `safe-refactor.md` — use to restructure code without changing behavior, with a baseline, regression tests, and per-step checks.
-- `write-tests.md` — use to add focused tests for existing behavior, covering meaningful paths and edge cases without weakening the suite.
+- [Build a docs freshness radar](docs/docs-system-freshness-radar.md): add a docs system with metadata-driven freshness tracking.
+- [Package agent docs](docs/package-agent-docs.md): write maintainer docs from the actual codebase.
+- [Write a README](docs/write-or-update-readme.md): make the README match verified commands and behavior.
 
-## Docs prompts
+## Local models
 
-Index of `prompts/docs/`. Copy a file's full contents and paste it as your instruction.
+- [Fix local model chat routing](local-models/local-model-chat-routing-fix.md): make chat requests reach the intended local backend.
+- [Make local models self-serve in a TUI](local-models/local-model-self-serve-tui.md): let a user discover, install, run, tune, and repair models through the UI.
 
-- `docs-system-freshness-radar.md` — use to build a local docs system with metadata-driven freshness tracking and a radar/dashboard.
-- `package-agent-docs.md` — use to create or refresh package-level agent/maintainer documentation from the actual codebase.
-- `write-or-update-readme.md` — use to create or update a README so it matches verified commands, structure, and current project behavior.
+## Maintenance
 
-## Goal loop prompts
+Cleanup and consistency work, one verified unit at a time.
 
-Index of `prompts/goal-loop/`. Copy a file's full contents and paste it as your instruction.
+- [Autonomous maintainer](maintenance/autonomous-maintainer.md): deliver exactly one committed, verified unit from a task list.
+- [Remove dead code](maintenance/dead-code-removal.md): delete code you can prove has no consumer.
+- [Clean up debug statements](maintenance/debug-statement-cleanup.md): remove temporary prints while keeping intentional logging.
+- [Deduplicate a dependency](maintenance/dependency-dedupe.md): unify one duplicate dependency version per cycle.
+- [Audit dependency security](maintenance/dependency-security-audit.md): triage advisories and apply only safe patched upgrades.
+- [Check docs freshness](maintenance/docs-freshness-check.md): fix documentation that drifted from code and config.
+- [Reconcile env config drift](maintenance/env-config-drift.md): match sample config to the variables the code reads.
+- [Normalize format and lint](maintenance/format-lint-normalize.md): conform to the project's formatter and linter config.
+- [Sweep git hygiene](maintenance/git-hygiene-sweep.md): tidy local branches, stashes, and ignores without rewriting history.
+- [Scan for secret leaks](maintenance/secret-leak-scan.md): find and remove committed credentials without printing them.
+- [Check test health](maintenance/test-health-check.md): fix root-cause test failures without lowering coverage.
+- [Triage TODOs](maintenance/todo-triage.md): turn scattered TODO comments into tracked work or delete stale noise.
+- [Run a universal improvement pass](maintenance/universal-improvement-pass.md): improve clarity, consistency, and measured performance in the current directory.
 
-- `goal-repo-improvement-pass.md` — use for a goal-loop/plugin-specific pass (hot paths, gates, generated artifacts); shares the method with the universal pass.
+## Planning
 
-## Local model prompts
+- [Plan a feature](planning/plan-feature.md): turn a request into scoped, ordered, verifiable work units.
 
-Index of `prompts/local-models/`. Copy a file's full contents and paste it as your instruction.
+## Project
 
-- `local-model-chat-routing-fix.md` — use to diagnose and fix local model chat routing so requests reach the intended local backend.
-- `local-model-self-serve-tui.md` — use to make local models fully self-serve in a TUI, from discovery/setup to use.
-- `local-model-settings-setup.md` — use to add an easy settings flow for configuring local model providers and defaults.
+- [Bootstrap a new project](project/bootstrap-new-project.md): start a minimal, verified project layout with tooling and tests.
 
-## Maintenance prompts
+## Release
 
-Index of `prompts/maintenance/`. Copy a file's full contents and paste it as your instruction; run one at a time and verify after each.
+- [Land an integration branch](release/land-dev-to-main.md): land work to the release branch through the project's sanctioned flow.
+- [Review and promote a release](release/review-and-promote-release.md): review merged work, fix real defects, and promote with evidence.
 
-- `autonomous-maintainer.md` — use to deliver exactly one committed, verified unit in an isolated worktree; also the default workflow prompt for `prompter`.
-- `dead-code-removal.md` — use to remove provably dead code in small units with consumer evidence and full checks.
-- `debug-statement-cleanup.md` — use to remove temporary debug prints/statements while preserving intentional logging and required literals.
-- `dependency-dedupe.md` — use to unify one duplicate dependency version per cycle (same-major, safe only), recording and skipping major-gap or transitive/alias cases.
-- `dependency-security-audit.md` — use to run the repo's dependency audit, triage advisories, and apply only safe patched upgrades with full checks.
-- `docs-freshness-check.md` — use to find and fix documentation that has drifted from the code and configuration it describes.
-- `env-config-drift.md` — use to reconcile sample env/config files with the variables the code actually reads, without printing real secrets.
-- `format-lint-normalize.md` — use to bring the repo into conformance with its own formatter/linter config without changing behavior.
-- `git-hygiene-sweep.md` — use to tidy local git state (branches, stashes, ignores) without rewriting history or discarding anyone's work.
-- `remove-model-attribution.md` — use to strip AI model/tool attribution stamps while keeping legitimate code and required literals.
-- `secret-leak-scan.md` — use to detect and remove accidentally committed credentials without printing secret values or rewriting history.
-- `test-health-check.md` — use to run the suite and fix root-cause failures without lowering coverage, skipping, or deleting tests.
-- `todo-triage.md` — use to turn scattered TODO/FIXME/HACK/XXX comments into tracked work or delete stale noise.
-- `universal-improvement-pass.md` — use as the canonical improvement-pass method; the goal-loop pass is its repo-specific specialization.
+## TUI
 
-## Planning prompts
-
-Index of `prompts/planning/`. Copy a file's full contents and paste it as your instruction.
-
-- `plan-feature.md` — use before coding to turn a request into scoped, ordered, verifiable work units with risks and assumptions.
-
-## Project prompts
-
-Index of `prompts/project/`. Copy a file's full contents and paste it as your instruction.
-
-- `bootstrap-new-project.md` — use to start a new project from scratch with a minimal verified layout, tooling, tests, and README.
-
-## Release prompts
-
-Index of `prompts/release/`. Copy a file's full contents and paste it as your instruction.
-
-- `land-dev-to-main.md` — use to land an integration branch to the release branch through the repository's sanctioned flow.
-- `merge-coordinator-to-main.md` — use to merge coordinator-managed work into the release branch and rebuild required artifacts.
-- `review-and-promote-release.md` — use to review merged work, fix real defects, and promote a release with verification evidence.
-
-## TUI prompts
-
-Index of `prompts/tui/`. Copy a file's full contents and paste it as your instruction.
-
-- `behavior-control-settings.md` — use to add or refine TUI settings that control agent behavior with clear UX and persistence.
-- `fix-post-send-flicker.md` — use to diagnose and fix transcript flicker that appears after sending a message in a TUI.
-- `headless-debug-frame-protocol.md` — use to define or debug a headless frame protocol for inspecting TUI rendering state.
-- `polish-evaluator.md` — use to evaluate a TUI polish pass against quality criteria and report concrete issues.
-- `polish-pass.md` — use to execute a focused TUI polish pass with small, verified visual/interaction improvements.
-- `sticky-note-capture.md` — use to add persistent sticky-note capture in a TUI without disrupting core workflows.
-- `transcript-verbosity-consistency.md` — use to normalize transcript verbosity and remove dead or inconsistent rendering paths.
+- [Add behavior control settings](tui/behavior-control-settings.md): add settings that control agent behavior with clear UX and persistence.
+- [Fix post-send flicker](tui/fix-post-send-flicker.md): stop the transcript from flickering after a message is sent.
+- [Run a TUI polish pass](tui/polish-pass.md): make small, verified visual and interaction improvements.
+- [Add sticky note capture](tui/sticky-note-capture.md): let users pin notes in the TUI without disrupting core flows.
 
 ## Conventions
-- Prompts are written to be self-contained and low-bloat.
-- Discover repo-specific paths, commands, and conventions from the current project before acting.
-- Prefer small, verifiable changes with quoted command output as evidence.
-- When a prompt mentions coordinator or release tooling, use the mechanisms that exist in the current repository; if they do not exist, report that clearly.
-- The three improvement passes share one method: `maintenance/universal-improvement-pass.md` is canonical, `goal-loop/goal-repo-improvement-pass.md` is the plugin specialization, and `maintenance/autonomous-maintainer.md` is the single-unit variant. Prefer the narrowest one that fits the task.
+
+- The current directory is the target unless a prompt says otherwise.
+- Discover commands and rules from the project itself before acting.
+- If a workflow a prompt mentions does not exist in the project, say so rather than inventing one.
