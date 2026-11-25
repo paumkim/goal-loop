@@ -19,6 +19,8 @@ export interface HookDeps {
   readonly config: GoalConfig
   readonly controller: GoalController
   readonly evaluator: Evaluator
+  /** Nested headless children are workers: a `/goal-loop` directive becomes plain work text, never a new goal. */
+  readonly nestedHeadless: boolean
   readonly messaging: AgentMessaging
   /** Read-only view of the other parent agents known to be alive (no storage reads, no message bodies). */
   readonly background: { readonly otherParentAddresses: (exclude: string) => readonly string[] }
@@ -37,7 +39,7 @@ export interface HookDeps {
 }
 
 export async function registerHooks(deps: HookDeps): Promise<void> {
-  const { ctx, config, controller, evaluator, messaging, background, agentIdFor, handleBareLoop, planGoal, armedPlanScopes, resetPending, isInjectedPrompt, plannerChildren, evaluatorChildren, seenBackgroundResults, isPluginReport, isInternalChildReport, coldReplay } = deps
+  const { ctx, config, controller, evaluator, nestedHeadless, messaging, background, agentIdFor, handleBareLoop, planGoal, armedPlanScopes, resetPending, isInjectedPrompt, plannerChildren, evaluatorChildren, seenBackgroundResults, isPluginReport, isInternalChildReport, coldReplay } = deps
     // ---- hooks
     // OpenCode's own compaction prompt always summarizes the conversation, so an instruction from the user to carry
     // nothing over cannot change its output. /reset-context marks the session; setting `result` here makes the host
@@ -69,6 +71,14 @@ export async function registerHooks(deps: HookDeps): Promise<void> {
       const goalLoop = parseGoalLoopDirective(text)
       if (goalLoop) {
         const objective = goalLoop.objective
+        // A nested headless worker shares the goal owner's storage and directory. Arming here started a
+        // second evaluator on the same work, whose different judge prefix and digest could disagree with
+        // the live terminal's verdict. Strip the directive into plain work text and leave the verdict to
+        // the owner: what this child reports back is still judged there.
+        if (nestedHeadless) {
+          event.prompt.text = objective
+          return
+        }
         // A registered-command invocation classifies `clear|stop|...` through parseGoalCommand, but a raw
         // `/goal-loop[-N] clear` line reaches this hook directly. Without the same guard it armed a loop whose
         // objective was "clear" instead of ending the loop (docs/install.html).

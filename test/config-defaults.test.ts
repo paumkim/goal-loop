@@ -11,7 +11,7 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import { DEFAULTS, resolveConfig } from "../src/core/config.ts"
+import { DEFAULTS, isNestedHeadless, resolveConfig } from "../src/core/config.ts"
 
 const ROOT = join(import.meta.dir, "..")
 const readme = readFileSync(join(ROOT, "README.md"), "utf8")
@@ -250,5 +250,14 @@ describe("config defaults — documented vs code", () => {
     expect(norm(readmeRows.get("coordinator"))).toBe("auto")
     expect(norm(htmlRows.get("coordinator"))).toBe("auto")
     expect(resolved.commit.coordinator).toBe("auto")
+  })
+
+  test("nested headless detection only fires for a positive depth marker", () => {
+    expect(isNestedHeadless({})).toBe(false)
+    expect(isNestedHeadless({ OPENCODE_HEADLESS_DEPTH: "0" })).toBe(false)
+    expect(isNestedHeadless({ OPENCODE_HEADLESS_DEPTH: "1" })).toBe(true)
+    expect(isNestedHeadless({ OPENCODE_HEADLESS_DEPTH: " 3 " })).toBe(true)
+    expect(isNestedHeadless({ OPENCODE_HEADLESS_DEPTH: "not-a-number" })).toBe(false)
+    expect(isNestedHeadless({ OPENCODE_HEADLESS_DEPTH: "-1" })).toBe(false)
   })
 })

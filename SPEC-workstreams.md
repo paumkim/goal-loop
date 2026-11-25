@@ -22,6 +22,7 @@ there.
 
 | Workstream | Lease slug | Summary |
 | --- | --- | --- |
+| merge-churn-reduction-rebase-fifo-anchors-pending | `merge-churn-reduction-rebase-fifo-anchors-pending` | wait-rebase, FIFO landing and append-only spec anchors |
 | CCIII | `proactive-strategy-escalation` | proactive strategy escalation replaces the repeated-failure pause |
 | CCIV | `bounded-failure-diagnostics` | one diagnostic artifact per failure streak (stable per-session signature path) |
 | CCV | `universal-no-progress-recognition` | one universal no-progress recognizer shared by plain goals and loops |
@@ -10489,6 +10490,12 @@ Verification: `test/plugin.test.ts` pins both `ctx.session.create` calls as `par
 
 Verification: `test/controller.test.ts` pins that no synthetic wake or check-in notice lands while the planner is in flight past the old due time, that a failed plan restores the wait's check-in, and that a mid-plan re-arm still waits. Full `bun run check` green (counts computed at gate time).
 
+## Workstream merge-churn-reduction-rebase-fifo-anchors-pending — wait-rebase and FIFO landing, append-only spec anchors (2026-11-25)
+
+`merge-next --wait` now auto-rebases a stale target onto the current dev and re-runs the gate before landing;
+FIFO is enforced (non-head leases need `--force`, or `--wait-for-turn` to wait for the turn). SPEC.md prose is
+append-only at per-slug anchors; changelog notes go to `.term/changelog-pending/<slug>.md` and are folded by
+merge-next. The spec gate computes counts at check time and the package test uses a relaxed band.
 ## Workstream evaluator-planner-subagent-child-reuse — evaluator and planner are reused parent-linked subagent children (2026-11-24)
 
 Two earlier workstreams (`evaluator-goal-achieved-planner` and `planner-parentless-completion`) removed the
