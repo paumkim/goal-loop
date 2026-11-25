@@ -1921,6 +1921,18 @@ their exact prompt, reason and state transitions. Regression tests: `test/evalua
 predicate and its precedence; `test/evaluator.test.ts` pins pass-through with no generation or second vote;
 `test/controller.test.ts` pins zero goal-state mutation on an abstention.
 
+### Explicit empty condition echo fails closed (empty-condition-echo-fails-closed, 2026-11-24)
+
+`echoedCondition()` treated an explicitly empty echo (`"condition": ""`) the same as an absent echo field, so a
+verdict produced from a harness-injected bare `<goal-evaluation>` request could be accepted as this turn's verdict
+with no condition of its own. It now returns `""` for a present-but-empty field while still returning `undefined`
+when no echo field exists, and `verdictFromNativeReport()` rejects the empty echo as a stale condition whenever an
+expected condition is supplied. A judge that genuinely omits the echo remains accepted — rejecting every echo-less
+verdict previously stalled the loop with `not_met` on every turn. No other caller or exported shape changes.
+
+Verification: `test/core.test.ts` pins both forms (strict JSON and JSON-ish fallback) of the empty echo returning
+`""`, plus the fail-closed verdict and the still-accepted omitted echo; focused suite 186 pass / 0 fail.
+
 ## Historical workstreams
 
 Workstreams older than the "Recent workstreams" section above are archived verbatim in

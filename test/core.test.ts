@@ -1450,6 +1450,10 @@ describe("native evaluator verdict", () => {
     expect(echoedCondition('{"verdict":"met","echo":"Reply with DONE"}')).toBe("Reply with DONE")
     expect(echoedCondition('{"verdict":"met","reason":"bad \" quote","condition":"Reply with DONE"}')).toBe("Reply with DONE")
     expect(echoedCondition('{"verdict":"met","reason":"no echo"}')).toBeUndefined()
+    // An explicitly present but empty echo is distinct from a missing field: the verdict gate uses the
+    // empty string to fail closed on a harness-injected bare request, while a missing field stays tolerated.
+    expect(echoedCondition('{"verdict":"met","condition":""}')).toBe("")
+    expect(echoedCondition('{"verdict":"met","reason":"bad \\" quote","condition":""}')).toBe("")
   })
 
   test("echoMatches accepts exact, punctuated and paraphrased echoes but rejects a different goal", () => {
@@ -1512,6 +1516,10 @@ describe("native evaluator verdict", () => {
     // every echo-less verdict stalled the loop on not_met for every turn.
     const noEcho = { key: "z", state: "completed", body: '{"verdict":"met","reason":"the reply was DONE"}' }
     expect(verdictFromNativeReport(noEcho, "Reply with the single word DONE.")).toEqual({ verdict: "met", reason: "the reply was DONE" })
+    // An explicit empty echo (a harness-injected bare request) is not the same as an omitted field: it cannot
+    // name the armed condition, so it fails closed instead of scoring as this turn's verdict.
+    const emptyEcho = { key: "e", state: "completed", body: '{"verdict":"met","reason":"no evidence","condition":""}' }
+    expect(() => verdictFromNativeReport(emptyEcho, "Reply with the single word DONE.")).toThrow(/judged a stale condition/)
   })
 
   test("every fail-closed verdict error clips the raw body at one shared 500-char preview", () => {
