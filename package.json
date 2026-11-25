@@ -65,6 +65,7 @@
     "docs:watch": "bun scripts/docs-watch.ts watch",
     "docs:once": "bun scripts/docs-watch.ts once",
     "rearm": "bun scripts/rearm.ts",
+    "diag": "bun scripts/diagnostics-summary.ts",
     "check:dist": "bun scripts/build.ts --check"
   },
   "dependencies": {

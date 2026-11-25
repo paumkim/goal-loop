@@ -2011,6 +2011,23 @@ Verification: `test/git.test.ts` pins that both slash variants of a Windows fixt
 instead of this checkout's root; `test/controller.test.ts` pins that a three-turn repeated-failure streak in the
 default fixture session still rotates strategy but cites no diagnostic artifact. Full `bun run check` green.
 <!-- workstream:diagnostics-artifact-fixture-leak:end -->
+<!-- workstream:diagnostics-summary-tool:start -->
+
+### diagnostics-summary-tool — a read-only report over the repeated-failure trail
+
+The `.term/goal-loop/diagnostics/` directory is the durable evidence trail written on every
+repeated-failure escalation, but reading a pile of per-signature JSON files by hand hides the recurring
+patterns. `bun run diag` (`scripts/diagnostics-summary.ts [dir]`) loads those artifacts without writing or
+deleting anything and reports: artifact count, breakdown by kind, the top signatures with their file
+counts, the dominant conditions and verdict reasons, and the latest escalation timestamp. A missing or
+empty directory reports `artifacts: 0 — no repeated-failure diagnostics recorded`. Unparseable files are
+skipped so one truncated artifact cannot hide the rest; rows are sorted by frequency and capped at ten.
+
+Verification: `test/diagnostics-summary.test.ts` covers missing directories, non-JSON and broken files,
+same-signature collapse with counts, empty summaries, dominant-pattern ordering, row cap and the final
+timestamp formatting. Full `bun run check` green (2457 pass / 0 fail; spec-check counts computed at gate
+time; docs, invariant and wiring gates ok).
+<!-- workstream:diagnostics-summary-tool:end -->
 <!-- per-slug-workstreams:end -->
 
 ## Workstream planner-reuse-builtin-session — arm-time planner reuses the built-in subagent session family (2026-11-25)
