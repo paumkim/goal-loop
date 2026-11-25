@@ -129,7 +129,7 @@ Every config rewrite is backed up and atomic; use `/goal` for status while check
 
 1. **Independent Evaluator**: After each turn, an evaluator inspects the conversation. Claims without fresh command output produced at the current git HEAD are rejected as `not_met`.
 2. **Deterministic Verifier Gate (`verifyCommand`)**: When `evaluator.verifyCommand` is set (e.g. `bun run check`), the plugin spawns the command in bash. Exit 0 is required; any failure downgrades the verdict to `not_met` and feeds the output tail to the agent.
-3. **Commit Rule**: Work must be committed to the target branch (`dev` by default) or submitted via isolated coordinator worktree (`wt/<slug>`) before `met` is granted.
+3. **Commit Rule**: Work must be committed to the target branch (`dev` by default), or — in a coordinator repo — committed on `wt/<slug>`, submitted, and merged into the target branch by `coordinator merge-next` with the lease shown `done` before `met` is granted. A submitted lease is only merge-ready, not completion evidence.
 4. **Autonomous Loop (`/goal-loop`)**: When a goal is met, `goal-loop` generates a concise summary, requests host context compaction (`compactOnLoopIteration: true`), and arms the next iteration until `maxLoops` or `LOOP_COMPLETE`.
 
 ### 🛡️ Catches False Agent Claims

@@ -1978,6 +1978,17 @@ FIFO is enforced (non-head leases need `--force`, or `--wait-for-turn` to wait f
 append-only at per-slug anchors; changelog notes go to `.term/changelog-pending/<slug>.md` and are folded by
 merge-next. The spec gate computes counts at check time and the package test uses a relaxed band.
 <!-- workstream:merge-churn-reduction-rebase-fifo-anchors-pending:end -->
+<!-- workstream:evaluator-require-landing-evidence:start -->
+
+### evaluator-require-landing-evidence
+
+A submitted coordinator lease is merge-ready, not done. The evaluator's coordinator rubric now requires landing
+evidence — `merge-next` output showing the merge into dev, or `coordinator status --json` showing the lease `done`
+with `worktree/wt-<slug>` removed — before judging a code task met; the commit/landing evidence rule and the bounded
+completion condition agree. Agent-facing prompts now instruct the submitting agent to drain the merge queue itself
+(`merge-status`, `merge-next --wait --target <slug>`, rebase/retry if dev moved) and to report completion only on
+`done` status with the worktree gone.
+<!-- workstream:evaluator-require-landing-evidence:end -->
 <!-- per-slug-workstreams:end -->
 
 ## Historical workstreams
