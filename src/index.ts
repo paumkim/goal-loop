@@ -68,7 +68,10 @@ const EVALUATION_SUMMARY_CHARS = 4_000
  */
 const evaluatorChildBySession = new Map<string, string>()
 
-/** The arm-time planner child: one parent-linked subagent per working session, reused on every arm. */
+/** The arm-time planner child: one parentless child per working session, reused on every arm. It has no `parentID`
+ * so the host cannot deliver a "Goal planner finished" completion into the working transcript and wake the parent
+ * while planning is still in flight — including when a slow planner runs past its budget. The plan is consumed
+ * from this child's own event stream, and the kickoff is delivered only after that stream reaches a terminal event. */
 const plannerChildBySession = new Map<string, string>()
 
 /**
@@ -542,11 +545,13 @@ export default Plugin.define({
       let id = plannerChildBySession.get(sessionID)
       if (!id) {
         try {
-          // The planner is a parent-linked subagent child of the goal session, not a new top-level session. Like the
-          // evaluator child it is reused on later arms; the plan is consumed from its own event stream below.
+          // No parent link: a parent-linked child makes the host deliver its own "↳ Goal planner finished"
+          // completion into the working transcript and wake the parent while planning is still in flight, and
+          // again later when the planner is slow — even though the planned condition is consumed internally from
+          // the child's event stream below. That delivery can carry the user's original message into the parent
+          // before the planner has died or finished, so the child stays parentless. Reused across arms otherwise.
           id = (await ctx.session.create({
             location: ctx.location,
-            parentID: sessionID,
             title: PLANNER_AGENT_TITLE,
             agent: PLANNER_AGENT_ID,
             model: model as any,
@@ -557,8 +562,8 @@ export default Plugin.define({
           return undefined
         }
       }
-      // Same as the judge child: the planner is goal-loop machinery parented to the goal owner, not a worker
-      // the owner delegated. Exclude it from busy() so arming a goal cannot self-defer its first evaluation.
+      // The planner is goal-loop machinery, not a worker the owner delegated. Exclude it from busy() so arming a
+      // goal cannot self-defer its first evaluation. The parentless child owes the working session no completion.
       background.noteInternal(id, PLANNER_AGENT_ID)
       plannerChildren.add(id)
       let childFailed = false
@@ -592,7 +597,9 @@ export default Plugin.define({
         // Do not admit a `<subagent>` synthetic: even queued with `resume: false`, a synthetic is durably admitted
         // to the parent's inbox, so the parent sees the planner's context and is pulled into a turn it never had to
         // take. The plan is consumed here from this child's own event stream; the planning notice, goal bar and
-        // durable record carry the visible outcome. The reused child stays navigable after it finishes.
+        // durable record carry the visible outcome. The reused child stays navigable after it finishes. Both the
+        // command and prompt-hook callers await this function before delivering the user's kickoff, so that
+        // delivery happens only here — after the planner succeeded, failed or was aborted, never mid-plan.
         return parsePlan(answer)
       } catch (error) {
         childFailed = true

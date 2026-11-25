@@ -1378,16 +1378,18 @@ describe("verdicts are delegated to a first-class evaluator agent (CXXX)", () =>
     }
   })
 
-  test("evaluator and planner are parent-linked subagent children, reused instead of respawned", () => {
+  test("evaluator is parent-linked; the planner is parentless and reused instead of respawned", () => {
     const root = join(import.meta.dir, "..")
     const read = (path: string) => readFileSync(join(root, path), "utf8")
     const host = read("src/index.ts")
     const code = host.split("\n").filter((line) => !line.trim().startsWith("//")).join("\n")
-    // Only two session creators remain: the evaluator and the arm-time planner. Both are parent-linked subagent
-    // children of the goal session, so neither appears as a new top-level session in OpenCode's session list. Each
-    // is created once per working session and then reused for later verdicts, loop steps and arms.
+    // Two session creators remain: the evaluator is a parent-linked subagent child of the goal session (one reused
+    // child serves every verdict and loop step). The arm-time planner is deliberately parentless: a parent link
+    // makes the host deliver its "finished" completion into the working transcript and wake the parent while
+    // planning is still in flight — including when the planner is slow. Its result is consumed from its own stream.
     expect(code.match(/ctx\.session\.create\(/g) ?? []).toHaveLength(2)
-    expect(code.match(/parentID: sessionID/g) ?? []).toHaveLength(2)
+    expect(code.match(/parentID: sessionID/g) ?? []).toHaveLength(1)
+    expect(code.slice(code.indexOf("const planGoal =")).includes("parentID: sessionID")).toBe(false)
     expect(code).toContain("evaluatorChildBySession.set(sessionID, id)")
     expect(code).toContain("evaluatorChildBySession.get(sessionID)")
     expect(code).toContain("plannerChildBySession.set(sessionID, id)")
@@ -1721,7 +1723,7 @@ describe("judge and planner child prompts must wake their own execution (CXLII P
     }
   })
 
-  test("the planner child is prompted with { sessionID, text } and no resume opt-out", async () => {
+  test("the planner is parentless, prompted without a resume opt-out, and never delivers early", async () => {
     const directory = repository()
     const { ctx, calls, storage } = context(directory, { model: "provider/model" })
     const previous = process.env.NODE_ENV
@@ -1739,9 +1741,14 @@ describe("judge and planner child prompts must wake their own execution (CXLII P
         if (input.sessionID === "ses_planner" || input.sessionID === "ses_judge") childCalls.push(input)
         else void calls.prompts.push(input)
       }
+      // Hold the planner's terminal event: while planning is in flight — even well past a minute — neither the
+      // host nor the plugin may deliver the user's kickoff into the working session.
+      let releasePlan!: () => void
+      const planGate = new Promise<void>((resolve) => { releasePlan = resolve })
       ;(ctx as any).event = {
         subscribe: async function* () {
           for (let i = 0; i < 1000 && !childCalls.some((c) => c.sessionID === "ses_planner"); i++) await new Promise((r) => setImmediate(r))
+          await planGate
           yield { type: "session.text.delta", data: { sessionID: "ses_planner", delta: JSON.stringify({ condition: "the parser is correct", scope: "code" }) } }
           yield { type: "session.execution.succeeded", data: { sessionID: "ses_planner" } }
           for (let i = 0; i < 1000 && !storage.has("goal/v1/ses_1"); i++) await new Promise((r) => setImmediate(r))
@@ -1755,7 +1762,12 @@ describe("judge and planner child prompts must wake their own execution (CXLII P
       const dispose = await (plugin as any).setup(ctx)
       try {
         const goal = calls.commands.find((command: any) => command.name === "goal")
-        await goal.execute({ sessionID: "ses_1", prompt: { text: "raw goal body pasted by a user" }, delivery: "steer" })
+        const executing = goal.execute({ sessionID: "ses_1", prompt: { text: "raw goal body pasted by a user" }, delivery: "steer" })
+        await waitFor(() => childCalls.some((c) => c.sessionID === "ses_planner"))
+        // The planner is still running: no user message, directive or completion may reach the parent yet.
+        expect(calls.prompts.filter((p: any) => p.sessionID === "ses_1")).toHaveLength(0)
+        releasePlan()
+        await executing
         await waitFor(() => (storage.get("goal/v1/ses_1") as any)?.status === "achieved")
         const plannerCall = childCalls.find((c) => c.sessionID === "ses_planner")
         expect(plannerCall).toBeDefined()
@@ -1764,11 +1776,12 @@ describe("judge and planner child prompts must wake their own execution (CXLII P
         // Same P0 pin as the judge: no resume opt-out may suppress the planner child's execution.
         expect("resume" in plannerCall).toBe(false)
         expect(plannerCall.resume).toBeUndefined()
-        // The planner is a parent-linked subagent child of the goal session, not a new top-level session. The plan
-        // is consumed internally from the child's event stream; no completion report reaches the worker.
+        // The planner is parentless: a parent link makes the host deliver its "finished" completion (and the
+        // user's original message) into the working turn while planning is in flight or slow. The plan is consumed
+        // from the child's own event stream; no completion report reaches the worker.
         const plannerCreate = created.find((input: any) => input.agent === PLANNER_AGENT_ID)
         expect(plannerCreate).toBeDefined()
-        expect(plannerCreate.parentID).toBe("ses_1")
+        expect(plannerCreate.parentID).toBeUndefined()
         // No completion is admitted to the working session: not a host delivery, and not a queued synthetic
         // either (a queued synthetic is durable parent-inbox input even with `resume: false`).
         expect(calls.prompts.some((p: any) => p.metadata?.agent === PLANNER_AGENT_ID)).toBe(false)
