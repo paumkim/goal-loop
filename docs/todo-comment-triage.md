@@ -28,7 +28,7 @@ git grep -n -I -i -E '\b(todo|fixme|hack|xxx)\b' -- .
 | Actionable marker comments in tracked source/config/docs — after | **0** |
 | Deleted / rewritten / flagged uncertain | 0 / 0 / 0 |
 | Low-risk self-contained fixes applied | 0 |
-| Tasks promoted to `docs/improvement-backlog.json` | 0 |
+| Tasks promoted to `docs/improvement-backlog.json` | 1 (`todo-feeding-into-backlog`) |
 
 No source, config, or doc content changed. Nothing was stale, done, decorative, vague, or large
 enough to promote.
@@ -59,12 +59,17 @@ lines plus the four definitional references above. The 26 case-insensitive match
 Binary asset hits (`assets/goal-status.png`, `assets/goal-verifier.png`, `assets/goal-workflow.png`)
 are byte coincidences; `-I` excludes them.
 
-## Follow-up
+## Promoted task
 
-None. The backlog already tracks the broader "feed from TODO/FIXME, audits, failing checks, and
-telemetry" idea under the done item `persistent-prioritized-backlog-dedup`; its honest limits in
-`SPEC-workstreams.md` record that automatic feeding remains unimplemented. That is a distinct,
-larger planning item and is not promoted here because this triage found no marker comments to act on.
+One larger item was promoted: `todo-feeding-into-backlog` in `docs/improvement-backlog.json`.
+
+The done item `persistent-prioritized-backlog-dedup` claims the ledger is fed from audits, failing
+checks, TODO/FIXME, and telemetry, but the honest limits at `SPEC-workstreams.md:6440,6452` record
+that automatic feeding was out of scope and remains unimplemented. The promoted item carries the
+finding, a concrete opt-in implementation path (a read-only classifier first, then planner wiring
+reusing `src/core/improvement-backlog.ts`), four evidence citations, and dedupe keys, so a later
+iteration can act on it without re-deriving this triage. No marker comment itself was large enough
+to promote.
 
 This report names the four markers in prose, so a future scan will see this file and the triage
 prompt itself. Both are definitions of the task, not debt.
