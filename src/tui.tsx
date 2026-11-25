@@ -615,18 +615,23 @@ export default Plugin.define({
       put: (sessionID, goal) => put(sessionID, goal, true),
     })
 
-    const goalMirror = createGoalMirror()
+    // `OPENCODE_GOAL_MIRROR=0` disables the mirror on BOTH sides. The server plugin already stops writing when the
+    // flag is set (index.ts); without this guard the TUI would still read a mirror left behind by an earlier run
+    // and paint that stale snapshot over a wedgedRPC — so the "off" state only half-worked. Honor the same flag
+    // here, where the read lives, so no mirror bytes (the user's condition text) are consumed when disabled.
+    const goalMirror = process.env.OPENCODE_GOAL_MIRROR === "0" ? undefined : createGoalMirror()
 
     /**
      * Convergence fallback for a dead RPC + dropped `changed`: read the mirror file the server plugin writes on
      * every `changed` emission (same snapshot, same atomic write discipline), instead of the wedged RPC bridge.
      * Used only where a re-pull is already due (the 15s stale-chrome tick, a pump reconnect, a first view whose
      * pull failed); any failure keeps the cached entry, the same posture as a rejected re-pull. Directory-scoped
-     * exactly like the `changed` intake, so a foreign project's record never paints here.
+     * exactly like the `changed` intake, so a foreign project's record never paints here. Disabled with the flag
+     * above: `refreshFromStorage` then behaves exactly like a missing mirror (false), never reading a stale file.
      */
     const refreshFromStorage = async (sessionID: string): Promise<boolean> => {
       try {
-        const goal = goalMirror.read(sessionID, context.location?.directory)
+        const goal = goalMirror?.read(sessionID, context.location?.directory)
         if (goal === undefined) return false
         put(sessionID, goal, true)
         return true

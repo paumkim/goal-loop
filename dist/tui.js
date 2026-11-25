@@ -7170,10 +7170,10 @@ var tui_default = Plugin.define({
       }, at(sessionID)),
       put: (sessionID, goal) => put(sessionID, goal, true)
     });
-    const goalMirror = createGoalMirror();
+    const goalMirror = process.env.OPENCODE_GOAL_MIRROR === "0" ? undefined : createGoalMirror();
     const refreshFromStorage = async (sessionID) => {
       try {
-        const goal = goalMirror.read(sessionID, context.location?.directory);
+        const goal = goalMirror?.read(sessionID, context.location?.directory);
         if (goal === undefined)
           return false;
         put(sessionID, goal, true);
