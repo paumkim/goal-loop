@@ -2042,6 +2042,13 @@ The TUI swaps the leading glyph to the existing `delegating` icon through the sa
 
 The arm-time planner's soft 30s budget cancels the child prompt but no longer ends the wait: planGoal releases the caller only on the child's own terminal event (succeeded / failed / interrupted), re-subscribing if the event stream drops, with a 5-minute hard ceiling. Stale terminal events from a reused child are ignored until a started/delta event proves this generation is live. A /goal opening mid-check-in re-checks the planning window after the busy check, and no continuation steer is dispatched while planning is active, so the original raw goal is delivered only after the planner is really done (or failed).
 <!-- workstream:raw-kickoff-waits-for-planner:end -->
+<!-- workstream:fix-over-engineering-findings:start -->
+
+
+### Follow-up (fix-over-engineering-findings) — dossier sections split by section
+
+`buildLoopDossier` composed the whole document in one long function. It now composes four section builders (`dossierHead`, `dossierIterations`, `dossierVerdictTrail`, `dossierTail`), each returning the same lines in the same order; byte output is unchanged. Verification: `test/dossier.test.ts` passes unchanged, full `bun run check` green with the invariant gate satisfied by this note and the changelog row.
+<!-- workstream:fix-over-engineering-findings:end -->
 <!-- per-slug-workstreams:end -->
 
 ## Historical workstreams

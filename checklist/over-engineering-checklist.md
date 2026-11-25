@@ -20,8 +20,8 @@ Excluded from findings: `node_modules/`, `dist/` (generated), `SPEC.md` / `SPEC-
 | Severity | Count |
 | --- | --- |
 | High | 0 |
-| Medium | 5 |
-| Low | 3 |
+| Medium | 3 |
+| Low | 0 |
 
 ## Confirmed findings
 
@@ -29,21 +29,13 @@ Excluded from findings: `node_modules/`, `dist/` (generated), `SPEC.md` / `SPEC-
 
 - `src/tui.tsx:286` — **complexity hot spot (over-engineering)**. `Plugin.define({ setup(context) { ... } })` is a single ~1623-line function ending at the file's close (~1909 lines). It owns RPC wiring, ~10 signals, keybind/plumbing tables, status-dialog/history/menu state, and the whole render tree. Evidence: brace-counted span from `setup(context)` at :286 to EOF; `showStatusDialogInner` alone is 97 lines at :401. Impact: any UI change must load the entire function; state and side effects are shared implicitly. Recommended action: split setup into focused factory functions (state, RPC subscriptions, keybinds, render) that return typed slices; keep one thin composition root. Status: open.
 
-- `src/index.ts:260` — **complexity hot spot (over-engineering)**. `setup(ctx)` is ~886 lines (:260–:1145), mixing startup scaffold, agent registration, ports onto the host, two long-lived child-session runtimes (`spawnEvaluator` :380, `planGoal` :550), commands, hooks, RPC, and update timers. Evidence: brace-counted span ; `createVerifier` at :164 is a separate 79-line helper. Impact: mixed responsibilities make hook-order regressions hard to localize. Recommended action: extract the evaluator/planner child runtime and the hook registration into modules; leave setup as composition only. Status: open.
 
 - `src/runtime/controller.ts:1401` — **complexity hot spot (over-engineering)**. `private async evaluate(...)` runs ~195 lines (:1401 to next method `evaluationFailed` :2596) inside a 3187-line controller. Evidence: method boundary read at :1398–:1406 and `evaluationFailed` at :2596. Impact: turn evaluation, check verification, check-in timers, and verdict dispatch are interleaved in one method. Recommended action: split verification and timer/disarm logic into helpers on the controller; add a test per branch. Status: open.
 
 - `packages/coordinator/bin/coordinator:1020` — **complexity hot spot (over-engineering)**. `do_merge_next()` is 588 lines (:1020 to next function `finish_merged_lease` :1608) in a 2149-line bash script with 51 functions. Evidence: `grep -c '^[a-zA-Z_][a-zA-Z0-9_]*()'` = 51; awk span for `do_merge_next` = 588 lines; dispatcher at :2112. Impact: merge lock handling, trial merge, gate, bookkeeping union, and worktree removal all live in one function — the safety-critical path is the hardest to review. Recommended action: factor lock acquisition, trial merge, and bookkeeping into separate functions with explicit inputs; add shell tests per phase. Status: open.
 
-- `src/index.ts:380` and `src/index.ts:550` — **duplicate implementation (messy code)**. `spawnEvaluator` (:380–:469) and `planGoal`'s child runtime (:550–:632) repeat the same ~85-line lifecycle: cached child id per session, `background.noteInternal`, a Set add/remove, `AbortController`, an event-subscribe loop (identical shape at :421 and :597), a `Promise.race` of host prompt and a `done` promise, and a `finally` guard that evicts the child on failure/abort (near-identical predicates at :465 and :628). Evidence: read :385–:455 and :565–:615. Impact: two copies already differ (`failure` vs `childFailed`, `finish(answer)` vs `finish()`), so a fix to timeout/abort handling must be applied twice. Recommended action: extract one `spawnHostChild({ id map, set, agentId, timeout, onText })` helper and keep verdict/plan parsing at the call sites. Status: open.
-
 ### Low
 
-- `src/index.ts:393,394,422,448,449,573,598,610` — **type escapes (messy code)**. Eight `as any` casts on `ctx.session.create`, `ctx.session.prompt`, and `(evt as any).data` for evaluator/planner children. Evidence: read :385–:455 and :565–:615. Impact: a field rename in `@opencode/*` fails at runtime instead of compile time. Recommended action: define a minimal structural type for event payloads and create/prompt options, cast once at the boundary. Status: open.
-
-- `src/index.ts:272,283` — **double cast (messy code)**. `agent.name = "Evaluator" as unknown as typeof agent.name` and the planner equivalent bypass the host's literal-string type. Evidence: read :260–:290. Impact: typos in display names/types are not caught. Recommended action: narrow via the host's exported agent-name type or a single documented cast helper. Status: open.
-
-- `src/core/dossier.ts:331` — **complexity hot spot (over-engineering)**. `buildLoopDossier(goal, nowMs)` is 130 lines that assemble multiple dossier sections in one function. Evidence: brace-counted span from :331; module is 460 lines. Impact: section ordering/formatting changes touch one long function. Recommended action: split by section into small builders composed at the end. Status: open.
 
 ## Verified non-findings (checked, no action)
 
