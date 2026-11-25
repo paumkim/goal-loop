@@ -548,6 +548,46 @@ describe("GoalController", () => {
     expect(h.calls.synthetic).toHaveLength(1)
   })
 
+  test("an arm-time planner suspends a leftover check-in until planning completes", async () => {
+    await h.set()
+    h.setWork({ subagents: 1, shells: 0 })
+    await h.turn() // deferred on the subagent; the first check-in is armed
+    expect(h.clock.pending).toBe(1)
+
+    // A fresh /goal distils its condition in a planner child before arm() replaces the record. The old
+    // check-in must not wake the parent while that planner is still running.
+    h.controller.showPlanning(SID, "raw objective")
+    expect(h.clock.pending).toBe(0)
+    await h.clock.advance(30 * 60_000)
+    expect(h.calls.synthetic).toHaveLength(0)
+    expect(h.notices.some((n) => n.kind === "checkin")).toBeFalse()
+
+    // No replacement was armed (the plan failed): the still-live wait gets a fresh check-in back.
+    h.controller.endPlanning(SID)
+    expect(h.clock.pending).toBe(1)
+    await h.clock.advance(30 * 60_000)
+    expect(h.calls.synthetic).toHaveLength(1)
+    expect(h.notices.some((n) => n.kind === "checkin")).toBeTrue()
+  })
+
+  test("a check-in armed mid-plan still waits for the arm-time planner", async () => {
+    await h.set()
+    h.setWork({ subagents: 1, shells: 0 })
+    await h.turn()
+    h.controller.showPlanning(SID, "raw objective")
+    // A turn event that lands during the planning window can re-arm the check-in after showPlanning cleared it.
+    await h.turn()
+    expect(h.clock.pending).toBe(1)
+
+    await h.clock.advance(30 * 60_000)
+    expect(h.calls.synthetic).toHaveLength(0)
+    expect(h.notices.some((n) => n.kind === "checkin")).toBeFalse()
+
+    h.controller.endPlanning(SID)
+    await h.clock.advance(30 * 60_000)
+    expect(h.calls.synthetic).toHaveLength(1)
+  })
+
   test("a deferred goal flips to active on session heartbeats and back to waiting when the session goes quiet — instantly, with no clock tick", async () => {
     await h.set()
     h.setWork({ subagents: 1, shells: 0 })

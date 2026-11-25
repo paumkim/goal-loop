@@ -2030,13 +2030,13 @@ time; docs, invariant and wiring gates ok).
 <!-- workstream:diagnostics-summary-tool:end -->
 <!-- per-slug-workstreams:end -->
 
-## Workstream planner-reuse-builtin-session — arm-time planner reuses the built-in subagent session family (2026-11-25)
+## Workstream timer-suppress-during-planning — a leftover check-in cannot wake the parent during the arm-time planner (2026-11-25)
 
-`planner-parentless-completion` removed `parentID` from the arm-time planner child to stop a host "Goal planner finished" completion from waking the working session mid-plan. That made each planner child a new top-level session: the session list filled with repeated `Goal planner` entries, and a fresh child paid a cold model prefix on every arm and every plugin reload. The earlier `evaluator-planner-subagent-child-reuse` design already had the right mechanism — one parent-linked, per-working-session subagent child reused on every arm via `plannerChildBySession`.
+`timer-wait-for-completion` made a deferred check-in wait for a judge (and the loop planner after a met verdict), but a fresh `/goal <context>` still had a gap. The arm-time planner distils the raw condition into a child session before `arm()` creates the new record; an idle check-in left over from the goal being replaced stayed armed through that window. When it came due while the planner was running, `checkin()` had no `evaluating` flag to hide behind and dispatched a `resume: true` steer that woke the working session mid-plan.
 
-The planner child is parent-linked again, so it lives in the goal session's built-in session family and is reused rather than spawned as a new parent session. The original wake risk is closed without parentlessness: both the `/goal` command and the prompt hook await `planGoal` before delivering the kickoff, and the context hook now drops every `<background-result kind="subagent">` whose `sessionID` is a harness-owned child id registered with the background tracker (`isInternalChildReport`) — even when its metadata does not name the agent. Real delegated workers' reports are still admitted once while a goal is live. Verdict parsing, scope replay, timeouts and loop semantics are unchanged. This supersedes the parentless section of `planner-parentless-completion`; the `isPluginReport` strip stays as a defense for agent-tagged reports.
+`showPlanning()` now marks the runtime as planning and disarms a pending check-in at planning start. `endPlanning()` — called on every planner exit — lifts the mark and restores a fresh check-in only when no replacement was armed and the earlier wait is still live. A check-in re-armed by a turn event landing mid-plan is pushed out by a full interval instead of consuming a wake. No verdict, retry, backoff or planning-scope behavior changed.
 
-Verification: `test/plugin.test.ts` pins both `ctx.session.create` calls as `parentID: ses_1`, pins the planner create in the runtime path, and proves by id that a harness child's completion is stripped from a live session while a worker's completion is admitted. `bun run check` green (file/test counts computed at gate time by `scripts/spec-check.ts`).
+Verification: `test/controller.test.ts` pins that no synthetic wake or check-in notice lands while the planner is in flight past the old due time, that a failed plan restores the wait's check-in, and that a mid-plan re-arm still waits. Full `bun run check` green (counts computed at gate time).
 
 ## Historical workstreams
 
