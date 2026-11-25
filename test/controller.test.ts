@@ -81,6 +81,7 @@ function harness(
   const notices: Notice[] = []
   const changes: Array<GoalSnapshot | null> = []
   let work: BackgroundWork = { subagents: 0, shells: 0 }
+  let busyFn: (() => Promise<BackgroundWork>) | undefined
   let busyError: Error | undefined
   let usage: UsageSnapshot | undefined = { cost: 1, input: 100, output: 10, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
   let usageFn: (() => Promise<UsageSnapshot | undefined>) | undefined
@@ -120,7 +121,7 @@ function harness(
         return typeof next === "function" ? next() : next
       },
     },
-    background: { busy: async () => { if (busyError) throw busyError; return work } },
+    background: { busy: async () => { if (busyFn) return busyFn(); if (busyError) throw busyError; return work } },
     emitter: { changed: (_, goal) => void changes.push(goal), notice: (n) => void notices.push(n) },
   })
   /** Simulates one complete agent turn. */
@@ -143,6 +144,7 @@ function harness(
     logs,
     turn,
     setWork: (w: BackgroundWork) => void (work = w),
+    setBusyFn: (fn: (() => Promise<BackgroundWork>) | undefined) => void (busyFn = fn),
     setBusyError: (e: Error | undefined) => void (busyError = e),
     setUsage: (u: UsageSnapshot | undefined) => void (usage = u),
     setUsageFn: (fn: (() => Promise<UsageSnapshot | undefined>) | undefined) => void (usageFn = fn),
@@ -217,6 +219,54 @@ describe("GoalController", () => {
     expect(h.calls.synthetic.some((synthetic) => String(synthetic.description ?? "").startsWith("Goal achieved"))).toBe(false)
     expect(h.notices.some((n) => n.kind === "achieved")).toBeTrue()
   })
+  test("an abstain result emits no verdict and mutates no goal state", async () => {
+    await h.set()
+    const before = h.controller.get(SID)!
+    expect(before.turns).toBe(0)
+    h.verdicts.push({ verdict: "not_met", reason: "evaluation deferred: no fresh evidence from a finished turn", abstain: "no-fresh-evidence" })
+    await h.turn()
+    const after = h.controller.get(SID)!
+    expect(after.turns).toBe(0)
+    expect(after.history).toHaveLength(0)
+    expect(after.verdict).toBeUndefined()
+    expect(after.status).toBe("active")
+    expect(after.pendingEvaluation).toBeUndefined()
+    expect(h.calls.synthetic).toHaveLength(0)
+    expect(h.notices.some((n) => n.kind === "achieved" || n.kind === "failed")).toBe(false)
+  })
+
+  test("an active-sessions abstention defers and resumes on drain instead of dropping the turn", async () => {
+    await h.set()
+    // Turn-end and acceptance-boundary checks are clean; workers show up at the judge gate, which abstains.
+    let checks = 0
+    h.setBusyFn(async () => (++checks === 3 ? { subagents: 2, shells: 0 } : { subagents: 0, shells: 0 }))
+    h.verdicts.push({
+      verdict: "not_met",
+      reason: "evaluation deferred: sessions are still active",
+      abstain: "active-sessions",
+    })
+    await h.turn()
+    const waiting = h.controller.get(SID)!
+    expect(waiting.turns).toBe(0)
+    expect(waiting.history).toHaveLength(0)
+    expect(waiting.verdict).toBeUndefined()
+    expect(waiting.pendingEvaluation).toBeUndefined()
+    expect(typeof waiting.waitingSince).toBe("number")
+    expect(h.changes.at(-1)?.waiting).toBeTrue()
+    expect(h.calls.synthetic).toHaveLength(0)
+
+    // No new parent prompt: the workers' drain re-runs this turn's evaluation.
+    h.setBusyFn(undefined)
+    h.verdicts.push(met("judged after drain"))
+    await h.controller.onBackgroundDrained()
+    await flush()
+    const after = h.controller.get(SID)!
+    expect(after.status).toBe("achieved")
+    expect(after.history).toHaveLength(1)
+    expect(after.reason).toContain("judged after drain")
+    expect(after.waitingSince).toBeUndefined()
+  })
+
   test("an impossible verdict is terminal: it does not re-arm the goal", async () => {
     await h.set()
     h.verdicts.push({ verdict: "impossible", reason: "the target cannot be built here" })
@@ -428,6 +478,22 @@ describe("GoalController", () => {
     expect(h.controller.get(SID)?.turns).toBe(0)
   })
 
+  test("a duplicate succeeded event is dropped as a straggler while the first turn is evaluating", async () => {
+    const info: string[] = []
+    h = harness({ log: { info: (m: string) => void info.push(m), warn() {}, error() {} } })
+    await h.set()
+    h.verdicts.push(() => new Promise(() => {})) // first evaluation stays in flight
+    h.controller.onExecutionStarted(SID)
+    h.controller.onToolCalled(SID)
+    void h.controller.onExecutionSucceeded(SID)
+    await flush()
+    info.length = 0
+    await h.controller.onExecutionSucceeded(SID)
+    // Without a consumed-success marker the second success bumps the epoch and re-enters evaluation,
+    // superseding the first attempt for one logical turn.
+    expect(info.some((line) => line.includes("straggler dropped"))).toBe(true)
+  })
+
   test("background work defers evaluation and arms check-ins with backoff", async () => {
     await h.set()
     h.setWork({ subagents: 1, shells: 0 })
@@ -451,6 +517,99 @@ describe("GoalController", () => {
     await h.turn(0)
     expect(h.requests).toHaveLength(1)
     expect(h.controller.get(SID)?.stall).toBe(0)
+  })
+
+  test("a check-in armed during a background deferral does not wake the parent while the judge is still running", async () => {
+    await h.set()
+    h.setWork({ subagents: 1, shells: 0 })
+    await h.turn() // deferred on the subagent; the first check-in is armed
+    expect(h.calls.synthetic).toHaveLength(0)
+
+    // Background work drains and a slow judge starts. The check-in from the deferral must be disarmed so it
+    // cannot fire mid-evaluation and wake the parent before the verdict (and any loop arm after it) lands.
+    h.setWork({ subagents: 0, shells: 0 })
+    let deliver!: (result: EvaluationResult) => void
+    const gated = new Promise<EvaluationResult>((resolve) => { deliver = resolve })
+    h.verdicts.push(() => gated)
+    const drained = h.controller.onBackgroundDrained()
+    await flush()
+    expect(h.controller.snapshot(SID)?.evaluating).toBeTrue()
+
+    // The old check-in's due time arrives while the judge has not delivered its verdict.
+    await h.clock.advance(30 * 60_000)
+    expect(h.calls.synthetic).toHaveLength(0)
+    expect(h.notices.some((n) => n.kind === "checkin")).toBeFalse()
+
+    // The verdict lands: its continuation is the one and only wake.
+    deliver(notMet("still failing"))
+    await drained
+    await flush()
+    expect(h.requests).toHaveLength(1)
+    expect(h.calls.synthetic).toHaveLength(1)
+  })
+
+  test("an arm-time planner suspends a leftover check-in until planning completes", async () => {
+    await h.set()
+    h.setWork({ subagents: 1, shells: 0 })
+    await h.turn() // deferred on the subagent; the first check-in is armed
+    expect(h.clock.pending).toBe(1)
+
+    // A fresh /goal distils its condition in a planner child before arm() replaces the record. The old
+    // check-in must not wake the parent while that planner is still running.
+    h.controller.showPlanning(SID, "raw objective")
+    expect(h.clock.pending).toBe(0)
+    await h.clock.advance(30 * 60_000)
+    expect(h.calls.synthetic).toHaveLength(0)
+    expect(h.notices.some((n) => n.kind === "checkin")).toBeFalse()
+
+    // No replacement was armed (the plan failed): the still-live wait gets a fresh check-in back.
+    h.controller.endPlanning(SID)
+    expect(h.clock.pending).toBe(1)
+    await h.clock.advance(30 * 60_000)
+    expect(h.calls.synthetic).toHaveLength(1)
+    expect(h.notices.some((n) => n.kind === "checkin")).toBeTrue()
+  })
+
+  test("a check-in armed mid-plan still waits for the arm-time planner", async () => {
+    await h.set()
+    h.setWork({ subagents: 1, shells: 0 })
+    await h.turn()
+    h.controller.showPlanning(SID, "raw objective")
+    // A turn event that lands during the planning window can re-arm the check-in after showPlanning cleared it.
+    await h.turn()
+    expect(h.clock.pending).toBe(1)
+
+    await h.clock.advance(30 * 60_000)
+    expect(h.calls.synthetic).toHaveLength(0)
+    expect(h.notices.some((n) => n.kind === "checkin")).toBeFalse()
+
+    h.controller.endPlanning(SID)
+    await h.clock.advance(30 * 60_000)
+    expect(h.calls.synthetic).toHaveLength(1)
+  })
+
+  test("a check-in resolving after the planning window opened does not steer the parent with the old goal", async () => {
+    await h.set()
+    h.setWork({ subagents: 1, shells: 0 })
+    await h.turn()
+    expect(h.clock.pending).toBe(1)
+
+    // The timer fires and checkin() is waiting on the busy check when a fresh /goal opens the planning window.
+    let releaseBusy!: (work: BackgroundWork) => void
+    h.setBusyFn(() => new Promise<BackgroundWork>((resolve) => { releaseBusy = resolve }))
+    await h.clock.advance(30 * 60_000)
+    h.controller.showPlanning(SID, "raw objective")
+    releaseBusy({ subagents: 1, shells: 0 })
+    h.setBusyFn(undefined)
+    await flush()
+
+    expect(h.calls.synthetic).toHaveLength(0)
+    expect(h.notices.some((n) => n.kind === "checkin")).toBeFalse()
+    // The check was pushed out, not lost: once planning fails the old wait keeps its schedule.
+    h.controller.endPlanning(SID)
+    expect(h.clock.pending).toBe(1)
+    await h.clock.advance(30 * 60_000)
+    expect(h.calls.synthetic).toHaveLength(1)
   })
 
   test("a deferred goal flips to active on session heartbeats and back to waiting when the session goes quiet — instantly, with no clock tick", async () => {
@@ -512,6 +671,41 @@ describe("GoalController", () => {
     await h.clock.advance(15_000)
     expect(h.requests).toHaveLength(1)
     expect(h.controller.snapshot(SID)?.waiting).toBeFalse()
+  })
+
+  test("a met verdict defers while subagents are still running at evaluation time", async () => {
+    await h.set()
+    // The turn-end busy check sees no work; the two subagents become visible only when evaluation starts.
+    let checks = 0
+    h.setBusyFn(async () => (++checks === 1 ? { subagents: 0, shells: 0 } : { subagents: 2, shells: 0 }))
+    h.verdicts.push(met("reports are still in"))
+    await h.turn()
+    expect(h.requests).toHaveLength(0)
+    expect(h.controller.get(SID)?.status).toBe("active")
+    expect(h.controller.snapshot(SID)?.waiting).toBeTrue()
+    expect(h.notices.some((n) => n.kind === "achieved")).toBeFalse()
+
+    // Once they drain, the same turn is evaluated and the verdict can land.
+    h.setBusyFn(undefined)
+    h.setWork({ subagents: 0, shells: 0 })
+    await h.controller.onBackgroundDrained()
+    await flush()
+    expect(h.requests).toHaveLength(1)
+    expect(h.controller.get(SID)?.status).toBe("achieved")
+  })
+
+  test("an exhausted busy-check retry cannot settle a goal whose subagents are still running", async () => {
+    await h.set()
+    h.setWork({ subagents: 2, shells: 0 })
+    h.setBusyError(new Error("busy check failed"))
+    await h.turn()
+    expect(h.requests).toHaveLength(0)
+    for (const ms of [15_000, 60_000, 240_000, 300_000, 300_000]) await h.clock.advance(ms)
+    // The fallback evaluates without a busy check; make the check readable again while work is still active.
+    h.setBusyError(undefined)
+    await h.clock.advance(300_000)
+    expect(h.requests).toHaveLength(0)
+    expect(h.controller.get(SID)?.status).toBe("active")
   })
 
   test("idle check-ins stop after the cap until the user prompts", async () => {
@@ -715,6 +909,53 @@ describe("GoalController", () => {
     expect(isUsageLimitError(new Error("evaluator timed out after 120s"))).toBe(false)
   })
 
+  test("isUsageLimitError ignores non-quota errors that merely mention a limit", () => {
+    // A bare "rate/usage/free usage limit" phrase is not a quota signal. The old detector matched the phrase
+    // anywhere, so these ordinary evaluator failures paused the goal as a fake free-usage limit.
+    const nonQuota = [
+      "KiloCode-Free usage is available on this key",
+      "no rate limit is configured for this model",
+      "rate limit settings are documented at example.com",
+      "usage limit was not reached",
+      "no usage limit reached",
+      "free usage is permitted for this account",
+      "evaluator child failed (evaluator timed out after 120s)",
+    ]
+    for (const message of nonQuota) expect(isUsageLimitError(new Error(message))).toBe(false)
+
+    // The same phrases in structured provider fields must not be codes either. The old QUOTA_CODE regex
+    // matched a bare "rate limit"/"usage limit" anywhere, so these ordinary failures paused the goal.
+    for (const record of [
+      { type: "rate limit settings are documented at example.com", message: "invalid argument" },
+      { type: "usage limit settings", message: "config error" },
+      { type: "no rate limit is configured for this model", message: "model loaded" },
+      { name: "rate limit helper", message: "unrelated failure" },
+      { code: "usage limit policy", message: "unrelated" },
+    ]) expect(isUsageLimitError(record)).toBe(false)
+
+    // Genuine code/status signals still fire, including in a plain object thrown by a provider.
+    expect(isUsageLimitError({ type: "rate_limit_error", message: "provider rejected the request" })).toBe(true)
+    expect(isUsageLimitError({ code: "tpm_rate_limit_exceeded", message: "Provider returned error" })).toBe(true)
+    expect(isUsageLimitError({ status: "429", message: "quota" })).toBe(true)
+    expect(isUsageLimitError({ status: 500, message: "Free usage limit reached" })).toBe(true)
+  })
+
+  test("a non-quota evaluator error mentioning limits retries instead of pausing with usage_limit", async () => {
+    h = harness({ maxRetries: 3 })
+    await h.set()
+    h.verdicts.push(new Error("evaluator child failed: rate limit settings are documented in the provider docs"))
+    await h.turn()
+    const record = h.controller.get(SID)
+    expect(record?.status).toBe("active")
+    expect(record?.pauseCause).toBeUndefined()
+    expect(h.notices.at(-1)?.title).toBe("Goal still active")
+    expect(h.notices.at(-1)?.message).not.toContain("usage limit")
+    h.controller.onUserPrompt(SID)
+    h.verdicts.push(met("recovered after the transient evaluator failure"))
+    await h.turn()
+    expect(h.controller.get(SID)?.status).toBe("achieved")
+  })
+
   test("hasTerminalRecord is true only for a record that went terminal in this process (LXVII)", async () => {
     const first = harness()
     expect(first.controller.hasTerminalRecord(SID)).toBe(false)
@@ -735,7 +976,7 @@ describe("GoalController", () => {
     expect(second.controller.hasTerminalRecord(SID)).toBe(false)
   })
 
-  test("goals persist and restore with reset counters; finished goals are not restored", async () => {
+  test("an evaluated goal restores with its turn counter preserved; finished goals are not restored", async () => {
     const storage = new MemoryStorage()
     const first = harness({}, storage)
     await first.set("restore me")
@@ -745,7 +986,13 @@ describe("GoalController", () => {
     const second = harness({}, storage)
     expect(await second.controller.restore()).toBe(1)
     const goal = second.controller.get(SID)!
-    expect(goal).toMatchObject({ condition: "restore me", status: "active", turns: 0 })
+    // Renumbering a live goal to turn 1 on every reload re-tripped the zero-tool downgrade and produced
+    // the same canned "no evidence of work" not_met forever, even when the judge saw real evidence.
+    expect(goal).toMatchObject({ condition: "restore me", status: "active", turns: 1 })
+    second.verdicts.push(met("recovered with fresh evidence"))
+    await second.turn(0)
+    expect(second.controller.get(SID)?.verdict).toBe("met")
+    expect(second.controller.get(SID)?.reason).toContain("recovered with fresh evidence")
 
     second.controller.clear(SID)
     await second.store.flush()
@@ -851,6 +1098,48 @@ describe("GoalController", () => {
     h.controller.onSessionDeleted(SID)
     expect(h.controller.get(SID)).toBeUndefined()
     expect(h.changes.at(-1)).toBeNull()
+  })
+})
+
+describe("background tracker", () => {
+  const startChild = (tracker: BackgroundTracker, id: string, parentID = SID) => {
+    tracker.sessionCreated(id, parentID)
+    tracker.executionStarted(id)
+  }
+
+  test("goal-loop's own judge and planner children do not count as delegated workers", async () => {
+    const tracker = new BackgroundTracker({ parentOf: async () => SID })
+    startChild(tracker, "judge")
+    startChild(tracker, "planner")
+    startChild(tracker, "worker")
+    // Before registration every running descendant is a subagent, judge and planner included.
+    expect(await tracker.busy(SID)).toEqual({ subagents: 3, shells: 0 })
+
+    // The plugin registers each internal child by id with its agent identity (the judge recognizes itself).
+    tracker.noteInternal("judge", "evaluator")
+    tracker.noteInternal("planner", "planner")
+    expect(await tracker.busy(SID)).toEqual({ subagents: 1, shells: 0 })
+    expect(tracker.internalAgentOf("judge")).toBe("evaluator")
+    expect(tracker.internalAgentOf("planner")).toBe("planner")
+    expect(tracker.internalAgentOf("worker")).toBeUndefined()
+
+    // A failed busy check would still fail closed; only the real worker keeps the verdict deferred.
+    tracker.executionEnded("worker")
+    expect(await tracker.busy(SID)).toEqual({ subagents: 0, shells: 0 })
+  })
+
+  test("re-registering a reused child is idempotent and deletion forgets its identity", async () => {
+    const tracker = new BackgroundTracker({ parentOf: async () => SID })
+    startChild(tracker, "judge")
+    tracker.noteInternal("judge", "evaluator")
+    tracker.noteInternal("judge", "evaluator") // same reused child on a later verdict / loop step
+    expect(await tracker.busy(SID)).toEqual({ subagents: 0, shells: 0 })
+
+    tracker.sessionDeleted("judge")
+    expect(tracker.internalAgentOf("judge")).toBeUndefined()
+    expect(await tracker.busy(SID)).toEqual({ subagents: 0, shells: 0 })
+    startChild(tracker, "judge")
+    expect(await tracker.busy(SID)).toEqual({ subagents: 1, shells: 0 })
   })
 })
 
@@ -982,6 +1271,47 @@ describe("event router", () => {
   })
 })
 
+describe("evaluation targets the goal-owning parent, never a subagent", () => {
+  test("a descendant completion spawns no verdict and steers no subagent", async () => {
+    const h = harness()
+    await h.set("all tests pass")
+    h.verdicts.push(met(), met())
+    // A worker subagent finishing must not be judged against the parent's goal, whatever the goal is.
+    await h.controller.onExecutionSucceeded("child_1")
+    await h.controller.onExecutionSucceeded("child_2")
+    await flush()
+    expect(h.requests).toHaveLength(0)
+    expect(h.calls.synthetic).toHaveLength(0)
+    expect(h.controller.get(SID)?.status).toBe("active")
+    expect(h.controller.get(SID)?.history.some((entry) => (entry as { source?: string }).source === "child_1")).toBe(false)
+  })
+
+  test("the goal-owning parent's turn is judged from the parent session alone", async () => {
+    const h = harness()
+    await h.set("all tests pass")
+    h.verdicts.push(met("parent did the work"))
+    // A subagent ran and finished during the parent's turn; its report is injected back by the harness.
+    await h.controller.onExecutionSucceeded("child_1")
+    await h.turn()
+    expect(h.requests).toHaveLength(1)
+    expect(h.requests.at(0)?.sessionID).toBe(SID)
+    expect(h.requests.at(0)?.condition).toBe("all tests pass")
+    expect("ownerSessionID" in (h.requests.at(0) ?? {})).toBe(false)
+    expect(h.controller.get(SID)?.status).toBe("achieved")
+  })
+
+  test("a completed subagent does not hijack the parent's verdict child", async () => {
+    const h = harness()
+    await h.set("all tests pass")
+    h.verdicts.push(met())
+    await h.controller.onExecutionSucceeded("child_1")
+    await h.turn()
+    expect(h.requests).toHaveLength(1)
+    expect(h.requests.at(0)?.sessionID).toBe(SID)
+    expect(h.calls.synthetic).toHaveLength(0)
+  })
+})
+
 describe("GoalController async holes", () => {
   test("a rejecting durable write is treated as unwritten: set() resolves, the no-op marker drops, the next identical commit retries", async () => {
     const h = harness()
@@ -1074,7 +1404,7 @@ describe("context meter snapshot fields", () => {
     h.verdicts.push(notMet("keep going"))
     await h.turn()
     const withFigures = h.changes.filter((c) => c?.contextSize === 432_100)
-    expect(withFigures.length).toBeGreaterThan(0)
+    expect(withFigures).toHaveLength(4) // the per-turn refresh carries the figure on every changed event
     expect(withFigures[0]?.spend?.cost).toBe(6) // 7 vs the arm-time baseline of 1
   })
 
@@ -1160,14 +1490,18 @@ describe("background wait persists across a restart (Workstream XXVII)", () => {
     first.setWork({ subagents: 1, shells: 0 })
     await first.turn()
     expect(first.controller.snapshot(SID)?.waiting).toBeTrue()
+    expect(first.controller.snapshot(SID)?.waitingSubagents).toBe(1)
+    expect(first.changes.at(-1)?.waitingSubagents).toBe(1) // the TUI gets the count in the changed event
     await first.store.flush()
     const stored = storage.data.get(`goal/v1/${SID}`) as Record<string, unknown>
     expect(typeof stored.waitingSince).toBe("number")
+    expect(stored.waitingSubagents).toBe(1)
 
     // A fresh process: runtime state is gone, so only the record can paint the wait.
     const second = harness({}, storage)
     expect(await second.controller.restore()).toBe(1)
     expect(second.controller.snapshot(SID)?.waiting).toBeTrue()
+    expect(second.controller.snapshot(SID)?.waitingSubagents).toBe(1)
   })
 
   test("a restored wait flips to active on the first post-reload heartbeat, pushed as an immediate changed event", async () => {
@@ -1206,9 +1540,11 @@ describe("background wait persists across a restart (Workstream XXVII)", () => {
     await second.controller.onBackgroundDrained()
     expect(second.requests).toHaveLength(1)
     expect(second.controller.snapshot(SID)?.waiting).toBeFalse()
+    expect(second.controller.snapshot(SID)?.waitingSubagents).toBeUndefined()
     await second.store.flush()
     const stored = storage.data.get(`goal/v1/${SID}`) as Record<string, unknown>
     expect(stored.waitingSince).toBeUndefined()
+    expect(stored.waitingSubagents).toBeUndefined()
     // A third process sees no wait.
     const third = harness({}, storage)
     expect(await third.controller.restore()).toBe(1)
@@ -1978,7 +2314,7 @@ describe("terminal record pruning after finish (opportunistic)", () => {
 })
 
 describe("repeated failure-signature escalation", () => {
-  test("pauses after consecutive same-signature not_met verdicts instead of re-arming", async () => {
+  test("keeps the goal active and rotates strategy instead of pausing on consecutive same-signature not_met verdicts", async () => {
     const h = harness()
     await h.set("fix the failing tests")
     h.verdicts.push(
@@ -1991,16 +2327,40 @@ describe("repeated failure-signature escalation", () => {
     await h.turn()
 
     const goal = h.controller.get(SID)!
-    expect(goal.status).toBe("paused")
-    expect(goal.pauseCause).toBe("repeated_failure")
-    expect(goal.reason).toContain("Repeated failure signature detected")
-    expect(goal.reason).toContain("rotate strategy")
-    // Two continuations for turns 2 and 3; escalation blocks turn 4 re-arm.
-    expect(h.calls.synthetic).toHaveLength(2)
-    expect(h.notices.some((n) => n.kind === "paused" && n.message.includes("Repeated failure signature detected"))).toBe(true)
+    expect(goal.status).toBe("active")
+    expect(goal.pauseCause).toBeUndefined()
+    expect(goal.reason).toContain("same missing test evidence")
+    // A continuation on every turn; the third is the proactive escalation, not a pause.
+    expect(h.calls.synthetic).toHaveLength(3)
+    const steer = h.calls.synthetic[2]!
+    expect(steer.text).toContain("<goal-strategy-escalation")
+    expect(steer.text).toContain('count="3"')
+    expect(steer.text).toContain("Narrow the scope")
+    expect(steer.text).toContain("repeated not_met gap: same missing test evidence")
+    expect(steer.text).toContain("do not stop or wait for a user message")
+    expect(steer.resume).toBe(true)
+    expect(h.notices.some((n) => n.kind === "paused")).toBe(false)
+    expect(h.notices.some((n) => n.title === "Repeated failure — rotating strategy")).toBe(true)
   })
 
-  test("different failure signatures do not trigger escalation", async () => {
+  test("rotates to a different strategy on every repeated escalation", async () => {
+    const h = harness()
+    await h.set("fix the failing tests")
+    h.verdicts.push(
+      ...Array.from({ length: 5 }, () => ({ verdict: "not_met" as const, reason: "same missing test evidence" })),
+    )
+    for (let i = 0; i < 5; i++) await h.turn()
+
+    expect(h.controller.get(SID)!.status).toBe("active")
+    expect(h.calls.synthetic).toHaveLength(5)
+    const steers = h.calls.synthetic.slice(2).map((s) => String(s.text))
+    expect(steers[0]).toContain("Rotate strategy now: Narrow the scope")
+    expect(steers[1]).toContain("Rotate strategy now: Change the approach")
+    expect(steers[2]).toContain("Rotate strategy now: Produce a diagnostic artifact")
+    expect(new Set(steers).size).toBe(3)
+  })
+
+  test("different failure signatures still trigger the universal diverse-failure escalation", async () => {
     const h = harness()
     await h.set("fix the failing tests")
     h.verdicts.push(
@@ -2016,6 +2376,11 @@ describe("repeated failure-signature escalation", () => {
     expect(goal.status).toBe("active")
     expect(goal.pauseCause).toBeUndefined()
     expect(h.calls.synthetic).toHaveLength(3)
+    // Stuck is stuck even when each not_met names a different gap: one universal recognizer, not one signature.
+    const steer = h.calls.synthetic[2]!
+    expect(steer.text).toContain("<goal-strategy-escalation")
+    expect(steer.text).toContain("Recognized no-progress signals: diverse_failure")
+    expect(steer.text).toContain("Rotate strategy now:")
   })
 
   test("a met verdict breaks a repeated failure streak", async () => {
@@ -2035,7 +2400,7 @@ describe("repeated failure-signature escalation", () => {
     expect(h.calls.synthetic).toHaveLength(2)
   })
 
-  test("persists a diagnostic artifact under .term/goal-loop/diagnostics/ on escalation", async () => {
+  test("persists a diagnostic artifact under .term/goal-loop/diagnostics/ and cites it in the steer", async () => {
     const dir = await mkdtemp(join(tmpdir(), "goal-loop-ctrl-diag-"))
     try {
       const h = harness({}, new MemoryStorage(), { required: false, branch: "dev", reason: "test" }, dir)
@@ -2050,12 +2415,16 @@ describe("repeated failure-signature escalation", () => {
       await h.turn()
 
       const goal = h.controller.get(SID)!
-      expect(goal.status).toBe("paused")
-      expect(goal.pauseCause).toBe("repeated_failure")
+      expect(goal.status).toBe("active")
+      expect(goal.pauseCause).toBeUndefined()
 
       const diagDir = join(dir, ".term", "goal-loop", "diagnostics")
       const files = await readdir(diagDir)
       expect(files.length).toBe(1)
+      const steer = h.calls.synthetic[2]!
+      expect(steer.text).toContain("<goal-strategy-escalation")
+      expect(steer.text).toContain("Diagnostic artifact:")
+      expect(steer.text).toContain(join(diagDir, files[0]!))
       const saved = JSON.parse(await readFile(join(diagDir, files[0]!), "utf8"))
       expect(saved.signature).toBeString()
       expect(saved.count).toBe(3)
@@ -2072,6 +2441,33 @@ describe("repeated failure-signature escalation", () => {
     } finally {
       await rm(dir, { recursive: true, force: true })
     }
+  })
+
+  test("a Windows-style fixture directory writes no diagnostic artifact into this checkout", async () => {
+    // The default harness directory is "C:/work/project". On POSIX it is not a real path: anchoring it at
+    // the repo root made repeated-failure escalation write .term/goal-loop/diagnostics/ into this checkout.
+    const logs: Array<{ message: string; extra?: unknown }> = []
+    const h = harness({ log: {
+      info() {},
+      warn: (message: string, extra?: unknown) => void logs.push({ message, extra }),
+      error() {},
+    } })
+    await h.set("fix the failing tests")
+    h.verdicts.push(
+      { verdict: "not_met", reason: "same missing test evidence" },
+      { verdict: "not_met", reason: "same missing test evidence" },
+      { verdict: "not_met", reason: "same missing test evidence" },
+    )
+    await h.turn()
+    await h.turn()
+    await h.turn()
+
+    const escalation = logs.find((l) => l.message === "repeated failure signature escalated")
+    expect(escalation).toBeDefined()
+    expect(escalation!.extra).not.toHaveProperty("diagnostic")
+    const steer = h.calls.synthetic[2]!
+    expect(steer.text).toContain("<goal-strategy-escalation")
+    expect(steer.text).not.toContain("Diagnostic artifact:")
   })
 })
 

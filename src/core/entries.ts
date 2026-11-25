@@ -8,7 +8,7 @@
  * observed terminal stamp) so the tick can re-pull them inside a short window — a record cleared in
  * another process right after terminal converges instead of painting phantom chrome forever.
  */
-import { isLive, type GoalSnapshot } from "./types.ts"
+import { isLive, isPlanningSnapshot, type GoalSnapshot } from "./types.ts"
 
 /**
  * Elapsed wall time is recomputed from `now - startedAt` by every server snapshot, so two pulls of an
@@ -18,10 +18,26 @@ import { isLive, type GoalSnapshot } from "./types.ts"
  */
 const stripVolatile = (key: string, value: unknown) => (key === "elapsedMs" ? undefined : value)
 
+/**
+ * Cheap inequality precheck. Every key here is part of the serialized comparison (`elapsedMs` is the
+ * only stripped field and is deliberately absent), so any mismatch means the two snapshots really do
+ * differ and the two full serializations below can be skipped. Live `changed` events almost always move
+ * one of these — a new turn, a verdict, a status change — so this is the common path.
+ */
+const CHEAP_KEYS = [
+  "version", "id", "sessionID", "directory", "condition", "status",
+  "setAt", "startedAt", "turns", "stall", "retries", "checkins",
+  "evaluating", "waiting", "queued",
+] as const
+
 /** Snapshots arrive over RPC and from local helpers, so compare by value (key order is stable) to keep redundant `changed` events from re-rendering. */
 export const goalsEqual = (a: GoalSnapshot | null, b: GoalSnapshot | null) => {
   if (a === b) return true
   if (!a || !b) return false
+  for (const key of CHEAP_KEYS) {
+    if (a[key] !== b[key]) return false
+  }
+  if (a.history.length !== b.history.length) return false
   return JSON.stringify(a, stripVolatile) === JSON.stringify(b, stripVolatile)
 }
 
@@ -52,30 +68,76 @@ export function pruneSnapshotEntries(
   keep: string | undefined,
   cap: number = ENTRY_CAP,
 ): Readonly<Record<string, GoalSnapshotCacheEntry>> {
+  const keys = Object.keys(entries)
+  // No eviction is possible at or under the cap. Return the original reference without copying — this
+  // is the steady state for every `applySnapshot` call in a normal session (at most a handful of live
+  // sessions against a cap of 64), and keeping the reference is what lets Solid skip a re-render.
+  if (keys.length <= cap) return entries
   let changed = false
   const out: Record<string, GoalSnapshotCacheEntry> = {}
   for (const [sessionID, entry] of Object.entries(entries)) {
     out[sessionID] = entry
   }
-  const keys = Object.keys(out)
-  if (keys.length > cap) {
-    const rank = (k: string): number => {
-      const g = out[k]!.goal
-      return g !== null && isLive(g.status) ? 1 : 0
-    }
-    // Non-live first (rank 0), oldest first; the cap never evicts a live goal and never drops `keep`.
-    const sorted = keys.slice().sort((a, b) => rank(a) - rank(b) || out[a]!.receivedAt - out[b]!.receivedAt)
-    let overflow = keys.length - cap
-    for (const k of sorted) {
-      if (overflow <= 0) break
-      if (k === keep || rank(k) === 1) continue
-      delete out[k]
-      overflow--
-      changed = true
-    }
+  const rank = (k: string): number => {
+    const g = out[k]!.goal
+    return g !== null && isLive(g.status) ? 1 : 0
+  }
+  // Non-live first (rank 0), oldest first; the cap never evicts a live goal and never drops `keep`.
+  const sorted = keys.slice().sort((a, b) => rank(a) - rank(b) || out[a]!.receivedAt - out[b]!.receivedAt)
+  let overflow = keys.length - cap
+  for (const k of sorted) {
+    if (overflow <= 0) break
+    if (k === keep || rank(k) === 1) continue
+    delete out[k]
+    overflow--
+    changed = true
   }
   return changed ? out : entries
 }
+
+/**
+ * A planning placeholder is live in the TUI cache but has no persisted record: every re-pull in the
+ * planning window resolves `null` ("no record yet") or a stale terminal record left by a previous
+ * goal in the same session. Neither is the placeholder completing. Treating either as live→terminal
+ * used to arm the "loop complete" acknowledgment, close the HUD and blink the indicator out before
+ * `arm()`'s authoritative snapshot arrived. Keep the placeholder until a real live snapshot (a
+ * different record id) replaces it. The guard is id-based so a genuine arm is never swallowed.
+ *
+ * Only a `get` re-pull can be stale: its answer is composed when the request is handled and delivered
+ * later. A `changed` event is authoritative — including the terminal snapshot emitted when `arm()`
+ * refuses a new gap and the user's `cleared`. Suppressing those would strand a phantom queued bar that
+ * no later snapshot converges, so the guard applies only to pull-sourced answers.
+ */
+export const shouldKeepPlanningPlaceholder = (
+  previous: GoalSnapshot | null | undefined,
+  next: GoalSnapshot | null,
+  sessionID: string,
+  fromPull: boolean,
+): boolean => isPlanningSnapshot(previous, sessionID) && fromPull && (next === null || !isLive(next.status))
+
+/**
+ * A re-pull's reply is composed on the server when the request is handled, but delivered to `put()`
+ * later. Started while the planner still had no record, it can carry `null` or the previous goal's
+ * terminal snapshot and land AFTER the real arm event replaced the placeholder — the cache no longer
+ * identifies the placeholder, yet the answer is just as stale. A pull composed even earlier, while
+ * the pre-planning goal was still live, can also arrive late: its record was stamped before the
+ * placeholder and would evict the first-arm bar until the real arm lands. Suppress pull-sourced
+ * answers from this window — null, terminal, or a live record whose `setAt` predates the placeholder;
+ * the real arm snapshot is stamped after it and flows through. `changed` events (including a user's
+ * `cleared`) are never suppressed here, and a genuinely completed goal is re-pulled on the next tick.
+ */
+export const PLANNING_PULL_GRACE_MS = 35_000
+
+export const isStalePlanningPull = (
+  planningAt: number | undefined,
+  next: GoalSnapshot | null,
+  nowMs: number,
+  graceMs: number = PLANNING_PULL_GRACE_MS,
+): boolean =>
+  planningAt !== undefined &&
+  nowMs - planningAt >= 0 &&
+  nowMs - planningAt < graceMs &&
+  (next === null || !isLive(next.status) || next.setAt < planningAt)
 
 /** Drops the given session entries outright (end-of-life terminal records); `keep` is never dropped. */
 export function dropSessions(
@@ -84,13 +146,19 @@ export function dropSessions(
   keep?: string,
 ): Readonly<Record<string, GoalSnapshotCacheEntry>> {
   if (ids.length === 0) return entries
+  // One Set build replaces a linear scan of `ids` for every entry. Track the drop directly instead of
+  // re-counting both key sets — same result, no extra O(n) pass.
+  const drop = new Set(ids)
   const out: Record<string, GoalSnapshotCacheEntry> = {}
+  let removed = false
   for (const [sessionID, entry] of Object.entries(entries)) {
-    if (ids.includes(sessionID) && sessionID !== keep) continue
+    if (drop.has(sessionID) && sessionID !== keep) {
+      removed = true
+      continue
+    }
     out[sessionID] = entry
   }
-  if (Object.keys(out).length === Object.keys(entries).length) return entries
-  return out
+  return removed ? out : entries
 }
 
 /**

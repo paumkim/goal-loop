@@ -8,15 +8,19 @@ import { branchExists, commitExists, deleteBranch, isAncestor, removeWorktree, s
 import { killSwitch } from "./safety.ts"
 import { short } from "./util.ts"
 
-export interface ReviewDeps {
+interface ReviewDeps {
   readonly exists: (p: string) => boolean
   readonly env: NodeJS.ProcessEnv
 }
 
-export interface ReviewResult {
+interface ReviewResult {
   readonly ok: boolean
   readonly message: string
 }
+
+/** Both review decisions require a task parked in `in_review`; keep the refusal identical for each. */
+const requireInReview = (state: TaskState): ReviewResult | undefined =>
+  state.status === "in_review" ? undefined : { ok: false, message: `task ${state.id} is '${state.status}', not 'in_review'` }
 
 /** Human-facing list of tasks waiting for a decision. */
 export const reviewLines = (states: readonly TaskState[]): string => {
@@ -38,7 +42,8 @@ export const approve = (
   deps: ReviewDeps,
   opts: { readonly runVerify?: boolean } = {},
 ): ReviewResult => {
-  if (state.status !== "in_review") return { ok: false, message: `task ${state.id} is '${state.status}', not 'in_review'` }
+  const notReviewable = requireInReview(state)
+  if (notReviewable) return notReviewable
   const stopped = killSwitch(config, repo, deps)
   if (stopped) return { ok: false, message: `refusing to approve: ${stopped}` }
 
@@ -77,7 +82,8 @@ export const reject = (
   stateFile: string,
   reason: string,
 ): ReviewResult => {
-  if (state.status !== "in_review") return { ok: false, message: `task ${state.id} is '${state.status}', not 'in_review'` }
+  const notReviewable = requireInReview(state)
+  if (notReviewable) return notReviewable
   const line = parseBacklog(readBacklog(repo, config)).find((l) => l.id === state.id)
   if (line) markBacklog(repo, config, line, "rejected", state.id, false)
   recordOutcome(stateFile, {

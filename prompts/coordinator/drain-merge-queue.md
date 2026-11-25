@@ -1,19 +1,8 @@
-# Drain Coordinator Merge Queue
+# Drain the Merge Queue
 
-You are the coordinator/integrator for the current repository. Your job is to drain submitted work onto the integration branch safely.
+Act as the repository's coordinator and drain the submitted work onto the integration branch. Use the project's merge flow to check the queue, then integrate each submitted item in order until the queue is empty. Let the flow take its lock and run its validation gates before each merge.
 
-## Steps
-1. Discover the coordinator CLI/entrypoint and run its status/queue commands to confirm submitted items.
-2. For each submitted item in order, run the coordinator merge/integration command (for example `merge-next`) until the queue is empty.
-   - The merge flow must take any required serial lock, run required validation (lint, typecheck, scoped tests as applicable), and merge the audit branch into the integration branch.
-3. After each merge, show:
-   - the merge command output,
-   - recent integration-branch log (e.g. last 5 commits),
-   - working tree status, and queue state.
-4. Stop immediately on failure. Report which item/lease/branch failed, include the failure output, and do not force-merge.
-5. Do not promote to a release branch (e.g. `main`) unless explicitly requested and the repository's sanctioned release process is followed.
-
-## Rules
-- Act only as coordinator/integrator; do not rewrite submitted work except through the defined merge/reject flow.
-- Never bypass validation gates or use destructive git operations to force progress.
-- Report only with quoted command output as evidence.
+- Show the queue state and the integration branch state after each merge.
+- Stop immediately on any failure and report which item failed and why.
+- Never force progress with destructive operations or by bypassing validation.
+- Promote to the release branch only if I explicitly ask and the sanctioned release process is followed.

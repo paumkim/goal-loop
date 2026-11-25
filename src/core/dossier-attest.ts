@@ -36,6 +36,7 @@ import {
 import { gitAncestorProbe, reachRecord, type ReachProbe, type ReachVerification } from "./reach-record.ts"
 import { gitSignProbe, signRecord, type SignProbe, type SignVerification } from "./sign-record.ts"
 import { shortSha, stampOf } from "./dossier.ts"
+import { recordCellHelpers } from "./record-attestation.ts"
 import type { GoalSnapshot } from "./types.ts"
 
 /** One answer cell, exactly as the appendix prints it. */
@@ -183,9 +184,7 @@ type AttestationResult =
   | { readonly kind: "unsealed" }
   | { readonly kind: "unparsable" }
 
-const verifyCell = (status: string): AttestationAnswer => (status === "present" ? "yes" : status === "missing" ? "no" : "unknown")
-const reachCell = (status: string): AttestationAnswer => (status === "ancestor" ? "yes" : status === "unreached" ? "no" : "unknown")
-const signCell = (status: string): AttestationAnswer => (status === "verified" ? "yes" : status === "unverified" ? "no" : "unknown")
+const { verifyCell, reachCell, signCell } = recordCellHelpers<AttestationAnswer>()
 
 /** A one-off record view so the existing sweeps (and their injected probes) run over the file's shas verbatim. */
 const shasAsGoal = (rows: readonly AttestationRow[]): GoalSnapshot =>
@@ -321,6 +320,25 @@ export function attestationReportMarkdown(
 }
 
 const SEALED_NAME_RE = /^goal-dossier-sealed-(\d{8})-(\d{6})(?:-([1-9]\d*))?\.md$/
+
+/**
+ * Build the candidate list for `selectNewestSealedDossier` from directory entries, statting only
+ * names that can actually be a sealed dossier. `selectNewestSealedDossier` ignores every other
+ * name, so skipping their stat is output-identical while avoiding one filesystem call per
+ * unrelated entry — a repo root routinely holds thousands of them. `statMtimeMs` is supplied by
+ * the caller so the same best-effort `statSync` error handling and path join stay at the I/O edge.
+ */
+export function sealedDossierCandidates(
+  names: readonly string[],
+  statMtimeMs: (name: string) => number,
+): { name: string; mtimeMs: number }[] {
+  const out: { name: string; mtimeMs: number }[] = []
+  for (const name of names) {
+    if (!SEALED_NAME_RE.test(name)) continue
+    out.push({ name, mtimeMs: statMtimeMs(name) })
+  }
+  return out
+}
 
 /**
  * Picks the newest sealed-dossier filename from a candidate list (typically a directory's

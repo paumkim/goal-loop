@@ -12,39 +12,33 @@
  * --mono prints every frame under reduced color: the smoke arm for the NO_COLOR / TERM=dumb
  * contract — glyphs demote to ASCII (verified by the smoke test) and no frame may regress.
  */
-import { RGBA } from "@opentui/core"
 import { testRender } from "@opentui/solid"
 import type { JSX } from "@opentui/solid"
 import { HistoryBlock, LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
+import { positiveFinite as checkPositiveFinite } from "./positive-finite.ts"
+import { PALETTE } from "./render-theme.ts"
+import { monoFlag } from "./render-fixtures.ts"
 import type { GoalSnapshot, Verdict } from "../src/core/types.ts"
 
 /** [width, height, --flags…]: flags may appear in any slot; positionals must be positive finite numbers. */
 const rawArgv = process.argv.slice(2)
 const positional = rawArgv.filter(a => !a.startsWith("--"))
 const flagArgs = rawArgv.filter(a => a.startsWith("--"))
-const positiveFinite = (value: string | undefined, dflt: number, name: string): number => {
-  if (value === undefined) return dflt
-  const n = Number(value)
-  if (!Number.isFinite(n) || n <= 0) {
-    console.error(`render-history.tsx: ${name} must be a positive finite number (got "${value}")`)
-    process.exit(2)
-  }
-  return n
-}
+const positiveFinite = (value: string | undefined, dflt: number, name: string): number =>
+  checkPositiveFinite(value, dflt, `render-history.tsx: ${name}`)
 const width = positiveFinite(positional[0], 112, "width")
 const height = positiveFinite(positional[1], 34, "height")
 const empty = flagArgs.includes("--empty")
-const mono = flagArgs.includes("--mono")
-if (mono) process.env.NO_COLOR = "1"
+const mono = monoFlag(flagArgs)
 
 const theme: HistoryTheme = {
   text: {
-    base: RGBA.fromHex("#e8e8e8"),
-    muted: RGBA.fromHex("#a0a0a0"),
-    faint: RGBA.fromHex("#6f6f6f"),
+    base: PALETTE.base,
+    muted: PALETTE.muted,
+    faint: PALETTE.faint,
     feedback: {
-      info: { base: RGBA.fromHex("#6cb6ff") },
-      warning: { base: RGBA.fromHex("#e0af3c") },
+      info: { base: PALETTE.info },
+      warning: { base: PALETTE.warning },
     },
   },
 }

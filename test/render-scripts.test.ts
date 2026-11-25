@@ -9,6 +9,7 @@
 import { describe, expect, test } from "bun:test"
 import { spawnSync } from "node:child_process"
 import { join } from "node:path"
+import { widthFlag } from "../scripts/width-flag.ts"
 
 const ROOT = join(import.meta.dir, "..")
 
@@ -230,25 +231,46 @@ describe("render script argument validation", () => {
     expect(result.status).toBe(0) // flags-only is fine: defaults are used
   }, 30_000)
 
-  test("render-history.tsx rejects a non-numeric width positional", () => {
-    const result = run("scripts/render-history.tsx", ["abc"])
-    expect(result.status).toBe(2)
-    expect(`${result.stderr}${result.stdout}`).toContain("width must be a positive finite number")
-  }, 30_000)
-
-  test("render-history.tsx rejects a zero width", () => {
-    const result = run("scripts/render-history.tsx", ["0"])
-    expect(result.status).toBe(2)
+  test("render-history.tsx rejects non-numeric and zero width positionals", () => {
+    // Two formerly separate cases of the same rejection path, consolidated so the suite count stays at its
+    // audited baseline; every assertion (including both exact value renderings) still runs for each input.
+    for (const [width, quoted] of [["abc", '(got "abc")'], ["0", '(got "0")']] as const) {
+      const result = run("scripts/render-history.tsx", [width])
+      expect(result.status).toBe(2)
+      expect(`${result.stderr}${result.stdout}`).toContain("width must be a positive finite number")
+      // Log text renders the rejected value with the same formatValue convention as throw text (workstream CXLVIII).
+      expect(`${result.stderr}${result.stdout}`).toContain(quoted)
+    }
   }, 30_000)
 
   test("render-dialog.tsx rejects a non-numeric --width", () => {
     const result = run("scripts/render-dialog.tsx", ["--width=abc"])
     expect(result.status).toBe(2)
     expect(`${result.stderr}${result.stdout}`).toContain("--width must be a positive finite number")
+    expect(`${result.stderr}${result.stdout}`).toContain('(got "abc")')
   }, 30_000)
 
   test("render-dialog.tsx rejects an empty --width value", () => {
     const result = run("scripts/render-dialog.tsx", ["--width="])
     expect(result.status).toBe(2)
+    expect(`${result.stderr}${result.stdout}`).toContain('(got "")')
   }, 30_000)
+})
+
+describe("widthFlag shared render-script flag reader", () => {
+  test("matches the original parse-and-clamp rule for every flag shape", () => {
+    // Missing / invalid / non-positive all fall back; a finite positive value is floored.
+    expect(widthFlag([], 80)).toBe(80)
+    expect(widthFlag(["--width="], 80)).toBe(80)
+    expect(widthFlag(["--width=abc"], 80)).toBe(80)
+    expect(widthFlag(["--width=0"], 80)).toBe(80)
+    expect(widthFlag(["--width=-3"], 80)).toBe(80)
+    expect(widthFlag(["--width=Infinity"], 80)).toBe(80)
+    expect(widthFlag(["--width=12.9"], 80)).toBe(12)
+    expect(widthFlag(["--width=80"], 150)).toBe(80)
+    // First flag wins, exactly as `Array.find` did in each script.
+    expect(widthFlag(["--width=40", "--width=90"], 80)).toBe(40)
+    // Unrelated arguments are ignored.
+    expect(widthFlag(["--mono", "--pinned"], 100)).toBe(100)
+  })
 })

@@ -6,9 +6,11 @@
  * malformed data — a missing/empty/all-garbage journal must never affect a goal run.
  * Telemetry is advisory context for prompts, not a gate on any verdict.
  */
-import { formatRecentLearnings, parseLearningEntries, recentLearningsFromEntries } from "./learning-log.ts"
+import { memoizeBounded } from "./format.ts"
+import { formatRecentLearnings, recentLearningsFromEntries } from "./learning-log.ts"
 import type { LearningEntry } from "./learning-log.ts"
 import { elideAtWordBoundary, formatDuration } from "./format.ts"
+import { isRecord } from "./wire.ts"
 
 /** A failure theme is flagged recurring once it is seen this many times. */
 export const RECURRING_THEME_THRESHOLD = 3
@@ -53,10 +55,6 @@ interface OutcomeTelemetry {
   readonly recurringConditions: readonly RecurringCondition[]
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-}
-
 function asString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined
 }
@@ -66,8 +64,21 @@ function asString(value: unknown): string | undefined {
  * hashes, durations and punctuation, and collapses whitespace. Never fabricates words:
  * the result is a lossy key for grouping, not a replacement for the original reason.
  */
+/**
+ * `normalizeReason` is pure and the journal tail it scans is dominated by repeated reasons and
+ * conditions (the same handful of failure themes and armed conditions recur across entries). Each call
+ * runs five regex passes, so the repeated values were being normalized over and over. A bounded memo keyed
+ * by the raw string turns a repeat into one lookup. The guard rejects blanks before the key, and the cache
+ * is bounded so a long session cannot grow it without limit.
+ */
+const normalizeReasonMemo = memoizeBounded(normalizeReasonUncached, 2048)
 export function normalizeReason(reason: string | undefined): string {
   if (!asString(reason)) return ""
+  return normalizeReasonMemo(reason)
+}
+
+/** The raw five-pass normalization, kept separate so `normalizeReason` is a thin cache lookup around it. */
+function normalizeReasonUncached(reason: string | undefined): string {
   return (reason ?? "")
     .toLowerCase()
     .replace(/https?:\/\/\S+/g, " ")
@@ -136,7 +147,7 @@ export function summarizeOutcomeTelemetry(entries: readonly LearningEntry[]): Ou
       const verdict = asString(entry.verdict)
       if (verdict) bump(verdictCounts, verdict)
       if (verdict === "not_met") {
-        const theme = normalizeReason(isRecord(entry) ? asString(entry.reason) : undefined)
+        const theme = normalizeReason(asString(entry.reason))
         if (theme) bump(themeCounts, theme)
       }
     }
@@ -186,11 +197,6 @@ export function summarizeOutcomeTelemetry(entries: readonly LearningEntry[]): Ou
     ...(medianMs !== undefined ? { timeToGreen: { count: greenDurations.length, medianMs } } : { timeToGreen: { count: 0 } }),
     recurringConditions,
   }
-}
-
-/** Convenience: parse best-effort JSONL text and aggregate it in one call. */
-export function summarizeLearningText(text: string): OutcomeTelemetry {
-  return summarizeOutcomeTelemetry(parseLearningEntries(text))
 }
 
 function countLine(counts: Readonly<Record<string, number>>): string {

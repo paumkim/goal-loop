@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { execFileSync, spawnSync } from "node:child_process"
+import { execFileSync, spawn, spawnSync } from "node:child_process"
 import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -37,7 +37,7 @@ const setup = (checkScript: string, extraConfig: Record<string, string> = {}) =>
   mkdirSync(join(dir, ".term", "coordinator"), { recursive: true })
   writeFileSync(
     join(dir, ".term/coordinator/config.json"),
-    JSON.stringify({ devBranch: "dev", worktreeDir: "worktrees", ...extraConfig }) + "\n",
+    JSON.stringify({ devBranch: "dev", worktreeDir: "worktree", ...extraConfig }) + "\n",
   )
   writeFileSync(join(dir, ".term/coordinator/state.json"), '{"version":1,"leases":{},"mergeLock":null}\n')
   git(dir, ["add", "-A"])
@@ -51,7 +51,7 @@ afterEach(() => {
 /** Claim, write files in the wt worktree, commit, submit. Returns the worktree path. */
 const claimCommitSubmit = (slug: string, files: Record<string, string>, date: string, paths = ".") => {
   expect(run(dir, ["claim", slug, "--agent", "t", "--paths", paths]).status).toBe(0)
-  const wt = join(dir, "worktrees", `wt-${slug}`)
+  const wt = join(dir, "worktree", `wt-${slug}`)
   for (const [rel, content] of Object.entries(files)) {
     const target = join(wt, rel)
     mkdirSync(join(target, ".."), { recursive: true })
@@ -113,7 +113,7 @@ describe("never destroy uncommitted work (requirement 1)", () => {
     const result = run(wtLease, ["merge-next"])
     expect(result.status).toBe(0)
     expect(savedRefs()).toEqual([])
-    expect(readdirSync(join(dir, "worktrees")).filter((f) => f === "wt-exempt")).toEqual([])
+    expect(readdirSync(join(dir, "worktree")).filter((f) => f === "wt-exempt")).toEqual([])
   })
 })
 
@@ -166,7 +166,7 @@ describe("lease-scoped paths, enforced at submit (requirement 3)", () => {
     setup("true")
     const claim = run(dir, ["claim", "scoped", "--agent", "t", "--paths", "src/only.ts"])
     expect(claim.status).toBe(0)
-    const wt = join(dir, "worktrees", "wt-scoped")
+    const wt = join(dir, "worktree", "wt-scoped")
     mkdirSync(join(wt, "src"), { recursive: true })
     writeFileSync(join(wt, "src", "only.ts"), "claimed\n")
     writeFileSync(join(wt, "escaped.ts"), "not claimed\n")
@@ -183,7 +183,7 @@ describe("lease-scoped paths, enforced at submit (requirement 3)", () => {
     setup("true")
     const claim = run(dir, ["claim", "forced", "--agent", "t", "--paths", "src/only.ts"])
     expect(claim.status).toBe(0)
-    const wt = join(dir, "worktrees", "wt-forced")
+    const wt = join(dir, "worktree", "wt-forced")
     mkdirSync(join(wt, "src"), { recursive: true })
     writeFileSync(join(wt, "src", "only.ts"), "claimed\n")
     writeFileSync(join(wt, "escaped.ts"), "not claimed\n")
@@ -200,7 +200,7 @@ describe("lease-scoped paths, enforced at submit (requirement 3)", () => {
     setup("true", { sharedPaths: "SPEC.md,docs/shared/" })
     const claim = run(dir, ["claim", "shared-user", "--agent", "t", "--paths", "src/only.ts"])
     expect(claim.status).toBe(0)
-    const wt = join(dir, "worktrees", "wt-shared-user")
+    const wt = join(dir, "worktree", "wt-shared-user")
     mkdirSync(join(wt, "src"), { recursive: true })
     writeFileSync(join(wt, "src", "only.ts"), "claimed\n")
     writeFileSync(join(wt, "SPEC.md"), "marker\n")
@@ -216,11 +216,13 @@ describe("lease-scoped paths, enforced at submit (requirement 3)", () => {
     setup("true")
     const claim = run(dir, ["claim", "changelog-touch", "--agent", "t", "--paths", "src/only.ts"])
     expect(claim.status).toBe(0)
-    const wt = join(dir, "worktrees", "wt-changelog-touch")
+    const wt = join(dir, "worktree", "wt-changelog-touch")
     mkdirSync(join(wt, "src"), { recursive: true })
     writeFileSync(join(wt, "src", "only.ts"), "claimed\n")
     mkdirSync(join(wt, "docs"), { recursive: true })
     writeFileSync(join(wt, "docs", "changelog.html"), "<p>new row</p>\n")
+    mkdirSync(join(wt, ".term", "changelog-pending"), { recursive: true })
+    writeFileSync(join(wt, ".term", "changelog-pending", "changelog-touch.md"), "<!-- behavior-change: shared pending -->\n")
     git(wt, ["add", "-A"])
     git(wt, ["commit", "-q", "-m", "changelog row"], "2026-11-02T10:00:00+00:00")
     const submit = run(wt, ["submit"])
@@ -231,7 +233,7 @@ describe("lease-scoped paths, enforced at submit (requirement 3)", () => {
     setup("true")
     const claim = run(dir, ["claim", "globbed", "--agent", "t", "--paths", "src/**"])
     expect(claim.status).toBe(0)
-    const wt = join(dir, "worktrees", "wt-globbed")
+    const wt = join(dir, "worktree", "wt-globbed")
     mkdirSync(join(wt, "src", "deep", "deeper"), { recursive: true })
     writeFileSync(join(wt, "src", "deep", "deeper", "file.ts"), "deep\n")
     git(wt, ["add", "-A"])
@@ -244,7 +246,7 @@ describe("lease-scoped paths, enforced at submit (requirement 3)", () => {
     setup("true")
     const claim = run(dir, ["claim", "warn-uncommitted", "--agent", "t", "--paths", "."])
     expect(claim.status).toBe(0)
-    const wt = join(dir, "worktrees", "wt-warn-uncommitted")
+    const wt = join(dir, "worktree", "wt-warn-uncommitted")
     writeFileSync(join(wt, "committed.txt"), "in\n")
     git(wt, ["add", "-A"])
     git(wt, ["commit", "-q", "-m", "c"], "2026-11-02T10:00:00+00:00")
@@ -264,57 +266,50 @@ describe("lease-scoped paths, enforced at submit (requirement 3)", () => {
   })
 })
 
-describe("merge-owned SPEC marker (requirement 4)", () => {
-  const specFixture = (reality: { files: number; tests: number }, marker: string) => {
+describe("gate-computed spec counts (requirement 4)", () => {
+  const specFixture = (reality: { files: number; tests: number }) => {
     mkdirSync(join(dir, "scripts"), { recursive: true })
     writeFileSync(
       join(dir, "scripts", "spec-check.ts"),
       `#!/usr/bin/env bun
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 const ROOT = join(import.meta.dir, "..");
 const reality = JSON.parse(readFileSync(join(ROOT, ".reality.json"), "utf8"));
-const spec = readFileSync(join(ROOT, "SPEC.md"), "utf8");
-const m = spec.match(/<!--\\s*spec-check\\s+files=(\\d+)\\s+tests=(\\d+)\\s*-->/);
-const ok = m && Number(m[1]) === reality.files && Number(m[2]) === reality.tests;
-if (process.argv.includes("--write")) {
-  if (reality.tests < 0) process.exit(1);
-  const next = spec.replace(/<!--\\s*spec-check\\s+files=\\d+\\s+tests=\\d+\\s*-->/, \`<!-- spec-check files=\${reality.files} tests=\${reality.tests} -->\`);
-  writeFileSync(join(ROOT, "SPEC.md"), next);
-  process.exit(0);
-}
-process.exit(ok ? 0 : 1);
+if (reality.tests < 0) { console.error("bun test exits non-zero (a test failed)"); process.exit(1); }
+console.log("spec-check: ok (" + reality.files + " files, " + reality.tests + " tests — computed at gate time)");
+process.exit(0);
 `,
     )
-    writeFileSync(join(dir, "SPEC.md"), `# fixture\n\n${marker}\n`)
+    writeFileSync(join(dir, "SPEC.md"), "# fixture\n\nno stored marker\n")
     writeFileSync(join(dir, ".reality.json"), JSON.stringify(reality) + "\n")
   }
 
-  test("merge-next re-counts the marker on the merged tree; no agent hand-bump; gate goes green", () => {
+  test("merge-next computes counts on the merged tree; SPEC.md is never rewritten", () => {
     setup("bun scripts/spec-check.ts")
-    specFixture({ files: 2, tests: 3 }, "<!-- spec-check files=1 tests=1 -->")
+    specFixture({ files: 2, tests: 3 })
     git(dir, ["add", "-A"])
-    git(dir, ["commit", "-q", "-m", "add stale marker + fake spec-check"])
-    const wtMarker = claimCommitSubmit("marker-flow", { "src/new.ts": "export {}\n" }, "2026-11-02T10:00:00+00:00", "src/**,SPEC.md,scripts/**,.reality.json")
-    const result = run(wtMarker, ["merge-next"])
+    git(dir, ["commit", "-q", "-m", "count-at-gate fixture"])
+    const wt = claimCommitSubmit("count-flow", { "src/new.ts": "export {}\n" }, "2026-11-02T10:00:00+00:00", "src/**,SPEC.md,scripts/**,.reality.json")
+    const result = run(wt, ["merge-next"])
     expect(result.status).toBe(0)
-    const devSpec = git(dir, ["show", "dev:SPEC.md"])
-    expect(devSpec).toContain("<!-- spec-check files=2 tests=3 -->")
-    expect(lease("marker-flow").status).toBe("done")
+    expect(result.stdout).toContain("counts computed at gate time")
+    expect(git(dir, ["show", "dev:SPEC.md"])).toContain("no stored marker")
+    expect(lease("count-flow").status).toBe("done")
   })
 
   test("a red suite in the merged tree aborts before the gate; dev untouched; lease stays submitted", () => {
     setup("bun scripts/spec-check.ts")
-    specFixture({ files: 2, tests: -1 }, "<!-- spec-check files=1 tests=1 -->")
+    specFixture({ files: 2, tests: -1 })
     git(dir, ["add", "-A"])
     git(dir, ["commit", "-q", "-m", "red suite"])
-    const wtMarkerRed = claimCommitSubmit("marker-red", { "src/new.ts": "export {}\n" }, "2026-11-02T10:00:00+00:00", "src/**,SPEC.md,scripts/**,.reality.json")
+    const wtRed = claimCommitSubmit("count-red", { "src/new.ts": "export {}\n" }, "2026-11-02T10:00:00+00:00", "src/**,SPEC.md,scripts/**,.reality.json")
     const devBefore = git(dir, ["rev-parse", "dev"]).trim()
-    const result = run(wtMarkerRed, ["merge-next"])
+    const result = run(wtRed, ["merge-next"])
     expect(result.status).toBe(1)
-    expect(result.stderr).toContain("spec-check --write failed")
+    expect(result.stderr).toContain("spec-check failed")
     expect(git(dir, ["rev-parse", "dev"]).trim()).toBe(devBefore)
-    expect(lease("marker-red").status).toBe("submitted")
+    expect(lease("count-red").status).toBe("submitted")
   })
 })
 
@@ -362,6 +357,32 @@ writeFileSync(f, c.replace("<!-- changes:end -->", "<tr><td>merged-row</td></tr>
   })
 })
 
+
+describe("merge folds per-slug changelog pending files", () => {
+  test("a lease's pending note lands in docs/changelog.html and the pending file is deleted", () => {
+    setup("true")
+    mkdirSync(join(dir, "scripts"), { recursive: true })
+    // A no-op docs-watch keeps the folded note intact (the real one only manages stamps/table).
+    writeFileSync(join(dir, "scripts", "docs-watch.ts"), "process.exit(0)\n")
+    mkdirSync(join(dir, "docs"), { recursive: true })
+    writeFileSync(join(dir, "docs", "changelog.html"), "<!-- changes:start -->\n<!-- changes:end -->\n")
+    git(dir, ["add", "-A"])
+    git(dir, ["commit", "-q", "-m", "docs fixture"])
+    const wt = claimCommitSubmit(
+      "pending-fold",
+      { ".term/changelog-pending/pending-fold.md": "<!-- behavior-change: pending fold landed -->\n", "src/note.ts": "export {}\n" },
+      "2026-11-02T10:00:00+00:00",
+      "src/**,.term/changelog-pending/**",
+    )
+    const result = run(wt, ["merge-next"])
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain("folded changelog pending for pending-fold")
+    expect(git(dir, ["show", "dev:docs/changelog.html"])).toContain("pending fold landed")
+    expect(git(dir, ["ls-tree", "-r", "--name-only", "dev", "--", ".term/changelog-pending/"]).trim()).toBe("")
+    expect(lease("pending-fold").status).toBe("done")
+  })
+})
+
 describe("merge locking that survives crashes (requirement 6)", () => {
   test("stale lock reclamation prints the reclaimed holder instead of silently deleting it", () => {
     setup("true")
@@ -395,7 +416,7 @@ describe("visibility: status, queue, doctor (requirement 7)", () => {
   test("status --json includes per-lease worktree path, uncommitted count and merge flag", () => {
     setup("true")
     claimCommitSubmit("visible", { v: "y\n" }, "2026-11-02T10:00:00+00:00")
-    const wt = join(dir, "worktrees", "wt-visible")
+    const wt = join(dir, "worktree", "wt-visible")
     writeFileSync(join(wt, "loose.txt"), "loose\n")
     const result = run(dir, ["status", "--json"])
     expect(result.status).toBe(0)
@@ -408,7 +429,7 @@ describe("visibility: status, queue, doctor (requirement 7)", () => {
   test("status --json defaults to active leases + counts summary; --all includes done leases", () => {
     setup("true")
     claimCommitSubmit("historic", { h: "1\n" }, "2026-11-02T09:00:00+00:00", "h")
-    expect(run(join(dir, "worktrees", "wt-historic"), ["merge-next"]).status).toBe(0)
+    expect(run(join(dir, "worktree", "wt-historic"), ["merge-next"]).status).toBe(0)
     expect(lease("historic").status).toBe("done")
 
     const wt = claimCommitSubmit("active-lease", { a: "2\n" }, "2026-11-02T10:00:00+00:00", "a")
@@ -487,7 +508,7 @@ describe("scratch-branch cleanup (merge-next)", () => {
     const result = run(wtScratch, ["merge-next"])
     expect(result.status).toBe(0)
     expect(git(dir, ["branch", "--format=%(refname:short)", "--list", "merge-check-*"]).trim()).toBe("")
-    expect(readdirSync(join(dir, "worktrees")).filter((f) => f.startsWith("wt-merge-check-"))).toEqual([])
+    expect(readdirSync(join(dir, "worktree")).filter((f) => f.startsWith("wt-merge-check-"))).toEqual([])
   })
 })
 
@@ -502,14 +523,14 @@ describe("two agents, overlapping scopes, conflicting edits (requirement 8)", ()
 
     // agent A claims the shared scope and makes a green change
     expect(run(dir, ["claim", "agent-a", "--agent", "agent-a", "--paths", "src/**,SPEC.md"]).status).toBe(0)
-    const wtA = join(dir, "worktrees", "wt-agent-a")
+    const wtA = join(dir, "worktree", "wt-agent-a")
     writeFileSync(join(wtA, "src/shared.txt"), "good\nalpha\n")
     git(wtA, ["add", "-A"])
     git(wtA, ["commit", "-q", "-m", "alpha"], "2026-11-02T09:00:00+00:00")
 
     // agent B claims the same shared scope (forced: paths overlap) and makes a conflicting change
     expect(run(dir, ["claim", "agent-b", "--agent", "agent-b", "--paths", "src/**,SPEC.md", "--force"]).status).toBe(0)
-    const wtB = join(dir, "worktrees", "wt-agent-b")
+    const wtB = join(dir, "worktree", "wt-agent-b")
     writeFileSync(join(wtB, "src/shared.txt"), "good\nbeta\n")
     git(wtB, ["add", "-A"])
     git(wtB, ["commit", "-q", "-m", "beta"], "2026-11-02T10:00:00+00:00")
@@ -564,7 +585,7 @@ describe("two agents, overlapping scopes, conflicting edits (requirement 8)", ()
     expect(git(dir, ["rev-parse", "dev"]).trim()).toBe(devBefore)
     expect(lease("red-agent").status).toBe("submitted")
     // and a follow-up good merge lands after the red one is fixed on the branch
-    const wt = join(dir, "worktrees", "wt-red-agent")
+    const wt = join(dir, "worktree", "wt-red-agent")
     writeFileSync(join(wt, "src/red.txt"), "good\nfixed\n")
     git(wt, ["add", "-A"])
     git(wt, ["commit", "-q", "-m", "fix to green"], "2026-11-02T11:00:00+00:00")
@@ -587,7 +608,7 @@ describe("semantic and drift guards (Workstream CXIII)", () => {
     git(dir, ["add", "-A"])
     git(dir, ["commit", "-q", "--amend", "--no-edit"], "2026-11-01T10:00:00+00:00")
     claimCommitSubmit("sem-a", { "src/core/a.ts": "a\n" }, "2026-11-02T10:00:00+00:00", "src/core/a.ts")
-    const result = run(join(dir, "worktrees", "wt-sem-a"), ["merge-next"])
+    const result = run(join(dir, "worktree", "wt-sem-a"), ["merge-next", "--force"])
     expect(result.status).toBe(0)
     expect(result.stderr).toContain("SEMANTIC-RISK")
     expect(result.stderr).toContain("sem-b")
@@ -624,3 +645,136 @@ describe("semantic and drift guards (Workstream CXIII)", () => {
     expect(result.stdout).toContain("post-merge: health ok")
   })
 })
+
+// merge-status / await-merge are read-only observability over the SAME flock+holder that
+// merge-next uses. The helpers below simulate a real holder without starting a merge.
+const waitFor = async (predicate: () => boolean, ms = 4000): Promise<boolean> => {
+  const until = Date.now() + ms
+  while (Date.now() < until) {
+    if (predicate()) return true
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+  return false
+}
+
+const runAsync = (args: string[], extraEnv?: Record<string, string>) =>
+  new Promise<{ status: number; stdout: string; stderr: string }>((resolve) => {
+    const child = spawn(SCRIPT, args, { cwd: dir, env: { ...GIT_ENV, ...(extraEnv ?? {}) } })
+    let out = ""
+    let err = ""
+    child.stdout?.setEncoding("utf8")
+    child.stderr?.setEncoding("utf8")
+    child.stdout?.on("data", (chunk) => { out += chunk })
+    child.stderr?.on("data", (chunk) => { err += chunk })
+    child.on("close", (code) => resolve({ status: code ?? 0, stdout: out, stderr: err }))
+  })
+
+const mergeStatus = () => {
+  const result = run(dir, ["merge-status"])
+  expect(result.status).toBe(0)
+  return JSON.parse(result.stdout)
+}
+
+/** Hold the existing merge-lock flock for `seconds`, writing a live holder while held. */
+const holdLock = (seconds: number) => {
+  const lockFile = join(dir, ".term", "coordinator", ".merge-lock-file")
+  const holder = join(dir, ".term", "coordinator", ".merge-lock", "holder")
+  mkdirSync(join(dir, ".term", "coordinator", ".merge-lock"), { recursive: true })
+  return spawn("bash", [
+    "-c",
+    `exec 9<>${lockFile}; flock 9; printf 'slug=live-merge branch=wt/live-merge pid=%s started=%s\\n' "$$" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > ${holder}; sleep ${seconds}; rm -f ${holder}`,
+  ], { env: GIT_ENV, stdio: "ignore" })
+}
+
+describe("merge-status / await-merge / merge-next --wait (read-only merge lock view)", () => {
+  test("merge-status is JSON with the four documented fields and a clear recommendation when free", () => {
+    setup("true")
+    const status = mergeStatus()
+    expect(status.mergeInProgress).toBe(false)
+    expect(status.holder).toBeNull()
+    expect(status.ageSeconds).toBe(0)
+    expect(typeof status.recommendation).toBe("string")
+    expect(status.recommendation).toContain("no merge in progress")
+  })
+
+  test("concurrent readers agree while a live holder holds the existing flock; await waits, then clears", async () => {
+    setup("true")
+    const holder = holdLock(2)
+    try {
+      expect(await waitFor(() => existsSyncHolder(dir))).toBe(true)
+      const [a, b] = await Promise.all([runAsync(["merge-status"]), runAsync(["merge-status"])])
+      expect(a.status).toBe(0)
+      expect(b.status).toBe(0)
+      expect(JSON.parse(a.stdout)).toEqual(JSON.parse(b.stdout))
+      const live = JSON.parse(a.stdout)
+      expect(live.mergeInProgress).toBe(true)
+      expect(live.holder).toBe("live-merge")
+      expect(live.recommendation).toContain("await-merge")
+
+      // While held, await-merge times out and still prints the live status as JSON.
+      const waited = await runAsync(["await-merge", "--timeout", "0"])
+      expect(waited.status).toBe(1)
+      expect(JSON.parse(waited.stdout).mergeInProgress).toBe(true)
+      expect(waited.stderr).toContain("timed out")
+
+      // Once the holder releases the flock and removes its record, the same call succeeds.
+      await new Promise<void>((resolve) => holder.on("exit", () => resolve()))
+      const after = mergeStatus()
+      expect(after.mergeInProgress).toBe(false)
+      const done = await runAsync(["await-merge", "--timeout", "3"])
+      expect(done.status).toBe(0)
+      expect(JSON.parse(done.stdout).mergeInProgress).toBe(false)
+    } finally {
+      if (!holder.killed) holder.kill()
+    }
+  })
+
+  test("a dead holder is reported as stale and does not block await-merge", async () => {
+    setup("true")
+    mkdirSync(join(dir, ".term", "coordinator", ".merge-lock"), { recursive: true })
+    const started = new Date(Date.now() - 10_000).toISOString()
+    writeFileSync(join(dir, ".term", "coordinator", ".merge-lock", "holder"),
+      `slug=dead-merge branch=wt/dead-merge pid=999999 started=${started}\n`)
+    const status = mergeStatus()
+    expect(status.mergeInProgress).toBe(true)
+    expect(status.holder).toBe("dead-merge")
+    expect(status.ageSeconds).toBeGreaterThanOrEqual(9)
+    expect(status.recommendation).toContain("dead pid")
+    expect(status.recommendation).toContain("999999")
+    // Dead pid + free flock: await-merge returns immediately rather than hanging.
+    const awaited = await runAsync(["await-merge", "--timeout", "0"])
+    expect(awaited.status).toBe(0)
+    expect(JSON.parse(awaited.stdout).mergeInProgress).toBe(true)
+  })
+
+  test("a holder past the 60-minute reclaim window is labelled stale", () => {
+    setup("true")
+    mkdirSync(join(dir, ".term", "coordinator", ".merge-lock"), { recursive: true })
+    const started = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+    writeFileSync(join(dir, ".term", "coordinator", ".merge-lock", "holder"),
+      `slug=old-merge branch=wt/old-merge pid=${process.pid} started=${started}\n`)
+    const status = mergeStatus()
+    expect(status.mergeInProgress).toBe(true)
+    expect(status.holder).toBe("old-merge")
+    expect(status.ageSeconds).toBeGreaterThan(3600)
+    expect(status.recommendation).toContain("stale")
+    expect(status.recommendation).toContain("3600s")
+  })
+
+  test("merge-next --wait is a thin alias: it merges normally when the lock is free", () => {
+    setup("true")
+    const wt = claimCommitSubmit("waited", { "w.txt": "w\n" }, "2026-11-02T10:00:00+00:00")
+    const result = run(wt, ["merge-next", "--wait"])
+    expect(result.status).toBe(0)
+    expect(lease("waited").status).toBe("done")
+    expect(run(dir, ["merge-next", "--help"]).stdout).toContain("--wait")
+  })
+})
+
+function existsSyncHolder(root: string): boolean {
+  try {
+    return readFileSync(join(root, ".term", "coordinator", ".merge-lock", "holder"), "utf8").includes("live-merge")
+  } catch {
+    return false
+  }
+}

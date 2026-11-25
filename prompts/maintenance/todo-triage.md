@@ -1,36 +1,7 @@
-# TODO / FIXME Triage
+# Triage TODOs
 
-Turn scattered `TODO`, `FIXME`, `HACK`, and `XXX` comments in the current
-repository into either tracked work or deleted noise.
+Turn scattered `TODO`, `FIXME`, `HACK`, and `XXX` comments in this repository into tracked work or deleted noise. Search tracked source, config, and docs. Skip dependencies, build output, vendor code, and fixtures.
 
-## Before acting
-- Discover the project's issue/task tracker conventions (issue tracker, local
-  backlog file, or plain markdown) from its docs; do not assume a specific tool
-  exists.
-- Record a baseline of test/lint/typecheck results.
+Delete stale, done, and decorative comments. Rewrite vague ones into concrete notes. Flag any you are unsure about.
 
-## Inventory
-- Search tracked source/config/docs for `TODO`, `FIXME`, `HACK`, `XXX`
-  (case-insensitive), excluding dependencies, build output, vendor code, and
-  fixtures/snapshots.
-- Record each hit with `file:line` and a one-line summary.
-
-## Triage each
-- **Stale or done:** delete the comment.
-- **Actionable and self-contained:** fix it now as a small verified change if it
-  is low risk; otherwise promote it to a tracked task with `file:line` and enough
-  context to act later.
-- **Vague ("handle later"):** rewrite it into a concrete, actionable note or
-  remove it.
-- **Noise/decorative:** delete it.
-- **Unsure:** keep it and flag it with `file:line`.
-
-## Rules
-- Comment-only removals must not change behavior. Do not edit code beyond the
-  comment unless the item is being fixed as its own verified unit.
-- Do not introduce new TODOs. Follow repository safety rules for staging and checks.
-
-## Verify
-- Re-run the inventory and show the before/after count.
-- Re-run the baseline checks; quote output and confirm no behavior change.
-- Show `git diff --stat` and a list of promoted tasks with their references.
+Fix low-risk, self-contained items as small verified changes. Promote larger items into the project's task tracker with enough context to act later. Show me the before and after count and the tasks you promoted.

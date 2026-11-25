@@ -180,7 +180,15 @@ describe("buildSpendLedger", () => {
 
   test("the same record and clock render the same bytes", () => {
     const goal = loopGoal([entry(1, spend(), shaA), entry(2, undefined, shaB)])
-    expect(buildSpendLedger(goal, now).markdown).toBe(buildSpendLedger(goal, now).markdown)
+    const first = buildSpendLedger(goal, now).markdown
+    const second = buildSpendLedger(goal, now).markdown
+    expect(second).toBe(first)
+    // Pin the receipt: "deterministic" must not mean "deterministically wrong" — a missing row, a
+    // fabricated figure for the unmeasured iteration, or a changed clock line must fail this test.
+    expect(first).toContain("# Goal loop spend ledger")
+    expect(first).toContain("_Generated 2027-01-15T08:00:00.000Z")
+    expect(first).toContain("| v1 | 2023-11-14T22:13:21.000Z | $0.42 | 182345 | 21000 | 3000 | 96000 | 12500 | 9 | aaaaaaa |")
+    expect(first).toContain("| v2 | 2023-11-14T22:13:22.000Z | — | — | — | — | — | — | 9 | bbbbbbb |")
   })
 })
 

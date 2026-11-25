@@ -17,7 +17,7 @@ export const readPromptBodies = (config: Config): { bodies: string[]; missing: s
   return { bodies, missing }
 }
 
-export interface ObjectiveInput {
+interface ObjectiveInput {
   readonly objective: string
   readonly branch: string
   readonly baseBranch: string

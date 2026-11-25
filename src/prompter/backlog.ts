@@ -1,4 +1,4 @@
-import type { BacklogLine, TaskMarker, TaskState } from "./types.ts"
+import { ACTIVE_TASK_STATUSES, type BacklogLine, type TaskMarker, type TaskState } from "./types.ts"
 import { shortId } from "./util.ts"
 
 const CHECKBOX = /^(\s*)([-*+]\s+\[)([ xX])(\]\s*)(.*)$/
@@ -27,9 +27,6 @@ export const parseBacklog = (text: string): BacklogLine[] => {
   return out
 }
 
-/** States that still own a line: a marker can be missing after a crash, so the journal guards those too. */
-const ACTIVE_STATES: ReadonlySet<string> = new Set(["running", "in_review"])
-
 /**
  * First eligible unchecked line in file order. Removing a marker is the documented retry signal, so a
  * *terminal* journal record (failed/rejected/interrupted/merged) must not disqualify a line whose marker was
@@ -37,10 +34,10 @@ const ACTIVE_STATES: ReadonlySet<string> = new Set(["running", "in_review"])
  * Only live states still block selection (they cannot have a stale absence of a marker).
  */
 export const selectNextTask = (lines: readonly BacklogLine[], states: ReadonlyMap<string, TaskState>): BacklogLine | undefined =>
-  lines.find((line) => !line.checked && !line.marker && !ACTIVE_STATES.has(states.get(line.id)?.status ?? ""))
+  lines.find((line) => !line.checked && !line.marker && !ACTIVE_TASK_STATUSES.has(states.get(line.id)?.status ?? ""))
 
 /** Render one line with an updated marker (and checkbox for terminal-done states). */
-export const renderLine = (line: BacklogLine, status: string, id: string, done: boolean): string => {
+const renderLine = (line: BacklogLine, status: string, id: string, done: boolean): string => {
   const match = CHECKBOX.exec(line.raw)
   if (!match) return line.raw
   const indent = match[1] ?? ""

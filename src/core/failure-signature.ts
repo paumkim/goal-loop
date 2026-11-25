@@ -1,5 +1,7 @@
+import { createHash } from "node:crypto"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
+import { normalizeConditionText } from "./format.ts"
 import { isWindowsDrivePathOnPosix } from "./wire.ts"
 import type { Verdict, VerdictEntry, VerdictVerificationMatrix, VerifyCheckEvidence } from "./types.ts"
 
@@ -28,25 +30,20 @@ interface RepeatedFailureSignature {
   readonly summary: string
 }
 
-function normalize(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .trim()
-    .replace(/\s+/g, " ")
-}
+/**
+ * Failure signatures are computed over a history of past verdicts, where the same handful of reasons
+ * and missing-check names recur entry after entry. `normalize` is pure but runs a Unicode fold plus two
+ * regex passes on every call, so those repeats were re-normalized each time. A bounded memo keyed by the
+ * raw text turns a repeat into one lookup; a miss recomputes. Memory stays capped.
+ */
+const normalize = normalizeConditionText
 
 function clamp(text: string, max: number): string {
   return text.length <= max ? text : text.slice(0, max)
 }
 
 function verificationSignature(v: VerdictVerificationMatrix): string | undefined {
-  const failed = v.checks.filter((c) => {
-    if (!c.pass) return true
-    if (v.missing.includes(c.id)) return true
-    if (v.missing.includes(c.type)) return true
-    return c.required && !c.scoped
-  })
+  const failed = v.checks.filter((c) => isFailingMatrixCheck(c, v))
   const relevant = failed.length ? failed : (!v.pass || v.missing.length ? v.checks.filter((c) => c.required) : [])
   if (!relevant.length && v.pass && !v.missing.length && !(v.coverageReasons?.length)) return undefined
   const checks = relevant
@@ -117,8 +114,91 @@ export function failureEscalationReason(detected: RepeatedFailureSignature): str
   return [
     `Repeated failure signature detected (${detected.count} consecutive not_met evaluations, same ${detected.kind} pattern): ${detected.summary}.`,
     `Escalation required instead of re-arming the same approach: rotate strategy (narrow scope, change approach), produce a diagnostic artifact with concrete evidence of the blocker, or mark blocked with the blocking cause.`,
-    `Do not repeat the same failing strategy. Send a message after changing strategy/evidence to resume, or /goal clear.`,
+    `The goal stays active: the next turn rotates to a different strategy automatically, no user message needed. The diagnostic artifact records the evidence behind this escalation.`,
   ].join(" ")
+}
+
+/**
+ * Universal strategy rotation for a recurring failure. A repeated signature means the previous approach
+ * did not close the gap, so every escalation must try a different angle. The rotation index is derived from
+ * the streak length (count - threshold) instead of persisted state: it survives restarts, applies to every
+ * goal, and works for every signature kind (verification, legacy-verify, or plain reason). The diagnostic
+ * artifact keeps the concrete evidence; this keeps the *response* fresh instead of re-arming the same steer.
+ */
+export const STRATEGY_ROTATION = [
+  `Narrow the scope: pick the single most critical clause behind this failure and close only that gap with fresh, scoped evidence.`,
+  `Change the approach: use a different tool, command, or technique than the last attempt. If a gate keeps failing, gather its evidence from a different source instead of repeating it.`,
+  `Produce a diagnostic artifact: record the concrete blocker with command output, exit codes, and file paths, then plan the next step around that evidence.`,
+  `Re-examine the condition: identify the exact clause this failure blocks and either close it with a new line of attack or name the specific blocker preventing progress.`,
+] as const
+
+export function strategyForRepeat(detected: RepeatedFailureSignature, threshold = FAILURE_SIGNATURE_REPEAT_THRESHOLD): { readonly index: number; readonly strategy: string } {
+  const base = threshold > 1 ? threshold : FAILURE_SIGNATURE_REPEAT_THRESHOLD
+  const index = Math.max(0, detected.count - base) % STRATEGY_ROTATION.length
+  return { index, strategy: STRATEGY_ROTATION[index]! }
+}
+
+/**
+ * Universal no-progress recognition. A stuck goal is not only the same signature three times: alternating
+ * failures, zero-tool reporting turns, retry streaks, stalls, and loop iterations with no work all mean the
+ * current approach is not moving. One recognizer reads every signal so the loop escalates proactively for
+ * every stuck shape, not one particular signature. The `diverse_failure` signal is the key generalization:
+ * three not_met turns with *different* signatures are still stuck and still get a strategy rotation.
+ */
+export const NO_PROGRESS_ZERO_TOOL_THRESHOLD = 2
+
+export type NoProgressSignal = "repeated_signature" | "diverse_failure" | "zero_tool_turn" | "retry_streak" | "stall" | "loop_not_progress"
+
+export interface NoProgressRecognition extends RepeatedFailureSignature {
+  readonly signals: readonly NoProgressSignal[]
+}
+
+export function recognizeNoProgress(input: {
+  readonly info: FailureSignatureInfo
+  readonly history: readonly Pick<VerdictEntry, "verdict" | "reason" | "verification" | "verify" | "toolCalls">[]
+  readonly tools: number
+  readonly retries: number
+  readonly stall: number
+  readonly loopNotProgress: number
+}): NoProgressRecognition | undefined {
+  if (input.info.verdict !== "not_met") return undefined
+  const sig = failureSignatureOf(input.info)
+  const kind = sig?.kind ?? "reason"
+  const baseSummary = summarizeFailureSignature(input.info, kind)
+
+  // Walk the trailing not_met run once, accumulating both the identical-signature run and the all-failures run.
+  let notMetRun = 1
+  let sameSigRun = 1
+  let zeroToolRun = input.tools === 0 ? 1 : 0
+  let zeroBroken = input.tools !== 0
+  for (let i = input.history.length - 1; i >= 0; i--) {
+    const entry = input.history[i]!
+    if (entry.verdict !== "not_met") break
+    notMetRun++
+    if (sig && failureSignatureOf(entry)?.key === sig.key) sameSigRun++
+    if (!zeroBroken) {
+      if (entry.toolCalls === 0) zeroToolRun++
+      else zeroBroken = true
+    }
+  }
+
+  const signals: NoProgressSignal[] = []
+  if (sameSigRun >= FAILURE_SIGNATURE_REPEAT_THRESHOLD) signals.push("repeated_signature")
+  if (notMetRun >= FAILURE_SIGNATURE_REPEAT_THRESHOLD) signals.push("diverse_failure")
+  if (zeroToolRun >= NO_PROGRESS_ZERO_TOOL_THRESHOLD) signals.push("zero_tool_turn")
+  if (input.retries >= FAILURE_SIGNATURE_REPEAT_THRESHOLD) signals.push("retry_streak")
+  if (input.stall >= FAILURE_SIGNATURE_REPEAT_THRESHOLD) signals.push("stall")
+  if (input.loopNotProgress >= 2) signals.push("loop_not_progress")
+  if (!signals.length) return undefined
+
+  const streak = Math.max(sameSigRun, notMetRun, zeroToolRun, input.retries, input.stall, input.loopNotProgress)
+  return {
+    signature: sig?.key ?? `reason:${normalize(input.info.reason) || "empty"}`,
+    count: streak,
+    kind,
+    summary: `${baseSummary} · stuck across ${notMetRun} not_met turn${notMetRun === 1 ? "" : "s"} (${signals.join(" + ")})`,
+    signals,
+  }
 }
 
 interface FailingCheckDiagnostic {
@@ -245,10 +325,14 @@ const ensuredDiagnosticsDirs = new Set<string>()
 
 function writeFailureDiagnosticArtifact(dir: string, artifact: RepeatedFailureDiagnosticArtifact): string {
   const diagnosticsDir = join(dir, ".term", "goal-loop", "diagnostics")
-  const stamp = artifact.at.replace(/[:.]/g, "-")
+  // A proactive loop escalates on every not_met turn, so a timestamped name wrote one file per turn —
+  // 433 files accumulated for a single repeated signature. Key the name by (session, signature) instead:
+  // a digest of the full signature keeps distinct failures distinct while capping the set at one file
+  // per signature per session. Each escalation overwrites that file with the latest count/turn/at.
+  // Pre-existing timestamped artifacts are left in place; nothing is deleted.
   const session = safeToken(artifact.sessionID ?? "session")
-  const turn = typeof artifact.turn === "number" ? `-t${artifact.turn}` : ""
-  const name = `${stamp}-${session}${turn}-repeated-failure.json`
+  const fingerprint = createHash("sha256").update(artifact.signature).digest("hex").slice(0, 12)
+  const name = `${session}-${fingerprint}-repeated-failure.json`
   const file = join(diagnosticsDir, name)
   const body = JSON.stringify(artifact, null, 2) + "\n"
   try {

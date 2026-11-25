@@ -3,7 +3,8 @@ import type { GoalConfig } from "../core/config.ts"
 import { MAX_BUSY_RETRIES } from "../core/config.ts"
 import { classifyChangeRisk, collectChangeSetPaths, formatStrictGateNotice, STRICT_GATE_NOTICE_TITLE } from "../core/change-risk.ts"
 import { classifyFailure, errorMessage, isNotFoundError, isUsageLimitError } from "../core/errors.ts"
-import { diffUsage, elideAtWordBoundary, formatDuration, formatStatus, outcomeStory, statusLabel, stripControls, truncate } from "../core/format.ts"
+import { ABSTENTION_REASON, evaluationAbstention } from "../core/evaluation-gate.ts"
+import { diffUsage, elideAtWordBoundary, formatDuration, formatStatus, normalizeConditionText as normalizeCondition, outcomeStory, statusLabel, stripControls, truncate } from "../core/format.ts"
 import { parseGoalCommand } from "../core/parse.ts"
 import { isAlreadySatisfiedLanding } from "../core/verdict.ts"
 import * as Prompt from "../core/prompts.ts"
@@ -18,7 +19,7 @@ import {
   type GoalSnapshot,
   type GoalStatus,
   type LoopEntry,
-  COMPACT_MISS_CAP, boundLoopHistory, boundVerdictHistory, boundCompletedConditions, completedIterationCount,
+  COMPACT_MISS_CAP, boundLoopHistory, boundVerdictHistory, boundCompletedConditions, completedIterationCount, planningSnapshotId,
   type LoopCompactState,
   type Notice,
   type NoticeKind,
@@ -35,7 +36,7 @@ import { readFileSync } from "node:fs"
 import { isAbsolute, join } from "node:path"
 import { appendLearningEntry, buildGoalArmedLearningEntry, buildGoalTerminalLearningEntry, buildLoopIterationLearningEntry, buildSessionOutcomeLearningEntry, buildTurnVerdictLearningEntry, readLearningEntriesTail, type LearningEntry } from "../core/learning-log.ts"
 import { formatLearningsForPrompt } from "../core/outcome-telemetry.ts"
-import { detectRepeatedFailureSignature, failureEscalationReason, persistFailureDiagnosticArtifact } from "../core/failure-signature.ts"
+import { FAILURE_SIGNATURE_REPEAT_THRESHOLD, failureEscalationReason, persistFailureDiagnosticArtifact, recognizeNoProgress, strategyForRepeat } from "../core/failure-signature.ts"
 import { resolveProjectRoot } from "../core/git.ts"
 import { isWindowsDrivePathOnPosix } from "../core/wire.ts"
 import { sameDirectory, type GoalStore } from "./store.ts"; import { stripUndefined } from "../core/wire.ts"
@@ -61,6 +62,13 @@ const PRODUCING_CONDITION = /\b(tests?|files?|merge|merged|commit|create|created
 // Applies to armed loops only; plain goals never request boundary compaction at all.
 const COMPACT_MISS_RETRY = 2
 
+/**
+ * The one host-unwilling warning, shared with its acceptance pins so code and tests cannot drift. States the
+ * trickle contract in plain words: the loop keeps running, and re-requests slow down after the forced retry.
+ */
+export const COMPACT_MISS_NOTICE =
+  "The boundary compaction has not landed after 2 armed iterations; re-requests drop to a trickle every 3rd arm. The loop keeps running. Run /compact manually if you want it now."
+
 interface ControllerDeps {
   readonly config: GoalConfig
   readonly directory: string
@@ -83,8 +91,10 @@ interface ControllerDeps {
    * Asks the host to compact the session at a loop-iteration boundary so the next iteration arms with a fresh
    * context. Optional so tests/probes can omit it; awaiting only waits for the host's acceptance of the request.
    * `force` skips the cooldown (never the in-flight/busy gate): used to re-request a compaction that never landed.
+   * `cold` makes that compaction replay as no conversation — this is a new goal version, so the worker starts from
+   * the freshly armed condition rather than the previous version's transcript.
    */
-  readonly compactAtBoundary?: (sessionID: string, opts?: { force?: boolean }) => Promise<BoundaryCompactResult>
+  readonly compactAtBoundary?: (sessionID: string, opts?: { force?: boolean; cold?: boolean }) => Promise<BoundaryCompactResult>
   /** Estimated model-visible context size in tokens, or undefined when unknown. Used to detect a landed boundary compaction. */
   readonly estimateContext?: (sessionID: string) => Promise<number | undefined>
   /** Session context/messages for scoped transcript/artifact evidence checks (best-effort). */
@@ -112,6 +122,8 @@ interface Runtime {
   dropStragglerSucceeded: boolean
   /** Set when this iteration deferred an evaluation because background work was running: background work is real work for the zero-tool not-progress guard. */
   iterationDeferred: boolean
+  /** True while the arm-time planner is distilling a fresh /goal. No new record exists yet, so a leftover wake timer must not fire into the parent while planning runs. */
+  planning?: boolean
   abort?: AbortController
   timer?: unknown
   deferredSince?: number
@@ -172,8 +184,6 @@ const isNearDuplicate = (a: Set<string>, b: Set<string>): boolean => {
   return containment >= 0.7 || jaccard >= 0.6
 }
 
-/** Normalize a condition for anti-repeat matching: lowercase, collapse every run of non-alphanumerics to one space (unicode letters/numbers kept), trim. */
-const normalizeCondition = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()
 /**
  * The completed-condition ledger of one record, as raw condition strings (deduped by exact match): the persisted
  * `completedConditions` (harness-measured completed iterations), the retained iteration conditions that verdicts met,
@@ -512,6 +522,16 @@ export class GoalController {
   }
 
   /**
+   * True while subagent/shell sessions are still active for the goal owner, or when the busy check itself fails.
+   * This is the in-repo "active sessions visible" signal the verdict gate needs; a failed check counts as active
+   * so an incomplete request can never be judged on a guess (fail closed, like the compactor's busy guard).
+   */
+  async isActive(sessionID: string): Promise<boolean> {
+    const work = await this.deps.background.busy(sessionID).catch(() => undefined)
+    return work === undefined || work.subagents + work.shells > 0
+  }
+
+  /**
    * Shared drop heuristic: true when the estimated context has dropped at least 10% from what it was when the
    * boundary request was made (or below an absolute floor when no estimate was recorded). An unknown/unestimable
    * size is not a drop. Used by the arm-time settle; the ended event is authoritative and needs no estimate.
@@ -718,7 +738,7 @@ export class GoalController {
       if (hit !== undefined) {
         const capped = boundCompletedConditions([...ledger])
         const totalDropped = dropped + capped.dropped
-        const refusalReason = `no new gap: the proposed objective near-duplicates (exact repeat, or token containment >= 0.7 / Jaccard >= 0.6) the already-completed "${truncate(normalizeCondition(hit), 140)}" recorded for this session; the loop was not armed.`
+        const refusalReason = `no new gap: the proposed objective near-duplicates the already-completed "${truncate(normalizeCondition(hit), 140)}" recorded for this session; the loop was not armed.`
         const refusal: GoalRecord = {
           version: 1,
           id: this.newId(),
@@ -825,9 +845,20 @@ export class GoalController {
    */
   showPlanning(sessionID: string, condition: string): void {
     const now = this.deps.clock.now()
+    // A /goal arm runs this planner before arm() creates the new record. If the session already has a
+    // waiting goal, its idle check-in is still armed: clear it so it cannot fire into the parent while
+    // the planner is working. endPlanning() restores it if no replacement was armed.
+    const runtime = this.runtimes.get(sessionID)
+    if (runtime) {
+      runtime.planning = true
+      if (runtime.timer !== undefined) {
+        this.deps.clock.clearTimeout(runtime.timer)
+        runtime.timer = undefined
+      }
+    }
     const snapshot: GoalSnapshot = {
       version: 1,
-      id: `planning-${sessionID}`,
+      id: planningSnapshotId(sessionID),
       sessionID,
       directory: this.directoryFor(sessionID),
       condition,
@@ -846,6 +877,26 @@ export class GoalController {
       queued: true,
     }
     this.deps.emitter.changed(sessionID, snapshot)
+  }
+
+  /**
+   * The arm-time planner finished, failed or was aborted: lift the check-in suppression set by showPlanning().
+   * A successful arm resets the runtime, so this only restores a wait that was left live by a failed plan.
+   */
+  endPlanning(sessionID: string): void {
+    const runtime = this.runtimes.get(sessionID)
+    if (!runtime || runtime.planning !== true) return
+    runtime.planning = false
+    const record = this.goals.get(sessionID)
+    if (!record || record.status !== "active") return
+    if (runtime.deferredSince === undefined && record.waitingSince === undefined) return
+    runtime.lastCheckinAt = this.deps.clock.now()
+    this.armCheckin(record, runtime, { subagents: 0, shells: 0 })
+  }
+
+  /** Fresh read of the planning window: async paths must re-check rather than trust a flag sampled before an await. */
+  private isPlanning(sessionID: string): boolean {
+    return this.runtimes.get(sessionID)?.planning === true
   }
 
   /** User-visible notice for a present-but-invalid loop count suffix. Stated, never guessed; the default applies. */
@@ -995,7 +1046,14 @@ export class GoalController {
   async onExecutionSucceeded(sessionID: string): Promise<void> {
     this.running.delete(sessionID)
     const record = this.goals.get(sessionID)
-    if (!record || record.status !== "active") return
+    if (!record || record.status !== "active") {
+      // The evaluator judges the goal-owning parent, never a descendant. A subagent's completion only ends
+      // its own execution; the harness injects its report back into the parent, which wakes the parent's turn
+      // and lets its evaluation read the parent's work plus the bundled Planner's distilled condition. Judging
+      // the child here spawned a verdict (and a continuation steer) against every worker subagent regardless
+      // of the goal, which stole turns from the parent and made the goal pill follow subagents.
+      return
+    }
     const runtime = this.runtime(sessionID)
     // The main session went quiet: if a background deferral is still pending, the pill flips straight back
     // to `waiting` on this event — it no longer rides a check-in or the 15s mirror tick. A succeeded means
@@ -1008,6 +1066,10 @@ export class GoalController {
       this.deps.log.info("goal evaluation straggler dropped", { sessionID, awaitingExecution: runtime.awaitingExecution, dropStragglerSucceeded: runtime.dropStragglerSucceeded })
       return
     }
+    // This success is consumed. A second `succeeded` for the same execution (distinct event id, so
+    // the router's dedupe cannot catch it) must not bump the epoch again and supersede this turn.
+    // The marker is cleared by the next execution.started, exactly like the failure/interrupt paths.
+    runtime.dropStragglerSucceeded = true
     const epoch = ++runtime.epoch
     const tools = runtime.toolCalls
     runtime.toolCalls = 0
@@ -1254,10 +1316,13 @@ export class GoalController {
     // evaluate() — after the bookkeeping mutations but before the commit, so the goal wedged
     // silently, forever. Normalize on adoption instead.
     if (!Array.isArray(record.history)) record.history = []
-    // A pending evaluation owns turn N-1's identity: resetting turns to 0 would make the resumed evaluate()
-    // recompute turn 1 (wrong verdict numbering, and it would trip the turn-1 zero-tool downgrade). Other
-    // restored goals keep the Claude-Code-parity counter reset.
-    const resuming = record.status === "active" && record.pendingEvaluation !== undefined
+    // A live goal that has already been evaluated owns its turn counter. Resetting it to 0 on every
+    // restore made each post-continuation reload look like turn 1 again, which re-tripped the turn-1
+    // zero-tool downgrade forever ("no evidence of work ... zero tool calls this turn") even when the
+    // judge had seen real evidence. Preserve the counter whenever an active goal has verdict history;
+    // only a genuinely fresh goal (no verdicts yet) keeps the Claude-Code-parity reset.
+    const evaluated = Array.isArray(record.history) && record.history.length > 0
+    const resuming = record.status === "active" && (record.pendingEvaluation !== undefined || evaluated)
     Object.assign(record, {
       ...(resuming ? {} : { turns: 0, stall: 0, retries: 0, checkins: 0 }),
       baseline: usage ?? record.baseline ?? EMPTY_USAGE,
@@ -1367,8 +1432,41 @@ export class GoalController {
   // ---------------------------------------------------------------- turn evaluation
 
   private async evaluate(record: GoalRecord, runtime: Runtime, epoch: number, tools: number): Promise<void> {
-    const { config, clock, session } = this.deps
+    const { clock, session } = this.deps
+    // A check-in armed while the turn was deferred on background work must not survive into evaluation: when it
+    // fires mid-judge it sends a "still waiting" steer that wakes the parent before the verdict lands (and before
+    // the loop planner that follows it has armed the next iteration). Disarm it on every evaluation path — turn
+    // end, busy-check fallback, background drain, restore — so no stale wake timer outlives the deferral.
+    this.disarmEvaluationTimer(runtime)
     const sessionID = record.sessionID
+    // No verdict may settle a goal while its background work is still in flight. The turn-end gate can be
+    // bypassed (busy-check retries exhaust, events land late, a restore resumes a pending evaluation), so
+    // re-check at the acceptance boundary: a `met` waits here until every subagent/shell has drained.
+    const work = await this.deps.background.busy(sessionID).catch((error): BackgroundWork | undefined => {
+      this.deps.log.warn("goal busy check failed; will retry", { sessionID, error: errorMessage(error) })
+      return undefined
+    })
+    if (this.stale(record, runtime, epoch)) {
+      this.preserveToolsOnStaleDrop(record, runtime, tools, "before evaluation busy check")
+      return
+    }
+    if (!work) {
+      runtime.carriedToolCalls += tools
+      runtime.iterationDeferred = true
+      this.ensureDeferredState(record, runtime)
+      this.scheduleBusyRetry(record, runtime)
+      return
+    }
+    if (work.subagents + work.shells > 0) return this.defer(record, runtime, work, tools)
+    // Earliest in-repo guard. An incomplete request (empty condition, sessions still active) must not even
+    // write the pending marker, let alone settle a turn: this runs before the marker below. Fresh evidence
+    // is judged authoritatively later, in nativeVerdict, from the finished turn's digest — not available here.
+    const earlyAbstention = evaluationAbstention({ condition: record.condition, activeSessions: false })
+    if (earlyAbstention) {
+      this.deps.log.info("goal evaluation deferred", { sessionID, abstention: earlyAbstention, reason: ABSTENTION_REASON[earlyAbstention] })
+      this.emit(record)
+      return
+    }
     const turn = record.turns + 1
     const stall = tools > 0 ? 0 : record.stall + 1
     // Persist the owed step BEFORE any await or generation: a shutdown mid-evaluation aborts the in-memory
@@ -1432,31 +1530,39 @@ export class GoalController {
       return
     }
 
-    // A met verdict on a turn with zero tool calls, where the condition names production of a thing, is not a
-    // verdict — it is state inspection. Downgrade to not_met; the next turn re-attempts with tools in hand.
-    // Scoped to the first evaluated turn: on later turns prior evidence may already satisfy the condition and
-    // the evaluator judges from the full visible conversation, so a 0-tool-call reporting turn is legitimate.
-    // An already-satisfied landing that names a concrete `next:` gap is the sanctioned forward-pointer path
-    // (core/verdict.ts · applyForwardPointerGate), not state inspection posing as work — exempt it from the
-    // zero-tool downgrade so it can proceed to the verifier matrix and loop advance. A bare already-satisfied
-    // claim without a pointer is still rejected upstream by the forward-pointer gate.
-    if (result.verdict === "met" && tools === 0 && turn === 1 && PRODUCING_CONDITION.test(record.condition) && !isAlreadySatisfiedLanding(result.reason)) {
-      result = {
-        verdict: "not_met" as const,
-        reason: "no evidence of work toward the condition, only state inspection (zero tool calls this turn; the condition names production of a thing).",
+    // The gate abstained: no judge child was spawned and no verdict text exists. Drop the marker written before
+    // the evaluator call so the goal's durable state is byte-for-byte unchanged, and wait for the next
+    // finished-turn boundary where condition + fresh evidence are present. No turn, history, verdict, terminal
+    // state or continuation steer is mutated on this path.
+    if (result.abstain) {
+      delete record.pendingEvaluation
+      void this.commit(record)
+      this.deps.log.info("goal evaluation deferred", { sessionID, abstention: result.abstain, reason: ABSTENTION_REASON[result.abstain] })
+      this.emit(record)
+      // The judge was withheld because workers are still running. Arm the same deferral the busy gate uses, so
+      // their drain re-runs THIS turn's evaluation; otherwise the turn is dropped and the goal waits for a new
+      // parent prompt that may never arrive. Other abstentions have no work to drain and keep the old behavior.
+      if (result.abstain === "active-sessions") {
+        const work = await this.deps.background.busy(sessionID).catch(() => undefined)
+        if (this.stale(record, runtime, epoch)) return
+        if (!work) {
+          runtime.carriedToolCalls += tools
+          this.ensureDeferredState(record, runtime)
+          this.scheduleBusyRetry(record, runtime)
+        } else if (work.subagents + work.shells > 0) {
+          this.defer(record, runtime, work, tools)
+        } else {
+          // They drained between the gate and this check: judge the same turn now instead of waiting.
+          await this.evaluate(record, runtime, ++runtime.epoch, tools)
+        }
       }
+      return
     }
 
-    // Verifier, not transcriber: a candidate met verdict is accepted only when the applicable
-    // verification matrix (legacy verifyCommand or configured checks/profile) passes with fresh,
-    // scoped command evidence. Missing/unscoped required verification for broad goals downgrades to not_met.
-    let verificationMatrix: VerdictVerificationMatrix | undefined
-    if (result.verdict === "met") {
-      const verified = await this.verifyMet(record, runtime, result)
-      result = verified.result
-      verificationMatrix = verified.matrix
-      if (this.stale(record, runtime, epoch)) return
-    }
+    const gated = await this.gateCandidateVerdict(record, runtime, epoch, tools, turn, result)
+    if (!gated) return
+    result = gated.result
+    const verificationMatrix = gated.matrix
 
     record.turns = turn
     record.stall = stall
@@ -1481,6 +1587,71 @@ export class GoalController {
     }
     this.writeLearningTurnVerdict(record, verdictEntry)
 
+    await this.dispatchPostVerdict(record, runtime, epoch, tools, turn, stall, result, verdictEntry)
+  }
+
+  /** Clear a check-in timer left armed by a deferral before the verdict can land. */
+  private disarmEvaluationTimer(runtime: Runtime): void {
+    const { clock } = this.deps
+    if (runtime.timer !== undefined) {
+      clock.clearTimeout(runtime.timer)
+      runtime.timer = undefined
+    }
+  }
+
+  /** Apply the zero-tool downgrade and the verification gate to a candidate verdict. */
+  private async gateCandidateVerdict(
+    record: GoalRecord,
+    runtime: Runtime,
+    epoch: number,
+    tools: number,
+    turn: number,
+    result: EvaluationResult,
+  ): Promise<{ result: EvaluationResult; matrix?: VerdictVerificationMatrix } | undefined> {
+    // A met verdict on a turn with zero tool calls, where the condition names production of a thing, is not a
+    // verdict — it is state inspection. Downgrade to not_met; the next turn re-attempts with tools in hand.
+    // Scoped to the first evaluated turn: on later turns prior evidence may already satisfy the condition and
+    // the evaluator judges from the full visible conversation, so a 0-tool-call reporting turn is legitimate.
+    // An already-satisfied landing that names a concrete `next:` gap is the sanctioned forward-pointer path
+    // (core/verdict.ts · applyForwardPointerGate), not state inspection posing as work — exempt it from the
+    // zero-tool downgrade so it can proceed to the verifier matrix and loop advance. A bare already-satisfied
+    // claim without a pointer is still rejected upstream by the forward-pointer gate.
+    // The guard is for a fresh goal's very first evaluation: this runs before the verdict is pushed, so
+    // an empty history means no prior verdicts. A restored/evaluated goal keeps its counter now, but the
+    // history check is a second line of defence against any other path that renumbers a live goal to turn 1.
+    if (result.verdict === "met" && tools === 0 && turn === 1 && record.history.length === 0 && PRODUCING_CONDITION.test(record.condition) && !isAlreadySatisfiedLanding(result.reason)) {
+      result = {
+        verdict: "not_met" as const,
+        reason: "no evidence of work toward the condition, only state inspection (zero tool calls this turn; the condition names production of a thing).",
+      }
+    }
+
+    // Verifier, not transcriber: a candidate met verdict is accepted only when the applicable
+    // verification matrix (legacy verifyCommand or configured checks/profile) passes with fresh,
+    // scoped command evidence. Missing/unscoped required verification for broad goals downgrades to not_met.
+    let verificationMatrix: VerdictVerificationMatrix | undefined
+    if (result.verdict === "met") {
+      const verified = await this.verifyMet(record, runtime, result)
+      result = verified.result
+      verificationMatrix = verified.matrix
+      if (this.stale(record, runtime, epoch)) return undefined
+    }
+    return { result, matrix: verificationMatrix }
+  }
+
+  /** Settle the durable verdict and dispatch its terminal, guard or continuation step. */
+  private async dispatchPostVerdict(
+    record: GoalRecord,
+    runtime: Runtime,
+    epoch: number,
+    tools: number,
+    turn: number,
+    stall: number,
+    result: EvaluationResult,
+    verdictEntry: VerdictEntry,
+  ): Promise<void> {
+    const { config, clock } = this.deps
+    const sessionID = record.sessionID
     if (result.verdict === "met") {
       if (record.loopEnabled) return this.loopAdvance(record, runtime, epoch, result, turn)
       void this.settleTerminal(record, "achieved", {
@@ -1522,7 +1693,14 @@ export class GoalController {
       this.notify(sessionID, "loop", "warning", "No progress — loop keeps running", `${stall} turns in a row without tool use; an armed /goal-loop does not pause. Run /goal clear to stop it.`)
     }
     if (result.verdict === "not_met" && record.status === "active") {
-      const detected = detectRepeatedFailureSignature(record.history.slice(0, -1), { ...verdictEntry, verdict: "not_met" as const })
+      const detected = recognizeNoProgress({
+        info: { ...verdictEntry, verdict: "not_met" as const },
+        history: record.history.slice(0, -1),
+        tools,
+        retries: record.retries,
+        stall,
+        loopNotProgress: record.loopNotProgress ?? 0,
+      })
       if (detected) {
         const escalation = failureEscalationReason(detected)
         const diagnostic = persistFailureDiagnosticArtifact({
@@ -1536,8 +1714,35 @@ export class GoalController {
           goalID: record.id,
           condition: record.condition,
         })
-        this.deps.log.warn("repeated failure signature escalated", { sessionID, turn, count: detected.count, kind: detected.kind, signature: detected.signature, ...(diagnostic ? { diagnostic } : {}) })
-        await this.pause(record, escalation, "repeated_failure")
+        const rotation = strategyForRepeat(detected)
+        this.deps.log.warn("repeated failure signature escalated", { sessionID, turn, count: detected.count, kind: detected.kind, signature: detected.signature, strategy: rotation.strategy, ...(diagnostic ? { diagnostic } : {}) })
+        // A recurring failure means the last approach did not close the gap. Keep the goal active and steer the
+        // worker onto a different strategy instead of pausing — the same proactive path for loops and plain goals,
+        // every signature kind, and every repetition. The diagnostic artifact stays as the durable evidence trail.
+        if (detected.count === FAILURE_SIGNATURE_REPEAT_THRESHOLD) {
+          this.notify(sessionID, "loop", "warning", "Repeated failure — rotating strategy", `${detected.summary} The goal keeps running with a different approach; see the diagnostic artifact for the evidence.`)
+        }
+        record.pendingEvaluation = { turn, tools, condition: record.condition, phase: "continue", at: clock.now() }
+        this.commit(record)
+        // A user turn already started: it gets evaluated when it ends, so don't stack a continuation on it.
+        if (this.running.has(sessionID)) return
+        if (record.status !== "active") return
+        await this.continueWith(record, {
+          text: Prompt.strategyEscalation({
+            condition: record.condition,
+            turn: turn + 1,
+            reason: result.reason,
+            count: detected.count,
+            kind: detected.kind,
+            summary: detected.summary,
+            strategy: rotation.strategy,
+            signals: detected.signals,
+            ...(diagnostic ? { diagnostic } : {}),
+            learnings: this.recentLearningsForPrompt(record),
+          }, this.commitForSession(sessionID)),
+          description: `goal · turn ${turn + 1} · rotate strategy · ${truncate(detected.summary, 70)}`,
+          turn: turn + 1,
+        })
         return
       }
     }
@@ -1555,6 +1760,7 @@ export class GoalController {
       turn: turn + 1,
     })
   }
+
 
   /**
    * Runs the applicable verification matrix for a candidate met verdict and returns the (possibly downgraded) verdict
@@ -1722,7 +1928,7 @@ export class GoalController {
     this.emit(record)
     try {
       // First pass: resolve non-required and artifact/either satisfaction without command execution where possible.
-      const commandTasks: Array<{ idx: number; item: (typeof applicable)[number] }> = []
+      const commandTasks: Array<{ idx: number; item: (typeof applicable)[number]; key: string }> = []
       const pendingByKey = new Map<string, Promise<VerifyCheckEvidence>>()
       const pendingWaiters: Array<{ idx: number; item: (typeof applicable)[number]; key: string }> = []
       for (let idx = 0; idx < applicable.length; idx++) {
@@ -1849,7 +2055,7 @@ export class GoalController {
 
         // mark as pending now so identical checks later in this matrix reuse the in-flight result
         pendingByKey.set(key, Promise.resolve(undefined as unknown as VerifyCheckEvidence))
-        commandTasks.push({ idx, item })
+        commandTasks.push({ idx, item, key })
       }
 
       // Execute command checks concurrently with a cap; coalesce identical keys within this run.
@@ -1861,7 +2067,7 @@ export class GoalController {
           const task = commandTasks[my]!
           const item = task.item
           const def = item.def
-          const key = checkReuseKey(def) + "|head:" + (head ?? "none")
+          const key = task.key
           const timeoutMs = def.timeoutMs ?? config.evaluator.verifyTimeoutMs
           const started = this.deps.clock.now()
           const verification = new AbortController()
@@ -2406,7 +2612,7 @@ export class GoalController {
           record.loopCompact = measurableLoopState
           if (misses === COMPACT_MISS_RETRY && pending.unwillingWarned !== true) {
             // The host will not compact (2 measurable arms, no landing): say it once, exactly.
-            this.notify(sessionID, "compact", "warning", "Compaction not landing", "compaction did not land; loop is running hot; consider /compact manually")
+            this.notify(sessionID, "compact", "warning", "Compaction not landing", COMPACT_MISS_NOTICE)
           } else if (misses === COMPACT_MISS_CAP) {
             // Backstop only: one final warning at the cap crossing; re-requests continue as a trickle.
             this.notify(sessionID, "compact", "warning", "Compaction not landing", `The boundary compaction has not landed after ${COMPACT_MISS_CAP} armed iterations; re-requests drop to a trickle every 3rd arm. The loop keeps running.`)
@@ -2426,7 +2632,7 @@ export class GoalController {
         skipRequest !== undefined
           ? { requested: false, reason: skipRequest === "landed" ? "too-small" : "cooldown" }
           : await this.deps
-              .compactAtBoundary(sessionID, force ? { force: true } : undefined)
+              .compactAtBoundary(sessionID, { ...(force ? { force: true } : {}), cold: true })
               .catch((error): BoundaryCompactResult => {
                 log.warn("loop boundary compact failed", { sessionID, error: errorMessage(error) })
                 return { requested: false, reason: "read-failed" }
@@ -2529,7 +2735,7 @@ export class GoalController {
 
   /** Background work is running: skip this evaluation and arm an idle check-in (30m, then x2 up to x4). */
   private defer(record: GoalRecord, runtime: Runtime, work: BackgroundWork, tools: number) {
-    const { config, clock } = this.deps
+    const { clock } = this.deps
     runtime.carriedToolCalls += tools
     runtime.iterationDeferred = true
     const firstDefer = runtime.deferredSince === undefined
@@ -2538,20 +2744,60 @@ export class GoalController {
       // Persist the deferral on the record so a restart/plugin reload restores the `waiting` paint instead of
       // forgetting it mid-wait; commit also emits the snapshot the pill and mirror paint from.
       record.waitingSince = runtime.deferredSince
-      void this.commit(record)
     }
+    // The pill names what the parent is waiting on. Set the twin BEFORE commit/emit: both snapshot the record
+    // synchronously, so assigning afterwards would persist and paint a count-less wait. A later deferral can
+    // see a different worker count (one child finished, another started) — push that change too.
+    const countChanged = record.waitingSubagents !== work.subagents
+    if (countChanged) record.waitingSubagents = work.subagents
+    if (firstDefer || countChanged) void this.commit(record)
+    this.armCheckin(record, runtime, work)
+  }
+
+  /**
+   * Arm the next idle check-in for a deferred turn. `defer()` uses it for the first check-in; `checkin()` re-arms
+   * through it while a judge/planner is still in flight, so the check waits for completion instead of firing
+   * prematurely on a long-running task. Falls back to `now` when the deferral has already been cleared.
+   */
+  private armCheckin(record: GoalRecord, runtime: Runtime, previous: BackgroundWork) {
+    const { config, clock } = this.deps
     if (config.checkinMinutes === 0 || record.checkins >= config.maxIdleCheckins) return
     const interval = config.checkinMinutes * 60_000 * Math.min(2 ** record.checkins, 4)
-    const due = (runtime.lastCheckinAt ?? runtime.deferredSince) + interval
-    this.schedule(runtime, Math.max(0, due - clock.now()), () => void this.checkin(record, runtime, work).catch((e) => this.deps.log.error("goal check-in failed", { error: errorMessage(e) })))
+    const due = (runtime.lastCheckinAt ?? runtime.deferredSince ?? clock.now()) + interval
+    this.schedule(runtime, Math.max(0, due - clock.now()), () => void this.checkin(record, runtime, previous).catch((e) => this.deps.log.error("goal check-in failed", { error: errorMessage(e) })))
   }
 
   private async checkin(record: GoalRecord, runtime: Runtime, previous: BackgroundWork) {
     const { config, clock, background } = this.deps
     if (this.goals.get(record.sessionID) !== record || record.status !== "active" || this.running.has(record.sessionID)) return
+    // A deferral's check-in must not wake the parent while the turn's judge/verifier (or the loop planner that
+    // follows a met verdict) is still running: the verdict's own continuation is about to deliver the result.
+    // No live deferral means the check is obsolete (evaluation already started) — drop it. Still deferred but
+    // evaluating means a straggler timer caught the judge mid-flight — re-arm so it waits for completion.
+    if (runtime.deferredSince === undefined && record.waitingSince === undefined) return
+    if (runtime.evaluating) {
+      this.armCheckin(record, runtime, previous)
+      return
+    }
+    // An arm-time planner may have armed a check-in after showPlanning() cleared the previous one (a turn
+    // event landing mid-plan). Even then the wake must wait for the planner: push the check out by a full
+    // interval rather than consuming it, so the parent is never steered while its goal is being distilled.
+    if (runtime.planning === true) {
+      runtime.lastCheckinAt = clock.now()
+      this.armCheckin(record, runtime, previous)
+      return
+    }
     const epoch = runtime.epoch
     const work = await background.busy(record.sessionID).catch(() => previous)
     if (this.stale(record, runtime, epoch)) return
+    // A /goal planning window can open while the busy check is in flight. The top-of-function guard above saw
+    // planning=false; re-check before dispatching so a check-in resolved after the window opened is pushed out
+    // instead of steering the parent with the old (raw) goal while its replacement is being distilled.
+    if (this.isPlanning(record.sessionID)) {
+      runtime.lastCheckinAt = clock.now()
+      this.armCheckin(record, runtime, previous)
+      return
+    }
     record.checkins++
     runtime.lastCheckinAt = clock.now()
     const waitedMs = clock.now() - (runtime.deferredSince ?? clock.now())
@@ -2614,6 +2860,9 @@ export class GoalController {
 
   private async continueWith(record: GoalRecord, input: { text: string; description: string; turn: number }) {
     const runtime = this.runtime(record.sessionID)
+    // No steer of any kind may land in the parent while the arm-time planner owns the window. A new /goal will
+    // arm and deliver its own kickoff after planning ends; an older record's pending wake must not race it.
+    if (runtime.planning === true) return
     // Every completion event after this dispatch belongs to the execution the steer starts; a succeeded delivered
     // before its started is a straggler from the previous turn. Marked before the dispatch (not after) so a user
     // turn started during the dispatch wins the flag via onExecutionStarted and its succeeded is evaluated.
@@ -2877,7 +3126,7 @@ export class GoalController {
   private runtime(sessionID: string): Runtime {
     let runtime = this.runtimes.get(sessionID)
     if (!runtime) {
-      runtime = { sessionID, epoch: 0, toolCalls: 0, iterationToolCalls: 0, carriedToolCalls: 0, evaluating: false, awaitingExecution: false, dropStragglerSucceeded: false, iterationDeferred: false, heartbeating: false, waitingPaint: false }
+      runtime = { sessionID, epoch: 0, toolCalls: 0, iterationToolCalls: 0, carriedToolCalls: 0, evaluating: false, awaitingExecution: false, dropStragglerSucceeded: false, iterationDeferred: false, planning: false, heartbeating: false, waitingPaint: false }
       this.runtimes.set(sessionID, runtime)
     }
     return runtime
@@ -2897,6 +3146,7 @@ export class GoalController {
       awaitingExecution: false,
       dropStragglerSucceeded: false,
       iterationDeferred: false,
+      planning: false,
       heartbeating: previous?.heartbeating ?? false,
       waitingPaint: false,
     })
@@ -2917,6 +3167,7 @@ export class GoalController {
     if (!wasWaiting) return
     const ours = record !== undefined && this.goals.get(record.sessionID) === record
     if (record && record.waitingSince !== undefined) delete record.waitingSince
+    if (record && record.waitingSubagents !== undefined) delete record.waitingSubagents
     if (ours) void this.commit(record)
   }
 

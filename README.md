@@ -5,7 +5,7 @@ Give your AI coding agent a concrete finish line. It works turn after turn until
 
 [![Version](https://img.shields.io/github/v/tag/paumkim/goal-loop?label=version&color=blue)](https://github.com/paumkim/goal-loop/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests Passing](https://img.shields.io/badge/tests-1997%20passing-brightgreen.svg)](SPEC.md)
+[![Tests Passing](https://img.shields.io/badge/tests-passing-brightgreen.svg)](SPEC.md)
 [![OpenCode v2](https://img.shields.io/badge/opencode-v2.0.29%2B-purple.svg)](https://opencode.ai)
 [![Runtime: Bun](https://img.shields.io/badge/runtime-bun-black.svg)](https://bun.sh)
 [![Documentation](https://img.shields.io/badge/docs-online-blue.svg)](https://paumkim.github.io/goal-loop/)
@@ -22,8 +22,8 @@ Give your AI coding agent a concrete finish line. It works turn after turn until
 | --- | --- |
 | ❌ Stops prematurely when it "thinks" it is done | ✅ Loops autonomously until the finish line is proven |
 | ❌ Hallucinates that tests pass without running them | ✅ Evaluator requires fresh command output at current git HEAD |
-| ❌ Leaves messy, uncommitted code changes | ✅ Enforces clean commits or isolated worktrees before `met` |
-| ❌ Fails on network drops or rate limits | ✅ Retries transients forever; pauses on free-usage limits until you resume — never loses state |
+| ❌ Leaves messy, uncommitted code changes | ✅ Enforces clean commits or an isolated worktree before `met` |
+| ❌ Fails on network drops or rate limits | ✅ Retries transients with capped backoff (3 consecutive failures by default; `maxRetries: 0` for unlimited) and waits out rate limits — never loses state |
 | ❌ Context fills up and model quality degrades | ✅ Auto-compacts context at each loop iteration boundary |
 
 ---
@@ -129,7 +129,7 @@ Every config rewrite is backed up and atomic; use `/goal` for status while check
 
 1. **Independent Evaluator**: After each turn, an evaluator inspects the conversation. Claims without fresh command output produced at the current git HEAD are rejected as `not_met`.
 2. **Deterministic Verifier Gate (`verifyCommand`)**: When `evaluator.verifyCommand` is set (e.g. `bun run check`), the plugin spawns the command in bash. Exit 0 is required; any failure downgrades the verdict to `not_met` and feeds the output tail to the agent.
-3. **Commit Rule**: Work must be committed to the target branch (`dev` by default) or submitted via isolated coordinator worktree (`wt/<slug>`) before `met` is granted.
+3. **Commit Rule**: Work must be committed to the target branch (`dev` by default), or — in a coordinator repo — committed on `wt/<slug>`, submitted, and merged into the target branch by `coordinator merge-next` with the lease shown `done` before `met` is granted. A submitted lease is only merge-ready, not completion evidence.
 4. **Autonomous Loop (`/goal-loop`)**: When a goal is met, `goal-loop` generates a concise summary, requests host context compaction (`compactOnLoopIteration: true`), and arms the next iteration until `maxLoops` or `LOOP_COMPLETE`.
 
 ### 🛡️ Catches False Agent Claims
@@ -171,8 +171,8 @@ Full reference table: see [docs/config.html](https://paumkim.github.io/goal-loop
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `model` | — | Fallback model for `evaluator.model` |
-| `evaluator.model` | session model | Independent model that evaluates goal completion; set to `inherit` (aliases `session`/`parent`/`current`/`active`) to judge on the parent session's current model instead of a pinned one |
-| `evaluator.mode` | `auto` | Evaluator mode: `session`, `independent`, or `auto` |
+| `evaluator.model` | session model | Model for the opt-in `consensus: 2` second vote and `/goal-loop` summarize/next-condition steps — the per-turn verdict always runs on the session's own model. `inherit` (aliases `session`/`parent`/`current`/`active`) follows the parent session's current model instead of a pinned one |
+| `evaluator.mode` | `auto` | `session` / `independent` / `auto`, for `/goal-loop` summarize/next-condition generation only; the opt-in `consensus: 2` second vote is governed by `consensus` and uses `evaluator.model` — the per-turn verdict is always the worker's native `evaluator` subagent child |
 | `evaluator.maxTranscriptChars` | `20000` | Max transcript digest characters for evaluation |
 | `evaluator.maxOutputTokens` | `4096` | Max token budget for evaluator verdict |
 | `evaluator.timeoutMs` | `120000` | Evaluation call timeout in milliseconds |
@@ -203,7 +203,7 @@ Full reference table: see [docs/config.html](https://paumkim.github.io/goal-loop
 
 ### Environment Variables
 
-Every setting can be overridden via environment variables:
+Many settings can be overridden via environment variables (the nested `update` group is option-only):
 
 `OPENCODE_GOAL_MODEL`, `OPENCODE_GOAL_MAX_TURNS`, `OPENCODE_GOAL_CHECKIN_MINUTES`, `OPENCODE_GOAL_COMMIT_BRANCH`, `OPENCODE_GOAL_REQUIRE_COMMIT`, `OPENCODE_GOAL_COORDINATOR`, `OPENCODE_GOAL_COMPACT_AT_TOKENS`, `OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION`, `OPENCODE_GOAL_MAX_LOOPS`, `OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS`, `OPENCODE_GOAL_MAX_RETRIES`, `OPENCODE_GOAL_VERIFY_COMMAND`, `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`, `OPENCODE_GOAL_VERIFY_PROFILE`, `OPENCODE_GOAL_VERIFY_CONCURRENCY`, `OPENCODE_GOAL_LEARNING_LOG`, `OPENCODE_GOAL_LEARNING_LOG_PATH`, `OPENCODE_GOAL_MIRROR`, `OPENCODE_GOAL_LOG_FILE`, `OPENCODE_GOAL_PROBE`.
 
@@ -222,7 +222,7 @@ Full offline-first, dependency-free documentation lives in [`docs/`](docs/) and 
 - ⚙️ **[Configuration Reference](https://paumkim.github.io/goal-loop/config.html)**: Exhaustive reference for every option, default, and environment variable.
 - 🏗️ **[Architecture & State Machine](https://paumkim.github.io/goal-loop/architecture.html)**: Ports, event flow, and state transitions.
 - 🔄 **[Runtime & Auto-Compaction](https://paumkim.github.io/goal-loop/runtime.html)**: Compaction algorithms, retry backoff, and storage pruning.
-- 🔀 **[Coordinator & Parallel Worktrees](docs/parallel-work.md)**: Multi-agent coordination with `wt/<slug>` worktrees and `merge-next`.
+- 🔀 **[Coordinator & Parallel Worktree](docs/parallel-work.md)**: Multi-agent coordination with `wt/<slug>` worktree and `merge-next`.
 - 📋 **[Fresh Session Promotion Checklist](https://paumkim.github.io/goal-loop/runtime.html#freshsession)**: Safe operational rules for continuing long loops.
 
 ---

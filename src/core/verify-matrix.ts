@@ -1,10 +1,12 @@
+import { formatValue } from "./errors.ts"
+import { VERIFY_CHECK_TYPES, VERIFY_EVIDENCE_MODES } from "./types.ts"
 import { headSha, findRepository } from "./git.ts"
 import { isBroadGoalCondition } from "./prompts.ts"
 import type { VerifyCheckConfig, VerifyCheckType } from "./config.ts"
 
-export type VerifyEvidenceMode = "command" | "artifact" | "either"
-export type VerifyCheckSource = "configured" | "legacy" | "goal-declared"
-
+// Canonical unions live in types.ts; re-exported so existing imports from this module keep working.
+export type { VerifyEvidenceMode, VerifyCheckSource } from "./types.ts"
+import type { VerifyEvidenceMode, VerifyCheckSource } from "./types.ts"
 interface ParsedGoalDeclaredCheck extends VerifyCheckConfig {
   readonly source: "goal-declared"
   readonly evidence: VerifyEvidenceMode
@@ -39,9 +41,7 @@ interface ScopePolicy {
   readonly reason: string
 }
 
-const TYPES = new Set<VerifyCheckType>(["typecheck", "tests", "lint", "build", "smoke", "custom", "goal-declared"])
 const WHENS = new Set(["always", "broad"])
-const EVIDENCES = new Set<VerifyEvidenceMode>(["command", "artifact", "either"])
 
 /**
  * Safe, explicit goal-declared check syntax (inline directives in goal condition):
@@ -57,8 +57,12 @@ export function parseGoalDeclaredChecks(condition: string): GoalDeclaredParseRes
   let index = 0
   for (const line of lines) {
     const trimmed = line.trim()
-    // support inline/fenced-ish lines beginning with verify:
-    const m = /^`?verify\s*:\s*(.+)`?$/.exec(trimmed)
+    // Support inline/fenced-ish lines beginning with `verify:`. Strip one leading and one trailing
+    // backtick BEFORE the body capture: leaving the closing tick in the body either bakes it into the
+    // last token's value (`id=tc` -> "tc`") or makes tokenize reject a trailing quoted value, silently
+    // dropping a required check. The raw line is kept for malformed reports.
+    const unfenced = (trimmed.startsWith("`") ? trimmed.slice(1) : trimmed).replace(/`$/, "")
+    const m = /^verify\s*:\s*(.+)$/.exec(unfenced)
     if (!m) continue
     index++
     const body = m[1] ?? ""
@@ -69,10 +73,12 @@ export function parseGoalDeclaredChecks(condition: string): GoalDeclaredParseRes
       malformed.push({ malformed: true, raw: trimmed, reason: error instanceof Error ? error.message : String(error), index })
     }
   }
-  // also support multiple directives on same line separated? unlikely, but scan all "verify:" occurrences not at line start inside text
-  // (kept simple/deterministic: line-oriented above)
+  // Parsing is strictly line-oriented: one `verify:` directive per line, with an optional leading backtick.
   return { checks, malformed }
 }
+
+/** The one "missing required key" error shape. `formatValue` keeps key quoting consistent with every other verify-matrix error. */
+const missingRequired = (key: string): Error => new Error(`missing required ${formatValue(key)}`)
 
 function parseDirectiveBody(body: string, index: number): ParsedGoalDeclaredCheck {
   const tokens = tokenize(body)
@@ -85,43 +91,43 @@ function parseDirectiveBody(body: string, index: number): ParsedGoalDeclaredChec
   const one = (key: string, required = false): { value: string; quoted: boolean } | undefined => {
     const vals = map.get(key)
     if (!vals || vals.length === 0) {
-      if (required) throw new Error(`missing required ${key}`)
+      if (required) throw missingRequired(key)
       return undefined
     }
     return vals[vals.length - 1]
   }
   const typeRaw = one("type", true)!.value
-  if (!TYPES.has(typeRaw as VerifyCheckType)) throw new Error(`invalid type "${typeRaw}"`)
+  if (!VERIFY_CHECK_TYPES.has(typeRaw)) throw new Error(`invalid type ${formatValue(typeRaw)}`)
   const type = typeRaw as VerifyCheckType
   const cmdTok = one("cmd") ?? one("command")
-  if (!cmdTok) throw new Error("missing required cmd")
+  if (!cmdTok) throw missingRequired("cmd")
   if (!cmdTok.quoted) throw new Error('cmd must be a quoted string (cmd="...")')
   const cmd = cmdTok.value
   if (!cmd.trim()) throw new Error("cmd must be a non-empty quoted command")
   const whenRaw = one("when")?.value ?? "always"
-  if (!WHENS.has(whenRaw)) throw new Error(`invalid when "${whenRaw}"`)
+  if (!WHENS.has(whenRaw)) throw new Error(`invalid when ${formatValue(whenRaw)}`)
   const when = whenRaw as "always" | "broad"
   const evidenceRaw = (one("evidence")?.value ?? "command") as VerifyEvidenceMode
-  if (!EVIDENCES.has(evidenceRaw)) throw new Error(`invalid evidence "${evidenceRaw}"`)
+  if (!VERIFY_EVIDENCE_MODES.has(evidenceRaw)) throw new Error(`invalid evidence ${formatValue(evidenceRaw)}`)
   const id = (one("id")?.value ?? `goal-declared-${type}-${index}`).trim()
   if (!id) throw new Error("id must be non-empty")
   const labelTok = one("label")
   if (labelTok && !labelTok.quoted) throw new Error('label must be a quoted string (label="...")')
   const label = labelTok?.value
   const requiredRaw = one("required")?.value
-  const required = requiredRaw === undefined ? true : requiredRaw === "true" ? true : requiredRaw === "false" ? false : (() => { throw new Error(`invalid required "${requiredRaw}"`) })()
+  const required = requiredRaw === undefined ? true : requiredRaw === "true" ? true : requiredRaw === "false" ? false : (() => { throw new Error(`invalid required ${formatValue(requiredRaw)}`) })()
   const timeoutRaw = one("timeoutMs")?.value ?? one("timeout")?.value
   let timeoutMs: number | undefined
   if (timeoutRaw !== undefined) {
     const n = Number(timeoutRaw)
-    if (!Number.isFinite(n) || n < 1) throw new Error(`invalid timeoutMs "${timeoutRaw}"`)
+    if (!Number.isFinite(n) || n < 1) throw new Error(`invalid timeoutMs ${formatValue(timeoutRaw)}`)
     timeoutMs = Math.floor(n)
   }
   const artifactToks = [...(map.get("artifacts") ?? []), ...(map.get("artifact") ?? [])]
   for (const t of artifactToks) if (!t.quoted) throw new Error('artifact/artifacts values must be quoted strings')
   const artifactPatterns = artifactToks.flatMap((t) => t.value.split("||")).map((x) => x.trim()).filter(Boolean)
   if ((evidenceRaw === "artifact" || evidenceRaw === "either") && artifactPatterns.length === 0) {
-    throw new Error(`evidence=${evidenceRaw} requires at least one artifact pattern (artifacts="..." or artifact="...")`)
+    throw new Error(`evidence=${formatValue(evidenceRaw)} requires at least one artifact pattern (artifacts="..." or artifact="...")`)
   }
   return {
     id,
@@ -147,9 +153,9 @@ function tokenize(body: string): Array<{ key: string; value: string; quoted: boo
     if (i >= s.length) break
     let key = ""
     while (i < s.length && /[A-Za-z0-9_.-]/.test(s[i]!)) key += s[i++]
-    if (!key) throw new Error(`unexpected token near "${s.slice(i, i + 20)}"`)
+    if (!key) throw new Error(`unexpected token near ${formatValue(s.slice(i, i + 20))}`)
     while (i < s.length && /\s/.test(s[i]!)) i++
-    if (s[i] !== "=") throw new Error(`expected '=' after ${key}`)
+    if (s[i] !== "=") throw new Error(`expected '=' after ${formatValue(key)}`)
     i++
     while (i < s.length && /\s/.test(s[i]!)) i++
     let value = ""
@@ -171,10 +177,10 @@ function tokenize(body: string): Array<{ key: string; value: string; quoted: boo
           value += c
         }
       }
-      if (!closed) throw new Error(`unterminated quoted value for ${key}`)
+      if (!closed) throw new Error(`unterminated quoted value for ${formatValue(key)}`)
     } else {
       while (i < s.length && !/\s/.test(s[i]!)) value += s[i++]
-      if (!value) throw new Error(`missing value for ${key}`)
+      if (!value) throw new Error(`missing value for ${formatValue(key)}`)
     }
     out.push({ key, value, quoted })
   }
@@ -190,7 +196,7 @@ export function resolveVerifyChecks(opts: {
   const seen = new Set<string>()
   const push = (check: VerifyCheckConfig & { source: VerifyCheckSource; evidence?: VerifyEvidenceMode; artifactPatterns?: readonly string[] }) => {
     const id = check.id
-    if (seen.has(id)) return // deterministic: first wins (configured/legacy before goal-declared duplicates?) keep configured precedence
+    if (seen.has(id)) return // deterministic: first wins, so configured/legacy entries keep precedence over goal-declared duplicates
     seen.add(id)
     out.push({
       id,

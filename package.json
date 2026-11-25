@@ -45,7 +45,6 @@
     "packages/coordinator/bin/coordinator",
     "packages/coordinator/README.md",
     "prompts",
-    "bin/prompter.mjs",
     "install.sh"
   ],
   "engines": {
@@ -55,15 +54,18 @@
     "test": "cd test && bun test",
     "typecheck": "tsc --noEmit",
     "e2e": "bun scripts/e2e.ts",
-    "check": "tsc --noEmit && (cd test && bun test) && bun run check:dist && bun run compile && bun run check:tui && bun run docs:check && bun run check:invariant && bun run check:spec",
+    "check": "tsc --noEmit && (cd test && bun test) && bun run check:dist && bun run compile && bun run check:tui && bun run docs:check && bun run check:invariant && bun run check:spec && bun run check:wiring",
     "check:tui": "bun scripts/tui-load-check.ts ./tui.ts",
     "docs:check": "bun scripts/docs-watch.ts check",
     "check:invariant": "bun scripts/invariant-sweep.ts",
     "check:spec": "bun scripts/spec-check.ts",
+    "check:wiring": "bun scripts/wiring-audit.ts",
     "prepublishOnly": "bun run compile && cd test && bun test",
     "compile": "bun scripts/build.ts",
     "docs:watch": "bun scripts/docs-watch.ts watch",
     "docs:once": "bun scripts/docs-watch.ts once",
+    "rearm": "bun scripts/rearm.ts",
+    "diag": "bun scripts/diagnostics-summary.ts",
     "check:dist": "bun scripts/build.ts --check"
   },
   "dependencies": {
@@ -101,6 +103,10 @@
   "overrides": {
     "gaxios": "7.3.1",
     "google-logging-utils": "1.2.0",
+    "effect": "4.1.0",
+    "@opencode/client": "2.3.2",
+    "@opencode/protocol": "2.3.2",
+    "@opencode/schema": "2.3.2",
     "@babel/helper-module-imports": "7.29.7"
   },
   "publishConfig": {

@@ -23,7 +23,8 @@
  */
 import { writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
-import { buildLoopDossier, shortSha, stampOf, fileStampOf } from "./dossier.ts"
+import { artifactName, buildLoopDossier, iterationList, shortSha, stampOf } from "./dossier.ts"
+import { recordCellHelpers } from "./record-attestation.ts"
 import {
   gitCatFileProbe,
   verifyRecord,
@@ -89,16 +90,9 @@ interface ReviewedRecord {
  * Deterministic: the same (nowMs, attempt) always yields the same name. A non-finite or
  * unrepresentable clock stamps the epoch rather than throwing — the name stays honest.
  */
-export const reviewName = (nowMs: number, attempt = 0): string => {
-  const suffix = attempt > 0 ? `-${attempt + 1}` : ""
-  return `goal-dossier-review-${fileStampOf(nowMs)}${suffix}.md`
-}
+export const reviewName = (nowMs: number, attempt = 0): string => artifactName("dossier-review", nowMs, attempt)
 
-const iterationList = (iterations: readonly number[]): string => iterations.map((v) => `v${v}`).join(", ")
-
-const verifyCell = (status: string): ReviewAnswer => (status === "present" ? "yes" : status === "missing" ? "no" : "unknown")
-const reachCell = (status: string): ReviewAnswer => (status === "ancestor" ? "yes" : status === "unreached" ? "no" : "unknown")
-const signCell = (status: string): ReviewAnswer => (status === "verified" ? "yes" : status === "unverified" ? "no" : "unknown")
+const { verifyCell, reachCell, signCell } = recordCellHelpers<ReviewAnswer>()
 
 /** yes on all three → clean; any no → gaps; else unknown. The one honest collapse of the three cells. */
 export const reviewVerdict = (exists: ReviewAnswer, onThisLine: ReviewAnswer, underSeal: ReviewAnswer): ReviewVerdict => {

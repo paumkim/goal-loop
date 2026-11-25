@@ -1,9 +1,86 @@
 import stringWidth from "string-width"
+
+/**
+ * Bounded single-argument memo for pure text transforms. One home for the hit path and the eviction
+ * policy shared by the normalize helpers in failure-signature and outcome-telemetry: a hit is one map
+ * lookup, a miss runs the pure function once, and the cache stops growing at `limit`. A miss after the
+ * cap recomputes, which is safe because the transform is pure — no output changes.
+ */
+export function memoizeBounded<A, R>(fn: (arg: A) => R, limit: number): (arg: A) => R {
+  // Wrap the value so a cached `undefined` is distinguishable from a miss with a single lookup.
+  const cache = new Map<A, { readonly value: R }>()
+  return (arg: A): R => {
+    const hit = cache.get(arg)
+    if (hit !== undefined) return hit.value
+    const result = fn(arg)
+    if (cache.size < limit) cache.set(arg, { value: result })
+    return result
+  }
+}
+
+/**
+ * One home for the "finite or zero, never negative" clamp used by the chrome renderers. A non-finite
+ * clock, count or size paints nothing; a negative one paints nothing; a valid one passes through.
+ */
+export const nonNegative = (n: number): number => (Number.isFinite(n) ? Math.max(0, n) : 0)
+
+/**
+ * Canonical condition/reason fold: lowercase, collapse every run of non-alphanumerics to one space
+ * (Unicode letters and numbers kept), trim. One home for the controller's anti-repeat ledger and
+ * failure-signature's signature keys, so the two implementations cannot drift. Memoized because the
+ * same conditions and reasons recur across ledger scans and signature checks within a session; the
+ * bound keeps the cache finite and a miss after the cap simply recomputes the pure fold.
+ *
+ * A previous variant in failure-signature chained `.replace(/\s+/g, " ")` after the trim. That was a
+ * no-op: the first replace already collapses every non-alphanumeric run (including whitespace) to a
+ * single space, so no `\s+` remains. A 100000-string fuzz confirmed byte-identical output.
+ */
+export const normalizeConditionText = memoizeBounded(
+  (value: string): string => value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim(),
+  4096,
+)
+
+/**
+ * Memoized terminal-cell width. `stringWidth` strips ANSI and runs an Intl.Segmenter pass on every
+ * call; the TUI asks for the width of the same labels, prefixes and graphemes many times per frame.
+ * Cache hits are pure lookups. Bounded so a long session cannot grow the map without limit; an
+ * evicted string is simply recomputed, which yields the same number.
+ */
+export const cellWidth = memoizeBounded((text: string): number => stringWidth(text), 4096)
 import { COMPACT_MISS_CAP } from "./types.ts"
 import type { GoalRecord, GoalStatus, UsageSnapshot } from "./types.ts"
 
 /** Grapheme clusters, so a truncation boundary never splits an emoji, a flag or a combining sequence. */
 const segmenter = new Intl.Segmenter("en", { granularity: "grapheme" })
+
+/**
+ * Drop unpaired UTF-16 surrogates. Model/host text can carry a lone half of an astral pair (an upstream
+ * cut); both truncate and elide promise never to emit one. Sanitizing once at the source keeps every
+ * width/segment calculation on well-formed text — a lone surrogate's width inside a concatenated
+ * cluster differs from its per-grapheme sum, which let a malformed string paint one cell wider than
+ * truncate's cap. A string with no surrogate code unit is returned as-is (no copy, no scan cost beyond
+ * the single quick pass); ordinary text is byte-identical.
+ */
+export function stripLoneSurrogates(text: string): string {
+  let first = -1
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i)
+    if (code >= 0xd800 && code <= 0xdfff) { first = i; break }
+  }
+  if (first === -1) return text
+  let out = text.slice(0, first)
+  for (let i = first; i < text.length; i++) {
+    const code = text.charCodeAt(i)
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = text.charCodeAt(i + 1)
+      if (next >= 0xdc00 && next <= 0xdfff) { out += text[i]! + text[i + 1]!; i++ }
+      continue // lone high surrogate — drop
+    }
+    if (code >= 0xdc00 && code <= 0xdfff) continue // lone low surrogate — drop
+    out += text[i]!
+  }
+  return out
+}
 
 /**
  * Rows a `wrapMode="word"` cell needs to paint `text` at `width` terminal cells. Greedy word wrap on
@@ -17,7 +94,7 @@ export function wrapLines(text: string, width: number): number {
   let used = 0
   for (const word of text.split(" ")) {
     if (word === "") continue
-    const w = stringWidth(word)
+    const w = cellWidth(word)
     const sep = used === 0 ? 0 : 1
     if (used > 0 && used + sep + w > max) {
       lines += 1
@@ -81,13 +158,20 @@ export const outcomeStory = (input: { turns: number; elapsedMs: number; iteratio
 
 /** Minute-resolution duration for always-on indicators, so they re-render rarely. */
 export function formatDurationCoarse(ms: number): string {
-  const minutes = Math.floor(Math.max(0, ms) / 60_000)
+  // Clamp through `nonNegative` (finite or zero) like every other duration renderer: a non-finite clock
+  // would otherwise paint garbage ("NaNhNaNm"/"InfinityhNaNm") in always-on chrome. Finite inputs are
+  // unaffected — the clamp is the same Math.max(0, ms) as before.
+  const minutes = Math.floor(nonNegative(ms) / 60_000)
   if (minutes < 1) return "<1m"
   if (minutes < 60) return `${minutes}m`
   return `${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, "0")}m`
 }
 
 export function formatTokens(n: number): string {
+  // A corrupt/unavailable token metric must never paint "NaNM" or "InfinityM" in chrome. Callers in
+  // dossier/attestation already guard finite before calling; the TUI call sites pass raw snapshot
+  // values. Guard once here so every surface agrees. Finite inputs are byte-identical.
+  if (!Number.isFinite(n)) return "0"
   if (n < 1_000) return String(Math.round(n))
   // Round-then-compare at the unit boundary: a value whose rounded k-form reaches 1000k renders as M instead.
   const k = (n / 1_000).toFixed(n < 10_000 ? 1 : 0)
@@ -96,12 +180,19 @@ export function formatTokens(n: number): string {
 }
 
 export function formatCost(usd: number): string {
+  // Same honesty rule as the token formatter and the finite guards at the dossier/attestation call
+  // sites: a non-finite cost is an unavailable measurement, not "$NaN"/"$Infinity". Finite inputs,
+  // including negatives ($0), are unchanged.
+  if (!Number.isFinite(usd)) return "$0"
   if (usd <= 0) return "$0"
   return usd < 0.01 ? "<$0.01" : `$${usd.toFixed(2)}`
 }
 
 export function diffUsage(current: UsageSnapshot, baseline: UsageSnapshot): UsageSnapshot {
-  const d = (a: number, b: number) => Math.max(0, a - b)
+  // Host usage reaches this delta via toUsage(), which fills only *missing* fields with 0 — a
+  // non-finite reading would otherwise become a NaN delta in the record and the spend ledger.
+  // Finite inputs are byte-identical to the old clamp.
+  const d = (a: number, b: number) => (Number.isFinite(a) && Number.isFinite(b) ? Math.max(0, a - b) : 0)
   return {
     cost: d(current.cost, baseline.cost),
     input: d(current.input, baseline.input),
@@ -123,9 +214,12 @@ export function formatSpend(spend: UsageSnapshot, maxWidth: number = Number.POSI
   const parts = [`${formatTokens(spend.input + spend.cacheRead + spend.cacheWrite)} in`, `${formatTokens(spend.output + spend.reasoning)} out`]
   if (spend.cacheRead > 0) parts.push(`${formatTokens(spend.cacheRead)} cached`)
   const join = (tokens: string[]) => [...tokens, ...(cost ? [cost] : [])].join(" \u00B7 ")
+  // The default width is unbounded, so the degradation loop below can never fire. Skip both the
+  // cellWidth measurement and the extra array/string allocation on that common path.
+  if (maxWidth === Number.POSITIVE_INFINITY) return join(parts)
   let tokens = parts
   let out = join(tokens)
-  while (tokens.length > 0 && stringWidth(out) > maxWidth) {
+  while (tokens.length > 0 && cellWidth(out) > maxWidth) {
     tokens = tokens.slice(0, -1)
     out = join(tokens)
   }
@@ -180,16 +274,45 @@ export function formatStatus(record: GoalRecord, now: number, spend: UsageSnapsh
  * wider than `max`, whole graphemes of the ellipsis are emitted up to `max` — the width
  * contract wins over showing an ellipsis.
  */
+/**
+ * `truncate` is pure, but it runs an Intl.Segmenter grapheme pass plus several cellWidth lookups on
+ * every call. The TUI renders the same dossier/card lines on every frame, so those results repeat.
+ * A bounded memo keyed by the full (max, ellipsis, text) tuple turns a hit into one lookup. The
+ * JSON.stringify key is collision-free even when the text or ellipsis contains separators.
+ */
+const TRUNCATE_CACHE_LIMIT = 4096
+// Nested maps keyed by (max, ellipsis, text) avoid JSON.stringify-ing the full text on every hit.
+// A string key's hash is cached by the engine, so repeated lookups of long dossier lines are pure
+// map walks; the bound is tracked separately to preserve the original cache cap.
+const truncateCache = new Map<number, Map<string, Map<string, string>>>()
+let truncateCacheEntries = 0
 export function truncate(text: string, max: number, ellipsis: string = "\u2026"): string {
   if (max <= 0) return ""
-  const flat = text.replace(/\s+/g, " ").trim()
-  if (stringWidth(flat) <= max) return flat
-  const ellipsisWidth = stringWidth(ellipsis)
+  const hit = truncateCache.get(max)?.get(ellipsis)?.get(text)
+  if (hit !== undefined) return hit
+  const result = truncateUncached(text, max, ellipsis)
+  if (truncateCacheEntries < TRUNCATE_CACHE_LIMIT) {
+    let byEllipsis = truncateCache.get(max)
+    if (!byEllipsis) { byEllipsis = new Map(); truncateCache.set(max, byEllipsis) }
+    let byText = byEllipsis.get(ellipsis)
+    if (!byText) { byText = new Map(); byEllipsis.set(ellipsis, byText) }
+    byText.set(text, result)
+    truncateCacheEntries++
+  }
+  return result
+}
+
+/** The raw computation; kept separate so `truncate` is a thin cache lookup around it. */
+function truncateUncached(text: string, max: number, ellipsis: string = "\u2026"): string {
+  if (max <= 0) return ""
+  const flat = stripLoneSurrogates(text).replace(/\s+/g, " ").trim()
+  if (cellWidth(flat) <= max) return flat
+  const ellipsisWidth = cellWidth(ellipsis)
   if (ellipsisWidth >= max) {
     let fitted = ""
     let used = 0
     for (const { segment } of segmenter.segment(ellipsis)) {
-      const w = stringWidth(segment)
+      const w = cellWidth(segment)
       if (used + w > max) break
       fitted += segment
       used += w
@@ -200,7 +323,7 @@ export function truncate(text: string, max: number, ellipsis: string = "\u2026")
   let out = ""
   let used = 0
   for (const { segment } of segmenter.segment(flat)) {
-    const w = stringWidth(segment)
+    const w = cellWidth(segment)
     if (used + w > budget) break
     out += segment
     used += w
@@ -227,24 +350,27 @@ export function truncate(text: string, max: number, ellipsis: string = "\u2026")
  */
 export function elideAtWordBoundary(text: string, maxChars: number): string {
   if (maxChars <= 0) return ""
-  if (text.length <= maxChars) return text
+  // Sanitize before measuring/cutting: a lone surrogate in the input would otherwise be emitted as a
+  // half character and a cut beside it could leave a different orphan. Well-formed text is unchanged.
+  const clean = stripLoneSurrogates(text)
+  if (clean.length <= maxChars) return clean
   const budget = maxChars - 1 // reserve one code unit for the elision marker "…"
   if (budget <= 0) return "…"
   // Prefer the last whitespace at or before `budget` within the trailing quarter of the
   // window: a cut near the front of a long line would drop more payload than it saves.
   let cut = -1
   for (let i = budget; i >= Math.max(0, budget - Math.floor(budget / 4)); i--) {
-    const code = text.charCodeAt(i)
+    const code = clean.charCodeAt(i)
     if (code === 0x20 || code === 0x09 || code === 0x0a || code === 0x0d) {
       cut = i
       break
     }
   }
-  if (cut !== -1) return `${text.slice(0, cut).replace(/\s+$/, "")}…`
+  if (cut !== -1) return `${clean.slice(0, cut).replace(/\s+$/, "")}…`
   // No whitespace in the window: cut at the budget, backing off a high surrogate so the
   // pair stays whole (a low surrogate at the boundary is the split half — skip it too).
   let end = budget
-  const before = text.charCodeAt(end - 1)
+  const before = clean.charCodeAt(end - 1)
   if (before >= 0xd800 && before <= 0xdbff) end -= 1
-  return `${text.slice(0, end)}…`
+  return `${clean.slice(0, end)}…`
 }

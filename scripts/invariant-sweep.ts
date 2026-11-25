@@ -26,9 +26,9 @@
 import { collectChangedPaths as collectChangedPathsCore, pathsOf } from "../src/core/changed-paths.ts"
 
 /** Paths that constitute a behavior change requiring spec/changelog alignment. */
-export const BEHAVIOR_PREFIXES = ["src/core/", "src/runtime/"] as const
-export const SPEC_PATH = "SPEC.md"
-export const CHANGELOG_PATH = "docs/changelog.html"
+const BEHAVIOR_PREFIXES = ["src/core/", "src/runtime/"] as const
+const SPEC_PATH = "SPEC.md"
+const CHANGELOG_PATH = "docs/changelog.html"
 
 export { pathsOf }
 

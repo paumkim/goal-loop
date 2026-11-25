@@ -87,7 +87,9 @@ describe("directive() with the opencode-cli guide", () => {
   test("lands before the commit rule and keeps the evaluator framing", () => {
     const out = directive("rework the opencode harness tests", direct)
     expect(out.indexOf("<opencode-cli>")).toBeLessThan(out.indexOf("Commit rule:"))
-    expect(out).toContain("A separate evaluator decides whether the condition is met")
+    // the verdict handoff lives once, in the shared no-judge block — not in a second earlier paragraph
+    expect(out).toContain("goal-loop detects active sessions and defers its verdict")
+    expect(out).not.toContain("A separate evaluator decides whether the condition is met")
     expect(out.endsWith(DELEGATE_VERDICT)).toBe(true)
   })
 

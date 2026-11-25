@@ -19,6 +19,27 @@ import { iterationDurations, loopTotals, verdictCounts } from "./history.ts"
 /** Em-dash gap marker — the one thing every absent measurement renders as. */
 export const GAP = "—"
 
+/**
+ * Yes/no/unknown cell for a three-way record status. The verify, reach and sign record renderers and
+ * their three dossier exporters used to spell this mapping out six times; one home keeps the answer
+ * for a positive status, a negative status and everything else (including `"unknown"`) identical.
+ */
+export type RecordAnswer = "yes" | "no" | "unknown"
+export const recordStatusCell = (status: string, positive: string, negative: string): RecordAnswer =>
+  status === positive ? "yes" : status === negative ? "no" : "unknown"
+
+/**
+ * Iteration column shared by the verify, reach, sign, seal and review record tables. Those five renderers
+ * used to spell the same `v1, v2` list out locally; one home keeps every table identical.
+ */
+export const iterationList = (iterations: readonly number[]): string => iterations.map((v) => `v${v}`).join(", ")
+
+/** Flatten a goal condition to one table cell: whitespace collapsed, 200 chars + ellipsis at most, GAP when empty. */
+export const conditionCellOf = (condition: string | undefined): string => {
+  const flat = (condition ?? "").replace(/\s+/g, " ").trim()
+  return flat.length > 200 ? `${flat.slice(0, 200)}…` : flat || GAP
+}
+
 /** ISO-8601 UTC for a timestamp; non-finite or unrepresentable input renders the gap, never a guess. */
 export const isoOf = (ms: number): string => {
   if (!Number.isFinite(ms)) return GAP
@@ -54,6 +75,15 @@ export const fileStampOf = (ms: number): string => {
   )
 }
 
+/**
+ * Shared dossier-family artifact name: `goal-<stem>-<stamp>[-<attempt+1>].md`. Every exporter builds its
+ * file name here so the compact stamp and the collision suffix cannot drift apart; only the stem varies.
+ */
+export const artifactName = (stem: string, nowMs: number, attempt = 0): string => {
+  const suffix = attempt > 0 ? `-${attempt + 1}` : ""
+  return `goal-${stem}-${fileStampOf(nowMs)}${suffix}.md`
+}
+
 /** First 7 chars of a hex sha; non-hex shas (legacy/odd writers) print whole rather than invented. */
 export const shortSha = (sha: string | undefined): string => {
   if (!sha) return GAP
@@ -62,10 +92,16 @@ export const shortSha = (sha: string | undefined): string => {
   return flat.length > 7 ? flat.slice(0, 7) : flat
 }
 
+/** Longest backtick run in `text`, floored at `min` (0 for inline code, 2 for a fenced block). */
+const longestBacktickRun = (text: string, min: number): number => {
+  let longest = min
+  for (const run of text.match(/`+/g) ?? []) longest = Math.max(longest, run.length)
+  return longest
+}
+
 /** Inline-code fence that outgrows any backtick run inside the text. */
 export const inlineCode = (text: string): string => {
-  let longest = 0
-  for (const run of text.match(/`+/g) ?? []) longest = Math.max(longest, run.length)
+  const longest = longestBacktickRun(text, 0)
   if (longest === 0) return `\`${text}\``
   const fence = "`".repeat(longest + 1)
   return `${fence} ${text} ${fence}`
@@ -73,9 +109,7 @@ export const inlineCode = (text: string): string => {
 
 /** Fenced code block whose fence outgrows any ``` run inside the payload. Returns the block's lines. */
 export const fenceBlock = (text: string): string[] => {
-  let longest = 2
-  for (const run of text.match(/`{3,}/g) ?? []) longest = Math.max(longest, run.length)
-  const fence = "`".repeat(longest + 1)
+  const fence = "`".repeat(longestBacktickRun(text, 2) + 1)
   const body = text.replace(/\r\n?/g, "\n").replace(/\n+$/, "").split("\n")
   return [fence, ...body, fence]
 }
@@ -294,11 +328,8 @@ const verifyLines = (goal: GoalSnapshot): string[] => {
  * The whole dossier. Deterministic: the same record and the same clock render the same
  * document, byte for byte. `nowMs` is the caller's clock — nothing here reads Date.now().
  */
-export function buildLoopDossier(goal: GoalSnapshot, nowMs: number): string {
+function dossierHead(goal: GoalSnapshot, isLoop: boolean, generatedAt: string): string[] {
   const lines: string[] = []
-  const isLoop = Boolean(goal.loopEnabled)
-  const generatedAt = isoOf(nowMs)
-
   lines.push(isLoop ? "# Goal loop dossier" : "# Goal dossier")
   lines.push("")
   lines.push(
@@ -344,8 +375,11 @@ export function buildLoopDossier(goal: GoalSnapshot, nowMs: number): string {
     lines.push(...quote(goal.reason))
   }
   lines.push("")
+  return lines
+}
 
-  // ---- Iterations
+function dossierIterations(goal: GoalSnapshot, isLoop: boolean): string[] {
+  const lines: string[] = []
   const entries = goal.loopHistory ?? []
   const dropped = goal.loopHistoryDropped ?? 0
   if (isLoop || entries.length > 0) {
@@ -363,8 +397,11 @@ export function buildLoopDossier(goal: GoalSnapshot, nowMs: number): string {
       })
     }
   }
+  return lines
+}
 
-  // ---- Verdict trail
+function dossierVerdictTrail(goal: GoalSnapshot): string[] {
+  const lines: string[] = []
   const history = goal.history ?? []
   const historyDropped = goal.historyDropped ?? 0
   const totalTrail = history.length + historyDropped
@@ -386,7 +423,12 @@ export function buildLoopDossier(goal: GoalSnapshot, nowMs: number): string {
     lines.push(...verdictProse(history))
     lines.push("")
   }
+  return lines
+}
 
+function dossierTail(goal: GoalSnapshot, nowMs: number): string[] {
+  const lines: string[] = []
+  const entries = goal.loopHistory ?? []
   // ---- Boundary compaction
   lines.push("## Boundary compaction")
   lines.push("")
@@ -421,6 +463,15 @@ export function buildLoopDossier(goal: GoalSnapshot, nowMs: number): string {
   lines.push("")
   lines.push("---")
   lines.push("_goal-loop dossier · source: plugin record · nothing above was re-verified; it is the record's own bookkeeping._")
+  return lines
+}
 
-  return lines.join("\n")
+export function buildLoopDossier(goal: GoalSnapshot, nowMs: number): string {
+  const isLoop = Boolean(goal.loopEnabled)
+  return [
+    ...dossierHead(goal, isLoop, isoOf(nowMs)),
+    ...dossierIterations(goal, isLoop),
+    ...dossierVerdictTrail(goal),
+    ...dossierTail(goal, nowMs),
+  ].join("\n")
 }

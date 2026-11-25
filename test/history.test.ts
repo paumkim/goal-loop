@@ -1,6 +1,15 @@
 import { describe, expect, test } from "bun:test"
 import { BAR_CELLS, CONTEXT_BAR_CELLS, PIP_CELLS, SPARK_MAX_CELLS, contextMeter, contextSparkline, barCaption, currentIterationVerdict, durationShares, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, pauseDiagnostics, relativeTime, renderBar, renderPips, trailWindow, turnsSinceVerdict, verdictCounts, verdictEntryGlyph, verdictGlyph, verdictStreak } from "../src/core/history.ts"
 import type { LoopEntry, VerdictEntry } from "../src/core/types.ts"
+import { nonNegative } from "../src/core/format.ts"
+
+describe("nonNegative", () => {
+  test("matches the former inline clamp for finite, negative, non-finite and boundary inputs", () => {
+    const oracle = (n: number) => (Number.isFinite(n) ? Math.max(0, n) : 0)
+    const cases = [0, -0, 1, -1, 0.5, -0.5, Number.MAX_VALUE, Number.MIN_VALUE, NaN, Infinity, -Infinity]
+    for (const n of cases) expect(nonNegative(n)).toBe(oracle(n))
+  })
+})
 
 const entry = (version: number, endedAt: number, toolCalls = 0, turns = 1): LoopEntry => ({
   version,
@@ -57,6 +66,15 @@ describe("renderBar", () => {
 describe("barCaption", () => {
   test("with a max shows the cap and the completion count", () => {
     expect(barCaption(3, 5, 2)).toBe("v3 of at most 5 · 2 complete")
+  })
+
+  test("the dialog caption names every cap the loop-position repro used to render", () => {
+    // Re-pointed from the deleted scripts/repro-loop-cap.tsx: its dialog frame asserted `v3 of at most
+    // <cap>` at caps 5, 50, 99, 100 and 1000. The exact same string comes from barCaption, now pinned
+    // here on the underlying function instead of through a headless render of a manual-only script.
+    for (const cap of [5, 50, 99, 100, 1000]) {
+      expect(barCaption(3, cap, 2)).toBe(`v3 of at most ${cap} · 2 complete`)
+    }
   })
 
   test("without a max omits the cap", () => {

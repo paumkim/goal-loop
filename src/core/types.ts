@@ -1,6 +1,16 @@
 /** Lifecycle of a goal. `active` and `paused` are live; the rest are terminal. */
 export type GoalStatus = "active" | "paused" | "achieved" | "impossible" | "cleared" | "failed"
 
+/**
+ * Id prefix for the transient, non-persisted snapshot the controller paints while the arm-time
+ * planner distils a raw `/goal` body. The TUI keeps that placeholder live until the real `arm()`
+ * commit replaces it; the prefix is the only signal that a cached snapshot is a placeholder.
+ */
+export const PLANNING_SNAPSHOT_PREFIX = "planning-"
+export const planningSnapshotId = (sessionID: string): string => `${PLANNING_SNAPSHOT_PREFIX}${sessionID}`
+export const isPlanningSnapshot = (goal: GoalSnapshot | null | undefined, sessionID: string): boolean =>
+  goal?.id === planningSnapshotId(sessionID)
+
 export type Verdict = "met" | "not_met" | "impossible"
 
 /** What the user asked for: finished work has to be committed before the goal counts as met. */
@@ -33,12 +43,9 @@ export interface CommitPolicy {
   readonly mode?: CommitMode
   /** Absolute path to the coordinator wrapper; omitted when no binary can be located (never repo-relative). */
   readonly coordinatorBin?: string
-  /** Worktree directory, e.g. `worktrees`. */
+  /** Worktree directory, e.g. `worktree`. */
   readonly worktreeDir?: string
 }
-
-/** The commit rule is off: nothing in the session's directory is a git repository. */
-export const NO_COMMIT: CommitPolicy = { required: false, branch: "dev", mode: "direct", reason: "not a git repository" }
 
 /** Live (resumable) statuses. `failed` and `cleared` are both terminal but distinct: `failed` means an unrecoverable error ended the goal, `cleared` means the user ended it. Neither is resumable. */
 const LIVE_STATUSES: ReadonlySet<GoalStatus> = new Set(["active", "paused"])
@@ -57,10 +64,19 @@ export interface UsageSnapshot {
 export const EMPTY_USAGE: UsageSnapshot = { cost: 0, input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
 
 export type VerifyCheckType = "typecheck" | "tests" | "lint" | "build" | "smoke" | "custom" | "goal-declared"
+/** Runtime counterpart of {@link VerifyCheckType}: the one set of accepted verify-check types. */
+export const VERIFY_CHECK_TYPES: ReadonlySet<string> = new Set([
+  "typecheck", "tests", "lint", "build", "smoke", "custom", "goal-declared",
+])
 
 export type VerifyEvidenceMode = "command" | "artifact" | "either"
 export type VerifyCheckSource = "configured" | "legacy" | "goal-declared"
 type VerifyCheckRunState = "executed" | "artifact" | "reused" | "skipped"
+
+/** Runtime counterparts of the verify unions above. One home, consumed by config, verify-matrix and wire. */
+export const VERIFY_EVIDENCE_MODES: ReadonlySet<string> = new Set(["command", "artifact", "either"])
+export const VERIFY_CHECK_SOURCES: ReadonlySet<string> = new Set(["configured", "legacy", "goal-declared"])
+export const VERIFY_RUN_STATES: ReadonlySet<string> = new Set(["executed", "artifact", "reused", "skipped"])
 
 /** Evidence captured for one verification-matrix check (additive, persisted in verdict trail). */
 export interface VerifyCheckEvidence {
@@ -235,10 +251,6 @@ export const boundVerdictHistory = (entries: readonly VerdictEntry[]): { retaine
  * record (a line each, never the summaries) while staying small in storage and snapshots.
  */
 export const MAX_COMPLETED_CONDITION_ENTRIES = 100
-
-/** Total completed conditions a consumer should count: retained plus dropped. */
-export const completedConditionCount = (goal: { readonly completedConditions?: readonly string[]; readonly completedConditionsDropped?: number }): number =>
-  (goal.completedConditionsDropped ?? 0) + (goal.completedConditions?.length ?? 0)
 
 /**
  * Bounds the completed-condition ledger to the newest `MAX_COMPLETED_CONDITION_ENTRIES` strings. Oldest entries
@@ -433,7 +445,7 @@ export interface GoalRecord {
   completedConditions?: string[]
   /**
    * How many completed-condition strings the ledger cap dropped (oldest first). Additive; absent when the cap never
-   * engaged. Total completed conditions = (this ?? 0) + completedConditions.length — use `completedConditionCount`.
+   * engaged. Total completed conditions = (this ?? 0) + completedConditions.length.
    */
   completedConditionsDropped?: number
   /** Consecutive iterations with zero tool calls. Recorded and surfaced (TUI); armed loops never pause on it — an armed /goal-loop keeps arming, with at most one notice per stall event. */
@@ -454,6 +466,12 @@ export interface GoalRecord {
    * reload while the background subagent kept running).
    */
   waitingSince?: number
+  /**
+   * Number of delegated subagents holding evaluation back when the deferral above was armed. Additive;
+   * absent on legacy records and whenever no deferral is in flight. Lets the TUI say "waiting for subagent"
+   * (and show the count when more than one) instead of a bare "waiting" that hides what the parent is waiting on.
+   */
+  waitingSubagents?: number
   /**
    * Persisted twin of a turn's in-flight post-turn step, so a restart/plugin reload mid-evaluation resumes
    * the owed step instead of silently dropping it (the goal would otherwise sit active forever: no new

@@ -22,9 +22,9 @@
  *     are printed so a stale copy cannot masquerade as a live check.
  */
 import { execFileSync } from "node:child_process"
-import { shortSha, stampOf } from "./dossier.ts"
-import { recordShaMentions } from "./verify-record.ts"
 import type { GoalSnapshot } from "./types.ts"
+import { recordAckSegment, recordSummaryLine, renderRecordReport, sweepRecordMentions } from "./record-attestation.ts"
+import type { RecordCheckShape } from "./record-attestation.ts"
 
 /** The probe contract: true = an ancestor of HEAD at the probed directory, false = git answered and it is not, "unknown" = git could not answer. */
 export type ReachProbe = (sha: string) => boolean | "unknown"
@@ -53,13 +53,7 @@ export function gitAncestorProbe(cwd: string): ReachProbe {
 
 type ReachCheckStatus = "ancestor" | "unreached" | "unknown"
 
-interface ReachCheck {
-  readonly sha: string
-  readonly shortSha: string
-  /** 1-based loop iterations that quote this sha (oldest first). */
-  readonly iterations: readonly number[]
-  readonly status: ReachCheckStatus
-}
+type ReachCheck = RecordCheckShape<ReachCheckStatus>
 
 export interface ReachVerification {
   readonly checks: readonly ReachCheck[]
@@ -74,35 +68,16 @@ export interface ReachVerification {
 
 /** Sweeps the record's quoted shas against the probe. Pure: the probe is injected, the sweep never throws. */
 export function reachRecord(goal: GoalSnapshot, probe: ReachProbe): ReachVerification {
-  const checks = recordShaMentions(goal).map((m): ReachCheck => {
-    let answer: boolean | "unknown"
-    try {
-      answer = probe(m.sha)
-    } catch {
-      answer = "unknown"
-    }
-    const status: ReachCheckStatus = answer === true ? "ancestor" : answer === false ? "unreached" : "unknown"
-    return { sha: m.sha, shortSha: shortSha(m.sha), iterations: m.iterations, status }
-  })
-  let ancestors = 0
-  let unreached = 0
-  let unknown = 0
-  let mentions = 0
-  for (const check of checks) {
-    if (check.status === "ancestor") ancestors += 1
-    else if (check.status === "unreached") unreached += 1
-    else unknown += 1
-    mentions += check.iterations.length
+  const swept = sweepRecordMentions<ReachCheckStatus>(goal, probe, "ancestor", "unreached")
+  return {
+    checks: swept.checks,
+    unique: swept.unique,
+    mentions: swept.mentions,
+    ancestors: swept.positive,
+    unreached: swept.negative,
+    unknown: swept.unknown,
   }
-  return { checks, unique: checks.length, mentions, ancestors, unreached, unknown }
 }
-
-const iterationList = (iterations: readonly number[]): string => iterations.map((v) => `v${v}`).join(", ")
-
-const GAP = "—"
-
-const statusCell = (status: ReachCheckStatus): string =>
-  status === "ancestor" ? "yes" : status === "unreached" ? "no" : "unknown"
 
 /**
  * The ancestry report as Markdown — freshly generated, self-describing, safe to hand to a reviewer.
@@ -110,42 +85,38 @@ const statusCell = (status: ReachCheckStatus): string =>
  * check; the honesty footer states exactly what "not on this line" does and does not imply.
  */
 export function reachReportMarkdown(goal: GoalSnapshot, reach: ReachVerification, nowMs: number, directory: string): string {
-  const stamp = stampOf(nowMs)
-  const condition = (goal.condition ?? "").replace(/\s+/g, " ").trim()
-  const conditionCell = condition.length > 200 ? `${condition.slice(0, 200)}…` : condition || GAP
-  const lines: string[] = [
-    "# /goal-loop record ancestry",
-    "",
-    `- Generated: ${stamp}`,
-    `- Repository: ${directory}`,
-    `- Condition: ${conditionCell}`,
-    `- Shas quoted by the record: ${reach.unique} unique across ${reach.mentions} mention${reach.mentions === 1 ? "" : "s"}`,
-    "",
-    "| sha | quoted at | on this line |",
-    "| --- | --- | --- |",
-  ]
-  for (const check of reach.checks) {
-    lines.push(`| ${check.shortSha} | ${iterationList(check.iterations)} | ${statusCell(check.status)} |`)
-  }
-  if (reach.checks.length === 0) lines.push("| — | — | — |")
-  lines.push(
-    "",
-    `- On this line (ancestor of HEAD): ${reach.ancestors} · not on this line: ${reach.unreached} · unknown: ${reach.unknown}`,
-    "",
-    "Not on this line is not misconduct: the sha may live on another branch, may have been rebased away, or this record may predate the merge that carried it. Existence is not ancestry, and ancestry is not content — a sha that belongs to this history may still carry a tree you have not read, and a sha that resolves here may still belong elsewhere. This report asks one question, per sha, of the repository at the directory named above, at generation time, and says nothing about which ref the work landed on, signatures, the working tree's cleanliness, or the content of any commit. Unknown means git could not answer (no binary, not a repository, unparseable sha, timed out) — never counted as “no”.",
-    "",
+  return renderRecordReport(
+    goal,
+    reach,
+    {
+      title: "# /goal-loop record ancestry",
+      columnHeader: "on this line",
+      countsLine: `- On this line (ancestor of HEAD): ${reach.ancestors} · not on this line: ${reach.unreached} · unknown: ${reach.unknown}`,
+      footer: "Not on this line is not misconduct: the sha may live on another branch, may have been rebased away, or this record may predate the merge that carried it. Existence is not ancestry, and ancestry is not content — a sha that belongs to this history may still carry a tree you have not read, and a sha that resolves here may still belong elsewhere. This report asks one question, per sha, of the repository at the directory named above, at generation time, and says nothing about which ref the work landed on, signatures, the working tree's cleanliness, or the content of any commit. Unknown means git could not answer (no binary, not a repository, unparseable sha, timed out) — never counted as “no”.",
+      positive: "ancestor",
+      negative: "unreached",
+    },
+    nowMs,
+    directory,
   )
-  return lines.join("\n")
 }
 
 /** The one-line outcome for the toast and the tests. No glyphs, no color — callers paint their own chrome. */
 export function reachSummaryLine(reach: ReachVerification): string {
-  if (reach.unique === 0) return "record quotes no shas to place on this line"
-  if (reach.unreached === 0 && reach.unknown === 0)
-    return `record reaches HEAD: ${reach.ancestors} of ${reach.unique} shas on this line`
-  if (reach.unreached > 0)
-    return `record does not reach HEAD: ${reach.unreached} of ${reach.unique} shas not on this line`
-  return `record unverifiable: ${reach.unknown} of ${reach.unique} shas could not be placed`
+  return recordSummaryLine(
+    {
+      unique: reach.unique,
+      positive: reach.ancestors,
+      negative: reach.unreached,
+      unknown: reach.unknown,
+    },
+    {
+      none: "record quotes no shas to place on this line",
+      success: (v) => `record reaches HEAD: ${v.positive} of ${v.unique} shas on this line`,
+      failure: (v) => `record does not reach HEAD: ${v.negative} of ${v.unique} shas not on this line`,
+      unknown: (v) => `record unverifiable: ${v.unknown} of ${v.unique} shas could not be placed`,
+    },
+  )
 }
 
 /**
@@ -154,12 +125,22 @@ export function reachSummaryLine(reach: ReachVerification): string {
  * The leading space matches the other rows' suffix grammar. A record with no quoted shas says so, never fabricates a pass.
  */
 export function reachAckSegment(reach: Pick<ReachVerification, "unique" | "ancestors" | "unreached" | "unknown">, ascii: boolean): string {
-  const ok = ascii ? "+" : "✓"
-  const bad = ascii ? "-" : "✗"
-  if (reach.unique === 0) return ascii ? " (no shas)" : " (no shas to place)"
-  if (reach.unreached > 0) return ` (${bad} ${reach.unreached} of ${reach.unique} not on this line)`
-  if (reach.unknown > 0) return ` (! ${reach.unknown} of ${reach.unique} unknown)`
-  return ` (${ok} ${reach.ancestors}/${reach.unique} on this line)`
+  return recordAckSegment(
+    {
+      unique: reach.unique,
+      positive: reach.ancestors,
+      negative: reach.unreached,
+      unknown: reach.unknown,
+    },
+    ascii,
+    {
+      noneAscii: " (no shas)",
+      noneUnicode: " (no shas to place)",
+      negative: "not on this line",
+      unknown: "unknown",
+      positive: "on this line",
+    },
+  )
 }
 
 /** The shape the host hands back to the dossier row's in-place acknowledgment (and the dialog needs nothing else — the counts are the whole truth of the click). */

@@ -8,9 +8,9 @@ import { envOverrides, isRepoAllowed, loadConfig, mergeConfig, normalize } from 
 describe("config", () => {
   test("defaults are the review-gated, capped baseline", () => {
     expect(DEFAULT_CONFIG.maxTasksPerTick).toBe(1)
-    expect(DEFAULT_CONFIG.maxSpendUsd).toBeGreaterThan(0)
+    expect(DEFAULT_CONFIG.maxSpendUsd).toBe(2)
     expect(DEFAULT_CONFIG.requireCleanTree).toBe(true)
-    expect(DEFAULT_CONFIG.prompts.length).toBeGreaterThan(0)
+    expect(DEFAULT_CONFIG.prompts).toEqual(["maintenance/autonomous-maintainer.md"])
   })
 
   test("mergeConfig applies partial overrides and clamps ranges", () => {
@@ -59,6 +59,11 @@ describe("config", () => {
     expect(config.stateFile).toBe("/repo/journal.jsonl")
     expect(normalize(mergeConfig(DEFAULT_CONFIG, { stateFile: "/abs/journal.jsonl" }), "/repo").stateFile).toBe("/abs/journal.jsonl")
     expect(() => normalize(mergeConfig(DEFAULT_CONFIG, { model: "nope" }), "/repo")).toThrow(/provider\/model/)
+    // Exact value-rendering is pinned: strings are double-quoted, numbers bare, across every throw site.
+    expect(() => normalize(mergeConfig(DEFAULT_CONFIG, { model: "nope" }), "/repo")).toThrow('model must be "provider/model" (got "nope")')
+    expect(() => mergeConfig(DEFAULT_CONFIG, { maxTasksPerTick: "abc" })).toThrow('expected an integer, got "abc"')
+    expect(() => mergeConfig(DEFAULT_CONFIG, { maxSpendUsd: "abc" })).toThrow('expected a number, got "abc"')
+    expect(() => mergeConfig(DEFAULT_CONFIG, { requireCleanTree: "maybe" })).toThrow('expected a boolean, got "maybe"')
   })
 
   test("isRepoAllowed enforces the configured whitelist without a CLI override", () => {

@@ -96,6 +96,21 @@ describe("learning-log core", () => {
     expect(entry.lesson).toContain("bun run check passed")
   })
 
+  test("buildGoalTerminalLearningEntry records the terminal sha regardless of lastVerify state", () => {
+    const history = [{ turn: 2, verdict: "met" as const, reason: "ok", at: 1_700_000_030_000, sha: "abc1234" }]
+    const withFailingVerify = buildGoalTerminalLearningEntry(
+      baseRecord({
+        status: "achieved",
+        history,
+        lastVerify: { command: "bun run check", code: 1, at: 1_700_000_030_050 },
+      }),
+      1_700_000_030_100,
+    )
+    const withoutVerify = buildGoalTerminalLearningEntry(baseRecord({ status: "achieved", history }), 1_700_000_030_100)
+    expect(withFailingVerify.sha).toBe("abc1234")
+    expect(withoutVerify.sha).toBe("abc1234")
+  })
+
   test("buildGoalTerminalLearningEntry derives lessons for non-achieved outcomes without fabricating evidence", () => {
     const impossible = buildGoalTerminalLearningEntry(baseRecord({ status: "impossible", reason: "missing API key" }))
     expect(impossible.lesson).toContain("Judged impossible")
@@ -376,7 +391,12 @@ describe("learning-log runtime emission", () => {
     const text = await readFile(join(dir, ".term/goal-loop/learnings.jsonl"), "utf8")
     const rows = text.trim().split("\n").map((l) => JSON.parse(l))
     const cleared = rows.find((r) => r.kind === "goal_terminal" && r.status === "cleared")
-    expect(cleared).toBeTruthy()
+    expect(cleared).toMatchObject({
+      kind: "goal_terminal",
+      status: "cleared",
+      condition: "ship feature",
+      sessionID: "ses_test",
+    })
     expect(cleared.lesson).toContain("Cleared")
   })
 
@@ -398,7 +418,9 @@ describe("learning-log runtime emission", () => {
     expect(turnRows.length).toBeGreaterThanOrEqual(1)
     expect(iterRows.length).toBeGreaterThanOrEqual(1)
     expect(iterRows[0]?.iteration).toBe(1)
-    expect(iterRows[0]?.summary || iterRows[0]?.lesson).toBeTruthy()
+    expect(typeof iterRows[0]?.summary).toBe("string")
+    expect(iterRows[0]!.summary!.length).toBeGreaterThan(0)
+    expect(iterRows[0]?.lesson).toMatch(/^Iteration v1 met /)
     // loop ended clean (no planner) -> also terminal achieved
     expect(goalRows.some((r) => r.status === "achieved")).toBe(true)
   })

@@ -4,6 +4,7 @@ import { createElement as _$createElement5, setProp as _$setProp5, insert as _$i
 import { Plugin } from "@opencode/plugin/tui";
 import { TextAttributes as TextAttributes5 } from "@opentui/core";
 import { useTerminalDimensions as useTerminalDimensions2 } from "@opentui/solid";
+import { createMemo as createMemo3, createSignal as createSignal4, createEffect as createEffect2, onCleanup as onCleanup3, Show as Show4, ErrorBoundary } from "solid-js";
 
 // node_modules/ansi-regex/index.js
 function ansiRegex({ onlyFirst = false } = {}) {
@@ -160,19 +161,75 @@ function stringWidth(string, options = {}) {
   return width;
 }
 
-// src/tui.tsx
-import { createMemo as createMemo3, createSignal as createSignal4, createEffect as createEffect2, onCleanup as onCleanup3, Show as Show4, ErrorBoundary } from "solid-js";
-
 // src/core/types.ts
+var PLANNING_SNAPSHOT_PREFIX = "planning-";
+var planningSnapshotId = (sessionID) => `${PLANNING_SNAPSHOT_PREFIX}${sessionID}`;
+var isPlanningSnapshot = (goal, sessionID) => goal?.id === planningSnapshotId(sessionID);
 var LIVE_STATUSES = new Set(["active", "paused"]);
 var isLive = (status) => LIVE_STATUSES.has(status);
+var VERIFY_CHECK_TYPES = new Set([
+  "typecheck",
+  "tests",
+  "lint",
+  "build",
+  "smoke",
+  "custom",
+  "goal-declared"
+]);
+var VERIFY_EVIDENCE_MODES = new Set(["command", "artifact", "either"]);
+var VERIFY_CHECK_SOURCES = new Set(["configured", "legacy", "goal-declared"]);
+var VERIFY_RUN_STATES = new Set(["executed", "artifact", "reused", "skipped"]);
 var COMPACT_MISS_CAP = 4;
 var MAX_LOOP_HISTORY_ENTRIES = 50;
 var completedIterationCount = (goal) => (goal.loopHistoryDropped ?? 0) + (goal.loopHistory?.length ?? 0);
+var totalVerdictCount = (goal) => (goal.historyDropped ?? 0) + (goal.history?.length ?? 0);
 var TERMINAL_RECORD_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 // src/core/format.ts
+function memoizeBounded(fn, limit) {
+  const cache = new Map;
+  return (arg) => {
+    const hit = cache.get(arg);
+    if (hit !== undefined)
+      return hit.value;
+    const result = fn(arg);
+    if (cache.size < limit)
+      cache.set(arg, { value: result });
+    return result;
+  };
+}
+var nonNegative = (n) => Number.isFinite(n) ? Math.max(0, n) : 0;
+var normalizeConditionText = memoizeBounded((value) => value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim(), 4096);
+var cellWidth = memoizeBounded((text) => stringWidth(text), 4096);
 var segmenter2 = new Intl.Segmenter("en", { granularity: "grapheme" });
+function stripLoneSurrogates(text) {
+  let first = -1;
+  for (let i = 0;i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code >= 55296 && code <= 57343) {
+      first = i;
+      break;
+    }
+  }
+  if (first === -1)
+    return text;
+  let out = text.slice(0, first);
+  for (let i = first;i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code >= 55296 && code <= 56319) {
+      const next = text.charCodeAt(i + 1);
+      if (next >= 56320 && next <= 57343) {
+        out += text[i] + text[i + 1];
+        i++;
+      }
+      continue;
+    }
+    if (code >= 56320 && code <= 57343)
+      continue;
+    out += text[i];
+  }
+  return out;
+}
 function wrapLines(text, width) {
   const max = Math.max(1, Math.floor(width));
   let lines = 1;
@@ -180,7 +237,7 @@ function wrapLines(text, width) {
   for (const word of text.split(" ")) {
     if (word === "")
       continue;
-    const w = stringWidth(word);
+    const w = cellWidth(word);
     const sep = used === 0 ? 0 : 1;
     if (used > 0 && used + sep + w > max) {
       lines += 1;
@@ -211,7 +268,7 @@ function formatDuration(ms) {
   return `${s}s`;
 }
 function formatDurationCoarse(ms) {
-  const minutes = Math.floor(Math.max(0, ms) / 60000);
+  const minutes = Math.floor(nonNegative(ms) / 60000);
   if (minutes < 1)
     return "<1m";
   if (minutes < 60)
@@ -219,6 +276,8 @@ function formatDurationCoarse(ms) {
   return `${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, "0")}m`;
 }
 function formatTokens(n) {
+  if (!Number.isFinite(n))
+    return "0";
   if (n < 1000)
     return String(Math.round(n));
   const k = (n / 1000).toFixed(n < 1e4 ? 1 : 0);
@@ -227,6 +286,8 @@ function formatTokens(n) {
   return `${(n / 1e6).toFixed(2)}M`;
 }
 function formatCost(usd) {
+  if (!Number.isFinite(usd))
+    return "$0";
   if (usd <= 0)
     return "$0";
   return usd < 0.01 ? "<$0.01" : `$${usd.toFixed(2)}`;
@@ -237,9 +298,11 @@ function formatSpend(spend, maxWidth = Number.POSITIVE_INFINITY) {
   if (spend.cacheRead > 0)
     parts.push(`${formatTokens(spend.cacheRead)} cached`);
   const join = (tokens) => [...tokens, ...cost ? [cost] : []].join(" \xB7 ");
+  if (maxWidth === Number.POSITIVE_INFINITY)
+    return join(parts);
   let tokens = parts;
   let out = join(tokens);
-  while (tokens.length > 0 && stringWidth(out) > maxWidth) {
+  while (tokens.length > 0 && cellWidth(out) > maxWidth) {
     tokens = tokens.slice(0, -1);
     out = join(tokens);
   }
@@ -256,18 +319,44 @@ var STATUS_LABEL = {
   failed: "failed after an unrecoverable error"
 };
 var statusLabel = (status) => STATUS_LABEL[status];
+var TRUNCATE_CACHE_LIMIT = 4096;
+var truncateCache = new Map;
+var truncateCacheEntries = 0;
 function truncate(text, max, ellipsis = "\u2026") {
   if (max <= 0)
     return "";
-  const flat = text.replace(/\s+/g, " ").trim();
-  if (stringWidth(flat) <= max)
+  const hit = truncateCache.get(max)?.get(ellipsis)?.get(text);
+  if (hit !== undefined)
+    return hit;
+  const result = truncateUncached(text, max, ellipsis);
+  if (truncateCacheEntries < TRUNCATE_CACHE_LIMIT) {
+    let byEllipsis = truncateCache.get(max);
+    if (!byEllipsis) {
+      byEllipsis = new Map;
+      truncateCache.set(max, byEllipsis);
+    }
+    let byText = byEllipsis.get(ellipsis);
+    if (!byText) {
+      byText = new Map;
+      byEllipsis.set(ellipsis, byText);
+    }
+    byText.set(text, result);
+    truncateCacheEntries++;
+  }
+  return result;
+}
+function truncateUncached(text, max, ellipsis = "\u2026") {
+  if (max <= 0)
+    return "";
+  const flat = stripLoneSurrogates(text).replace(/\s+/g, " ").trim();
+  if (cellWidth(flat) <= max)
     return flat;
-  const ellipsisWidth = stringWidth(ellipsis);
+  const ellipsisWidth = cellWidth(ellipsis);
   if (ellipsisWidth >= max) {
     let fitted = "";
     let used = 0;
     for (const { segment } of segmenter2.segment(ellipsis)) {
-      const w = stringWidth(segment);
+      const w = cellWidth(segment);
       if (used + w > max)
         break;
       fitted += segment;
@@ -279,7 +368,7 @@ function truncate(text, max, ellipsis = "\u2026") {
   let out = "";
   let used = 0;
   for (const { segment } of segmenter2.segment(flat)) {
-    const w = stringWidth(segment);
+    const w = cellWidth(segment);
     if (used + w > budget)
       break;
     out += segment;
@@ -298,14 +387,14 @@ var BAR_EMPTY_ASCII = "-";
 function renderBar(done, max, cells = BAR_CELLS, ascii = false) {
   const width = Math.max(1, Math.floor(cells));
   const safeMax = typeof max === "number" && Number.isFinite(max) && max > 0 ? max : 0;
-  const safeDone = Number.isFinite(done) ? Math.max(0, done) : 0;
+  const safeDone = nonNegative(done);
   const filled = safeMax === 0 || safeDone <= 0 ? 0 : Math.min(width, Math.max(1, Math.round(safeDone / safeMax * width)));
   const filledGlyph = ascii ? BAR_FILLED_ASCII : BAR_FILLED;
   const emptyGlyph = ascii ? BAR_EMPTY_ASCII : BAR_EMPTY;
   return { filled, text: filledGlyph.repeat(filled) + emptyGlyph.repeat(width - filled) };
 }
 function barCaption(current, max, done) {
-  const safeDone = Number.isFinite(done) ? Math.max(0, done) : 0;
+  const safeDone = nonNegative(done);
   const v = Number.isFinite(current) && current >= 1 ? Math.floor(current) : 1;
   return typeof max === "number" && Number.isFinite(max) && max > 0 ? `v${v} of at most ${Math.floor(max)} \xB7 ${safeDone} complete` : `v${v} \xB7 ${safeDone} complete`;
 }
@@ -494,13 +583,10 @@ function localTime(ms) {
 function currentIterationVerdict(history, entries, setAt) {
   const last = entries.length > 0 ? entries[entries.length - 1] : undefined;
   const from = last && Number.isFinite(last.endedAt) ? last.endedAt : setAt;
-  for (let index = history.length - 1;index >= 0; index -= 1) {
-    const entry = history[index];
-    if (entry.at > from)
-      return entry;
-    break;
-  }
-  return;
+  if (history.length === 0)
+    return;
+  const entry = history[history.length - 1];
+  return entry.at > from ? entry : undefined;
 }
 function turnsSinceVerdict(turns, verdictTurn) {
   if (!Number.isFinite(turns) || !Number.isFinite(verdictTurn))
@@ -549,7 +635,7 @@ function contextSparkline(entries, ascii = false) {
 var CONTEXT_BAR_CELLS = 16;
 var CONTEXT_HOT_RATIO = 0.8;
 function contextMeter(size, capacity, cells = CONTEXT_BAR_CELLS, ascii = false) {
-  const safeSize = Number.isFinite(size) ? Math.max(0, size) : 0;
+  const safeSize = nonNegative(size);
   const width = Math.max(1, Math.floor(cells));
   const hasCapacity = typeof capacity === "number" && Number.isFinite(capacity) && capacity > 0;
   const filledGlyph = ascii ? BAR_FILLED_ASCII : BAR_FILLED;
@@ -570,6 +656,12 @@ function contextMeter(size, capacity, cells = CONTEXT_BAR_CELLS, ascii = false) 
 
 // src/core/dossier.ts
 var GAP = "\u2014";
+var recordStatusCell = (status, positive, negative) => status === positive ? "yes" : status === negative ? "no" : "unknown";
+var iterationList = (iterations) => iterations.map((v) => `v${v}`).join(", ");
+var conditionCellOf = (condition) => {
+  const flat = (condition ?? "").replace(/\s+/g, " ").trim();
+  return flat.length > 200 ? `${flat.slice(0, 200)}\u2026` : flat || GAP;
+};
 var isoOf = (ms) => {
   if (!Number.isFinite(ms))
     return GAP;
@@ -586,6 +678,10 @@ var fileStampOf = (ms) => {
   const valid = Number.isFinite(date.getTime()) ? date : new Date(0);
   return `${valid.getUTCFullYear()}${pad2(valid.getUTCMonth() + 1)}${pad2(valid.getUTCDate())}` + `-${pad2(valid.getUTCHours())}${pad2(valid.getUTCMinutes())}${pad2(valid.getUTCSeconds())}`;
 };
+var artifactName = (stem, nowMs, attempt = 0) => {
+  const suffix = attempt > 0 ? `-${attempt + 1}` : "";
+  return `goal-${stem}-${fileStampOf(nowMs)}${suffix}.md`;
+};
 var shortSha = (sha) => {
   if (!sha)
     return GAP;
@@ -594,20 +690,21 @@ var shortSha = (sha) => {
     return GAP;
   return flat.length > 7 ? flat.slice(0, 7) : flat;
 };
-var inlineCode = (text) => {
-  let longest = 0;
+var longestBacktickRun = (text, min) => {
+  let longest = min;
   for (const run of text.match(/`+/g) ?? [])
     longest = Math.max(longest, run.length);
+  return longest;
+};
+var inlineCode = (text) => {
+  const longest = longestBacktickRun(text, 0);
   if (longest === 0)
     return `\`${text}\``;
   const fence = "`".repeat(longest + 1);
   return `${fence} ${text} ${fence}`;
 };
 var fenceBlock = (text) => {
-  let longest = 2;
-  for (const run of text.match(/`{3,}/g) ?? [])
-    longest = Math.max(longest, run.length);
-  const fence = "`".repeat(longest + 1);
+  const fence = "`".repeat(longestBacktickRun(text, 2) + 1);
   const body = text.replace(/\r\n?/g, `
 `).replace(/\n+$/, "").split(`
 `);
@@ -833,10 +930,8 @@ var verifyLines = (goal) => {
   }
   return lines;
 };
-function buildLoopDossier(goal, nowMs) {
+function dossierHead(goal, isLoop, generatedAt) {
   const lines = [];
-  const isLoop = Boolean(goal.loopEnabled);
-  const generatedAt = isoOf(nowMs);
   lines.push(isLoop ? "# Goal loop dossier" : "# Goal dossier");
   lines.push("");
   lines.push(`_Generated ${generatedAt} from the goal-loop plugin's record. Everything below is the record's own bookkeeping; a measurement it does not carry renders as ${GAP}, never estimated. The session id is omitted on purpose._`);
@@ -878,6 +973,10 @@ function buildLoopDossier(goal, nowMs) {
     lines.push(...quote(goal.reason));
   }
   lines.push("");
+  return lines;
+}
+function dossierIterations(goal, isLoop) {
+  const lines = [];
   const entries = goal.loopHistory ?? [];
   const dropped = goal.loopHistoryDropped ?? 0;
   if (isLoop || entries.length > 0) {
@@ -896,6 +995,10 @@ function buildLoopDossier(goal, nowMs) {
       });
     }
   }
+  return lines;
+}
+function dossierVerdictTrail(goal) {
+  const lines = [];
   const history = goal.history ?? [];
   const historyDropped = goal.historyDropped ?? 0;
   const totalTrail = history.length + historyDropped;
@@ -919,6 +1022,11 @@ function buildLoopDossier(goal, nowMs) {
     lines.push(...verdictProse(history));
     lines.push("");
   }
+  return lines;
+}
+function dossierTail(goal, nowMs) {
+  const lines = [];
+  const entries = goal.loopHistory ?? [];
   lines.push("## Boundary compaction");
   lines.push("");
   lines.push(...boundaryCompactLines(goal, nowMs));
@@ -947,1004 +1055,59 @@ function buildLoopDossier(goal, nowMs) {
   lines.push("");
   lines.push("---");
   lines.push("_goal-loop dossier \xB7 source: plugin record \xB7 nothing above was re-verified; it is the record's own bookkeeping._");
-  return lines.join(`
-`);
-}
-
-// src/core/dossier-export.ts
-import { writeFileSync } from "fs";
-import { join, resolve } from "path";
-var MAX_EXPORT_ATTEMPTS = 100;
-var dossierExportName = (nowMs, attempt = 0) => {
-  const suffix = attempt > 0 ? `-${attempt + 1}` : "";
-  return `goal-dossier-${fileStampOf(nowMs)}${suffix}.md`;
-};
-function exportLoopDossier(goal, nowMs, dir) {
-  const content = buildLoopDossier(goal, nowMs);
-  const targetDir = resolve(dir);
-  const bytes = Buffer.byteLength(content, "utf8");
-  for (let attempt = 0;attempt < MAX_EXPORT_ATTEMPTS; attempt++) {
-    const path = join(targetDir, dossierExportName(nowMs, attempt));
-    try {
-      writeFileSync(path, content, { encoding: "utf8", flag: "wx" });
-      return { path, bytes, attempts: attempt + 1 };
-    } catch (error) {
-      const code = error?.code;
-      if (code === "EEXIST")
-        continue;
-      throw error;
-    }
-  }
-  throw new Error(`no free dossier filename after ${MAX_EXPORT_ATTEMPTS} attempts in ${targetDir}`);
-}
-
-// src/core/verify-record.ts
-import { execFileSync } from "child_process";
-var GIT_TIMEOUT_MS = 1e4;
-function gitCatFileProbe(cwd) {
-  return (sha) => {
-    try {
-      execFileSync("git", ["-C", cwd, "cat-file", "-e", sha], { stdio: "ignore", timeout: GIT_TIMEOUT_MS });
-      return true;
-    } catch (error) {
-      const status = error?.status;
-      if (typeof status === "number")
-        return false;
-      return "unknown";
-    }
-  };
-}
-function recordShaMentions(goal) {
-  const mentions = [];
-  const index = new Map;
-  for (const entry of goal.loopHistory ?? []) {
-    const sha = typeof entry.sha === "string" ? entry.sha.trim() : "";
-    if (!sha)
-      continue;
-    const at = index.get(sha);
-    if (at !== undefined) {
-      mentions[at].iterations.push(entry.version);
-      continue;
-    }
-    index.set(sha, mentions.length);
-    mentions.push({ sha, iterations: [entry.version] });
-  }
-  return mentions;
-}
-function verifyRecord(goal, probe) {
-  const checks = recordShaMentions(goal).map((m) => {
-    let answer;
-    try {
-      answer = probe(m.sha);
-    } catch {
-      answer = "unknown";
-    }
-    const status = answer === true ? "present" : answer === false ? "missing" : "unknown";
-    return { sha: m.sha, shortSha: shortSha(m.sha), iterations: m.iterations, status };
-  });
-  let present = 0;
-  let missing = 0;
-  let unknown = 0;
-  let mentions = 0;
-  for (const check of checks) {
-    if (check.status === "present")
-      present += 1;
-    else if (check.status === "missing")
-      missing += 1;
-    else
-      unknown += 1;
-    mentions += check.iterations.length;
-  }
-  return { checks, unique: checks.length, mentions, present, missing, unknown };
-}
-var iterationList = (iterations) => iterations.map((v) => `v${v}`).join(", ");
-var GAP2 = "\u2014";
-var statusCell = (status) => status === "present" ? "yes" : status === "missing" ? "no" : "unknown";
-function verifyReportMarkdown(goal, verification, nowMs, directory) {
-  const stamp = stampOf(nowMs);
-  const condition = (goal.condition ?? "").replace(/\s+/g, " ").trim();
-  const conditionCell = condition.length > 200 ? `${condition.slice(0, 200)}\u2026` : condition || GAP2;
-  const lines = [
-    "# /goal-loop record verification",
-    "",
-    `- Generated: ${stamp}`,
-    `- Repository: ${directory}`,
-    `- Condition: ${conditionCell}`,
-    `- Shas quoted by the record: ${verification.unique} unique across ${verification.mentions} mention${verification.mentions === 1 ? "" : "s"}`,
-    "",
-    "| sha | quoted at | resolves |",
-    "| --- | --- | --- |"
-  ];
-  for (const check of verification.checks) {
-    lines.push(`| ${check.shortSha} | ${iterationList(check.iterations)} | ${statusCell(check.status)} |`);
-  }
-  if (verification.checks.length === 0)
-    lines.push("| \u2014 | \u2014 | \u2014 |");
-  lines.push("", `- Present: ${verification.present} \xB7 missing: ${verification.missing} \xB7 unknown: ${verification.unknown}`, "", "Existence is not ancestry: a sha that resolves here may still belong to a rewritten history elsewhere. A sha that does not resolve is an unresolvable receipt, not proof of misconduct \u2014 the record says what HEAD was, this report says what the repository still holds. Unknown means git could not answer (no binary, not a repository, timed out) \u2014 never counted as missing. Existence is checked at the directory named above, at generation time, and says nothing about the working tree's cleanliness.", "");
-  return lines.join(`
-`);
-}
-function verifySummaryLine(verification) {
-  if (verification.unique === 0)
-    return "record quotes no shas to verify";
-  if (verification.missing === 0 && verification.unknown === 0)
-    return `record verifies: ${verification.present} of ${verification.unique} shas resolve`;
-  if (verification.missing > 0)
-    return `record does not verify: ${verification.missing} of ${verification.unique} shas unresolvable`;
-  return `record unverifiable: ${verification.unknown} of ${verification.unique} shas could not be checked`;
-}
-function verifyAckSegment(verification, ascii) {
-  const ok = ascii ? "+" : "\u2713";
-  const bad = ascii ? "-" : "\u2717";
-  if (verification.unique === 0)
-    return ascii ? " (no shas)" : " (no shas to verify)";
-  if (verification.missing > 0)
-    return ` (${bad} ${verification.missing} of ${verification.unique} unresolvable)`;
-  if (verification.unknown > 0)
-    return ` (! ${verification.unknown} of ${verification.unique} unknown)`;
-  return ` (${ok} ${verification.present}/${verification.unique} resolve)`;
-}
-
-// src/core/reach-record.ts
-import { execFileSync as execFileSync2 } from "child_process";
-var REACH_TIMEOUT_MS = 1e4;
-function gitAncestorProbe(cwd) {
-  return (sha) => {
-    try {
-      execFileSync2("git", ["-C", cwd, "merge-base", "--is-ancestor", sha, "HEAD"], { stdio: "ignore", timeout: REACH_TIMEOUT_MS });
-      return true;
-    } catch (error) {
-      const status = error?.status;
-      if (status === 0)
-        return true;
-      if (status === 1)
-        return false;
-      return "unknown";
-    }
-  };
-}
-function reachRecord(goal, probe) {
-  const checks = recordShaMentions(goal).map((m) => {
-    let answer;
-    try {
-      answer = probe(m.sha);
-    } catch {
-      answer = "unknown";
-    }
-    const status = answer === true ? "ancestor" : answer === false ? "unreached" : "unknown";
-    return { sha: m.sha, shortSha: shortSha(m.sha), iterations: m.iterations, status };
-  });
-  let ancestors = 0;
-  let unreached = 0;
-  let unknown = 0;
-  let mentions = 0;
-  for (const check of checks) {
-    if (check.status === "ancestor")
-      ancestors += 1;
-    else if (check.status === "unreached")
-      unreached += 1;
-    else
-      unknown += 1;
-    mentions += check.iterations.length;
-  }
-  return { checks, unique: checks.length, mentions, ancestors, unreached, unknown };
-}
-var iterationList2 = (iterations) => iterations.map((v) => `v${v}`).join(", ");
-var GAP3 = "\u2014";
-var statusCell2 = (status) => status === "ancestor" ? "yes" : status === "unreached" ? "no" : "unknown";
-function reachReportMarkdown(goal, reach, nowMs, directory) {
-  const stamp = stampOf(nowMs);
-  const condition = (goal.condition ?? "").replace(/\s+/g, " ").trim();
-  const conditionCell = condition.length > 200 ? `${condition.slice(0, 200)}\u2026` : condition || GAP3;
-  const lines = [
-    "# /goal-loop record ancestry",
-    "",
-    `- Generated: ${stamp}`,
-    `- Repository: ${directory}`,
-    `- Condition: ${conditionCell}`,
-    `- Shas quoted by the record: ${reach.unique} unique across ${reach.mentions} mention${reach.mentions === 1 ? "" : "s"}`,
-    "",
-    "| sha | quoted at | on this line |",
-    "| --- | --- | --- |"
-  ];
-  for (const check of reach.checks) {
-    lines.push(`| ${check.shortSha} | ${iterationList2(check.iterations)} | ${statusCell2(check.status)} |`);
-  }
-  if (reach.checks.length === 0)
-    lines.push("| \u2014 | \u2014 | \u2014 |");
-  lines.push("", `- On this line (ancestor of HEAD): ${reach.ancestors} \xB7 not on this line: ${reach.unreached} \xB7 unknown: ${reach.unknown}`, "", "Not on this line is not misconduct: the sha may live on another branch, may have been rebased away, or this record may predate the merge that carried it. Existence is not ancestry, and ancestry is not content \u2014 a sha that belongs to this history may still carry a tree you have not read, and a sha that resolves here may still belong elsewhere. This report asks one question, per sha, of the repository at the directory named above, at generation time, and says nothing about which ref the work landed on, signatures, the working tree's cleanliness, or the content of any commit. Unknown means git could not answer (no binary, not a repository, unparseable sha, timed out) \u2014 never counted as \u201Cno\u201D.", "");
-  return lines.join(`
-`);
-}
-function reachSummaryLine(reach) {
-  if (reach.unique === 0)
-    return "record quotes no shas to place on this line";
-  if (reach.unreached === 0 && reach.unknown === 0)
-    return `record reaches HEAD: ${reach.ancestors} of ${reach.unique} shas on this line`;
-  if (reach.unreached > 0)
-    return `record does not reach HEAD: ${reach.unreached} of ${reach.unique} shas not on this line`;
-  return `record unverifiable: ${reach.unknown} of ${reach.unique} shas could not be placed`;
-}
-function reachAckSegment(reach, ascii) {
-  const ok = ascii ? "+" : "\u2713";
-  const bad = ascii ? "-" : "\u2717";
-  if (reach.unique === 0)
-    return ascii ? " (no shas)" : " (no shas to place)";
-  if (reach.unreached > 0)
-    return ` (${bad} ${reach.unreached} of ${reach.unique} not on this line)`;
-  if (reach.unknown > 0)
-    return ` (! ${reach.unknown} of ${reach.unique} unknown)`;
-  return ` (${ok} ${reach.ancestors}/${reach.unique} on this line)`;
-}
-
-// src/core/sign-record.ts
-import { execFileSync as execFileSync3 } from "child_process";
-var SIGN_TIMEOUT_MS = 1e4;
-function gitSignProbe(cwd) {
-  return (sha) => {
-    try {
-      execFileSync3("git", ["-C", cwd, "cat-file", "-e", sha], { stdio: "ignore", timeout: SIGN_TIMEOUT_MS });
-    } catch {
-      return "unknown";
-    }
-    try {
-      execFileSync3("git", ["-C", cwd, "verify-commit", sha], { stdio: "ignore", timeout: SIGN_TIMEOUT_MS });
-      return true;
-    } catch (error) {
-      const status = error?.status;
-      return typeof status === "number" ? false : "unknown";
-    }
-  };
-}
-function signRecord(goal, probe) {
-  const checks = recordShaMentions(goal).map((m) => {
-    let answer;
-    try {
-      answer = probe(m.sha);
-    } catch {
-      answer = "unknown";
-    }
-    const status = answer === true ? "verified" : answer === false ? "unverified" : "unknown";
-    return { sha: m.sha, shortSha: shortSha(m.sha), iterations: m.iterations, status };
-  });
-  let verified = 0;
-  let unverified = 0;
-  let unknown = 0;
-  let mentions = 0;
-  for (const check of checks) {
-    if (check.status === "verified")
-      verified += 1;
-    else if (check.status === "unverified")
-      unverified += 1;
-    else
-      unknown += 1;
-    mentions += check.iterations.length;
-  }
-  return { checks, unique: checks.length, mentions, verified, unverified, unknown };
-}
-var iterationList3 = (iterations) => iterations.map((v) => `v${v}`).join(", ");
-var GAP4 = "\u2014";
-var statusCell3 = (status) => status === "verified" ? "yes" : status === "unverified" ? "no" : "unknown";
-function signReportMarkdown(goal, sign, nowMs, directory) {
-  const stamp = stampOf(nowMs);
-  const condition = (goal.condition ?? "").replace(/\s+/g, " ").trim();
-  const conditionCell = condition.length > 200 ? `${condition.slice(0, 200)}\u2026` : condition || GAP4;
-  const lines = [
-    "# /goal-loop record signatures",
-    "",
-    `- Generated: ${stamp}`,
-    `- Repository: ${directory}`,
-    `- Condition: ${conditionCell}`,
-    `- Shas quoted by the record: ${sign.unique} unique across ${sign.mentions} mention${sign.mentions === 1 ? "" : "s"}`,
-    "",
-    "| sha | quoted at | under seal |",
-    "| --- | --- | --- |"
-  ];
-  for (const check of sign.checks) {
-    lines.push(`| ${check.shortSha} | ${iterationList3(check.iterations)} | ${statusCell3(check.status)} |`);
-  }
-  if (sign.checks.length === 0)
-    lines.push("| \u2014 | \u2014 | \u2014 |");
-  lines.push("", `- Under seal (git verified): ${sign.verified} \xB7 not under seal: ${sign.unverified} \xB7 unknown: ${sign.unknown}`, "", "A signature attests integrity only as strongly as the key and the trust configured at the probed directory \u2014 git decides by its own rules. `verified` means git's configured rules accepted the commit's signature, nothing more, nothing less. Anything else \u2014 an unsigned commit, an expired or untrusted key, a bad signature \u2014 is `not under seal`, never proof of forgery; most commits are unsigned, and git's thresholds differ across machines and time. An unresolvable object has no signature to judge and reads `unknown`, never `not under seal`. Unknown means git could not answer (no binary, not a repository, unparseable sha, timed out) \u2014 never counted as \u201Cno\u201D. Existence is not ancestry, ancestry is not content, content is not intent \u2014 the EC and ED reports are the other halves, and none substitutes for another. This report asks one question, per sha, of the repository at the directory named above, at generation time \u2014 it says nothing about the key's origin, the author's intent, the commit's content, or the working tree's cleanliness.", "");
-  return lines.join(`
-`);
-}
-function signSummaryLine(sign) {
-  if (sign.unique === 0)
-    return "record quotes no shas to attest";
-  if (sign.unverified === 0 && sign.unknown === 0)
-    return `record under seal: ${sign.verified} of ${sign.unique} shas verify`;
-  if (sign.unverified > 0)
-    return `record not under seal: ${sign.unverified} of ${sign.unique} shas do not verify`;
-  return `record unverifiable: ${sign.unknown} of ${sign.unique} shas could not be attested`;
-}
-function signAckSegment(sign, ascii) {
-  const ok = ascii ? "+" : "\u2713";
-  const bad = ascii ? "-" : "\u2717";
-  if (sign.unique === 0)
-    return ascii ? " (no shas)" : " (no shas to attest)";
-  if (sign.unverified > 0)
-    return ` (${bad} ${sign.unverified} of ${sign.unique} unsigned)`;
-  if (sign.unknown > 0)
-    return ` (! ${sign.unknown} of ${sign.unique} unknown)`;
-  return ` (${ok} ${sign.verified}/${sign.unique} signed)`;
-}
-
-// src/core/dossier-seal.ts
-import { writeFileSync as writeFileSync2 } from "fs";
-import { join as join2, resolve as resolve2 } from "path";
-var sealedDossierName = (nowMs, attempt = 0) => {
-  const suffix = attempt > 0 ? `-${attempt + 1}` : "";
-  return `goal-dossier-sealed-${fileStampOf(nowMs)}${suffix}.md`;
-};
-var iterationList4 = (iterations) => iterations.map((v) => `v${v}`).join(", ");
-var verifyCell2 = (status) => status === "present" ? "yes" : status === "missing" ? "no" : "unknown";
-var reachCell = (status) => status === "ancestor" ? "yes" : status === "unreached" ? "no" : "unknown";
-var signCell = (status) => status === "verified" ? "yes" : status === "unverified" ? "no" : "unknown";
-var cleanShaCount = (verification, reach, sign) => {
-  const reachStatus = new Map(reach.checks.map((c) => [c.sha, c.status]));
-  const signStatus = new Map(sign.checks.map((c) => [c.sha, c.status]));
-  let clean = 0;
-  for (const check of verification.checks) {
-    if (check.status === "present" && reachStatus.get(check.sha) === "ancestor" && signStatus.get(check.sha) === "verified") {
-      clean += 1;
-    }
-  }
-  return clean;
-};
-function attestationAppendix(_goal, verification, reach, sign, nowMs, directory) {
-  const stamp = stampOf(nowMs);
-  const lines = [
-    "## Attestation (freshly probed at seal time)",
-    "",
-    `_The bookkeeping above is the record's own and was not re-verified; it renders what the record holds, nothing more. The shas the record quotes were re-probed here, fresh, against \`${directory}\`, at ${stamp}: existence (the object store), ancestry (this line), and the seal (git's signature check). \`unknown\` means git could not answer and is never counted as a pass or a fail. No question substitutes for another._`,
-    ""
-  ];
-  const droppedLoop = _goal.loopHistoryDropped ?? 0;
-  const droppedVerdicts = _goal.historyDropped ?? 0;
-  if (droppedLoop > 0 || droppedVerdicts > 0) {
-    const bits = [];
-    if (droppedLoop > 0)
-      bits.push(`${droppedLoop} earlier iteration record${droppedLoop === 1 ? "" : "s"}`);
-    if (droppedVerdicts > 0)
-      bits.push(`${droppedVerdicts} earlier verdict${droppedVerdicts === 1 ? "" : "s"}`);
-    lines.push(`_${bits.join(" and ")} dropped by the retention caps; the shas they quoted are not re-probed here and are never implied held._`, "");
-  }
-  if (verification.unique === 0) {
-    lines.push("The record quotes no sha \u2014 there is nothing to seal. An unshaded record cannot be re-probed, and none is claimed.", "");
-    return lines;
-  }
-  const reachStatus = new Map(reach.checks.map((c) => [c.sha, c.status]));
-  const signStatus = new Map(sign.checks.map((c) => [c.sha, c.status]));
-  lines.push("| sha | iterations | exists | on this line | under seal |", "| --- | --- | --- | --- | --- |");
-  for (const check of verification.checks) {
-    lines.push(`| ${check.shortSha} | ${iterationList4(check.iterations)} | ${verifyCell2(check.status)} | ${reachCell(reachStatus.get(check.sha) ?? "unknown")} | ${signCell(signStatus.get(check.sha) ?? "unknown")} |`);
-  }
-  const clean = cleanShaCount(verification, reach, sign);
-  lines.push("", `- Existence: ${verification.present} of ${verification.unique} shas resolve (${verification.unknown} unknown \u2014 never counted as present)`, `- Ancestry: ${reach.ancestors} of ${reach.unique} shas on this line (${reach.unknown} unknown)`, `- Seal: ${sign.verified} of ${sign.unique} shas under seal (${sign.unverified} not under seal \u2014 not an accusation; ${sign.unknown} unknown)`, `- All three: ${clean} of ${verification.unique} shas clean (present \xB7 on this line \xB7 under seal)`, "", "A clean row is the strongest thing this appendix can say: the object resolves, it belongs to this line, and git verified a signature on it at seal time. Anything short of that is not an accusation \u2014 existence is not ancestry, ancestry is not the seal, and most commits are unsigned. The loop that produced this record may be running right now; this file is a snapshot of its receipts at the moment it was written, and the stamp above travels with it.", "");
   return lines;
 }
-function sealRecord(goal, directory, nowMs, probes = {}) {
-  const verifyProbe = probes.verify ?? gitCatFileProbe(directory);
-  const reachProbe = probes.reach ?? gitAncestorProbe(directory);
-  const signProbe = probes.sign ?? gitSignProbe(directory);
-  const verification = verifyRecord(goal, verifyProbe);
-  const reach = reachRecord(goal, reachProbe);
-  const sign = signRecord(goal, signProbe);
-  const clean = cleanShaCount(verification, reach, sign);
-  const base = buildLoopDossier(goal, nowMs);
-  const appendix = attestationAppendix(goal, verification, reach, sign, nowMs, directory);
-  const markdown = `${base}
-
-${appendix.join(`
-`)}`;
-  return { markdown, verification, reach, sign, unique: verification.unique, clean };
-}
-function exportSealedDossier(goal, nowMs, dir, probes = {}) {
-  const targetDir = resolve2(dir);
-  const seal = sealRecord(goal, targetDir, nowMs, probes);
-  const bytes = Buffer.byteLength(seal.markdown, "utf8");
-  for (let attempt = 0;attempt < MAX_EXPORT_ATTEMPTS; attempt++) {
-    const path = join2(targetDir, sealedDossierName(nowMs, attempt));
-    try {
-      writeFileSync2(path, seal.markdown, { encoding: "utf8", flag: "wx" });
-      return {
-        path,
-        bytes,
-        attempts: attempt + 1,
-        unique: seal.unique,
-        clean: seal.clean,
-        verification: seal.verification,
-        reach: seal.reach,
-        sign: seal.sign
-      };
-    } catch (error) {
-      const code = error?.code;
-      if (code === "EEXIST")
-        continue;
-      throw error;
-    }
-  }
-  throw new Error(`no free sealed-dossier filename after ${MAX_EXPORT_ATTEMPTS} attempts in ${targetDir}`);
-}
-function sealSummaryLine(seal) {
-  if (seal.unique === 0)
-    return "record quotes no shas to seal";
-  const hard = seal.verification.missing + seal.reach.unreached + seal.sign.unverified;
-  const unknown = seal.verification.unknown + seal.reach.unknown + seal.sign.unknown;
-  if (hard === 0 && unknown === 0)
-    return `record sealed: ${seal.clean} of ${seal.unique} shas pass all three checks`;
-  if (hard > 0)
-    return `record sealed with gaps: ${seal.clean} of ${seal.unique} shas pass all three checks`;
-  return `record sealed, unverifiable: ${unknown} of ${3 * seal.unique} checks could not answer`;
-}
-function sealAckSegment(seal, ascii) {
-  const ok = ascii ? "+" : "\u2713";
-  const bad = ascii ? "-" : "\u2717";
-  if (seal.unique === 0)
-    return ascii ? " (no shas)" : " (no shas to seal)";
-  const hard = seal.verification.missing + seal.reach.unreached + seal.sign.unverified;
-  if (hard > 0)
-    return ` (${bad} ${seal.clean} of ${seal.unique} sealed)`;
-  if (seal.clean < seal.unique)
-    return ` (! ${seal.clean} of ${seal.unique} sealed)`;
-  return ` (${ok} ${seal.clean}/${seal.unique} sealed)`;
-}
-
-// src/core/dossier-review.ts
-import { writeFileSync as writeFileSync3 } from "fs";
-import { join as join3, resolve as resolve3 } from "path";
-var reviewName = (nowMs, attempt = 0) => {
-  const suffix = attempt > 0 ? `-${attempt + 1}` : "";
-  return `goal-dossier-review-${fileStampOf(nowMs)}${suffix}.md`;
-};
-var iterationList5 = (iterations) => iterations.map((v) => `v${v}`).join(", ");
-var verifyCell3 = (status) => status === "present" ? "yes" : status === "missing" ? "no" : "unknown";
-var reachCell2 = (status) => status === "ancestor" ? "yes" : status === "unreached" ? "no" : "unknown";
-var signCell2 = (status) => status === "verified" ? "yes" : status === "unverified" ? "no" : "unknown";
-var reviewVerdict = (exists, onThisLine, underSeal) => {
-  if (exists === "no" || onThisLine === "no" || underSeal === "no")
-    return "gaps";
-  if (exists === "yes" && onThisLine === "yes" && underSeal === "yes")
-    return "clean";
-  return "unknown";
-};
-function buildReview(goal, directory, nowMs, probes = {}) {
-  const verifyProbe = probes.verify ?? gitCatFileProbe(directory);
-  const reachProbe = probes.reach ?? gitAncestorProbe(directory);
-  const signProbe = probes.sign ?? gitSignProbe(directory);
-  const verification = verifyRecord(goal, verifyProbe);
-  const reach = reachRecord(goal, reachProbe);
-  const sign = signRecord(goal, signProbe);
-  const base = buildLoopDossier(goal, nowMs);
-  const stamp = stampOf(nowMs);
-  const reachBySha = new Map(reach.checks.map((check) => [check.sha, check.status]));
-  const signBySha = new Map(sign.checks.map((check) => [check.sha, check.status]));
-  const rows = verification.checks.map((check) => {
-    const exists = verifyCell3(check.status);
-    const onThisLine = reachCell2(reachBySha.get(check.sha) ?? "unknown");
-    const underSeal = signCell2(signBySha.get(check.sha) ?? "unknown");
-    return {
-      sha: check.sha,
-      shortSha: shortSha(check.sha),
-      iterations: check.iterations,
-      exists,
-      onThisLine,
-      underSeal,
-      verdict: reviewVerdict(exists, onThisLine, underSeal)
-    };
-  });
-  const clean = rows.filter((row) => row.verdict === "clean").length;
-  const gaps = rows.filter((row) => row.verdict === "gaps").length;
-  const unknown = rows.filter((row) => row.verdict === "unknown").length;
-  const appendix = [
-    "## Review (freshly probed at generation time)",
-    "",
-    `_The bookkeeping above is the record's own and was not re-verified; it renders what the record holds, nothing more. The shas the record quotes were re-probed here, fresh, against \`${directory}\`, at ${stamp}: existence (the object store), ancestry (this line), and the seal (git's signature check). A verdict of \`clean\` requires a yes on all three; any \`no\` makes the row \`gaps\`; a row with no \`no\` but at least one question git could not answer is \`unknown\` \u2014 never collapsed into either. Existence is not ancestry, ancestry is not the seal; no question substitutes for another._`,
-    ""
-  ];
-  if (verification.unique === 0) {
-    appendix.push("The record quotes no sha \u2014 there is nothing to review. An unshaded record cannot be re-probed, and none is claimed.", "");
-  } else {
-    appendix.push("| sha | quoted at | exists | on this line | under seal | verdict |", "| --- | --- | --- | --- | --- | --- |");
-    for (const row of rows) {
-      appendix.push(`| ${row.shortSha} | ${iterationList5(row.iterations)} | ${row.exists} | ${row.onThisLine} | ${row.underSeal} | ${row.verdict} |`);
-    }
-    appendix.push("", `- Existence: ${verification.present} of ${verification.unique} shas resolve (${verification.unknown} unknown \u2014 never counted as present)`, `- Ancestry: ${reach.ancestors} of ${reach.unique} shas on this line (${reach.unknown} unknown)`, `- Seal: ${sign.verified} of ${sign.unique} shas under seal (${sign.unverified} not under seal \u2014 not an accusation; ${sign.unknown} unknown)`, `- All three: ${clean} of ${verification.unique} shas clean (present \xB7 on this line \xB7 under seal) \xB7 ${gaps} with gaps \xB7 ${unknown} unverifiable`, "", "A clean row is the strongest thing this review can say: the object resolves, it belongs to this line, and git verified a signature on it at generation time. Anything short of that is not an accusation \u2014 existence is not ancestry, ancestry is not the seal, and most commits are unsigned. This file is a snapshot of the record's receipts at the moment it was written, and the stamp above travels with it. For a re-check weeks later, `goal.dossier.attest` answers whether what a sealed copy attests still holds.", "");
-  }
-  const markdown = `${base}
-
-${appendix.join(`
-`)}`;
-  return { markdown, verification, reach, sign, unique: verification.unique, clean, gaps, unknown };
-}
-function exportReview(goal, nowMs, dir, probes = {}) {
-  const targetDir = resolve3(dir);
-  const review = buildReview(goal, targetDir, nowMs, probes);
-  const bytes = Buffer.byteLength(review.markdown, "utf8");
-  for (let attempt = 0;attempt < MAX_EXPORT_ATTEMPTS; attempt++) {
-    const path = join3(targetDir, reviewName(nowMs, attempt));
-    try {
-      writeFileSync3(path, review.markdown, { encoding: "utf8", flag: "wx" });
-      return {
-        path,
-        bytes,
-        attempts: attempt + 1,
-        unique: review.unique,
-        clean: review.clean,
-        gaps: review.gaps,
-        unknown: review.unknown,
-        verification: review.verification,
-        reach: review.reach,
-        sign: review.sign
-      };
-    } catch (error) {
-      const code = error?.code;
-      if (code === "EEXIST")
-        continue;
-      throw error;
-    }
-  }
-  throw new Error(`no free review filename after ${MAX_EXPORT_ATTEMPTS} attempts in ${targetDir}`);
-}
-function reviewSummaryLine(review) {
-  if (review.unique === 0)
-    return "record quotes no shas to review";
-  if (review.gaps > 0)
-    return `review written with gaps: ${review.clean} of ${review.unique} shas clean on all three questions`;
-  if (review.unknown > 0)
-    return `review unverifiable: ${review.clean} of ${review.unique} shas clean, ${review.unknown} could not answer`;
-  return `review written: ${review.clean} of ${review.unique} shas clean on all three questions`;
-}
-
-// src/core/spend-ledger.ts
-import { writeFileSync as writeFileSync4 } from "fs";
-import { join as join4, resolve as resolve4 } from "path";
-var pad = (n) => String(n).padStart(2, "0");
-var spendLedgerName = (nowMs, attempt = 0) => {
-  const date = new Date(Number.isFinite(nowMs) ? nowMs : 0);
-  const valid = Number.isFinite(date.getTime()) ? date : new Date(0);
-  const stamp = `${valid.getUTCFullYear()}${pad(valid.getUTCMonth() + 1)}${pad(valid.getUTCDate())}` + `-${pad(valid.getUTCHours())}${pad(valid.getUTCMinutes())}${pad(valid.getUTCSeconds())}`;
-  const suffix = attempt > 0 ? `-${attempt + 1}` : "";
-  return `goal-spend-ledger-${stamp}${suffix}.md`;
-};
-var measuredSpend = (entry) => {
-  const spend = entry.spend;
-  if (!spend)
-    return;
-  const fields = [spend.cost, spend.input, spend.output, spend.reasoning, spend.cacheRead, spend.cacheWrite];
-  if (!fields.every((n) => Number.isFinite(n) && n >= 0))
-    return;
-  return spend;
-};
-var count = (n) => n !== undefined && Number.isFinite(n) ? String(Math.round(n)) : GAP;
-var costCell = (spend) => spend ? formatCost(spend.cost) : GAP;
-var toolsCell = (entry) => Number.isFinite(entry.toolCalls) ? String(entry.toolCalls) : GAP;
-var totalsOf = (entries) => {
-  let measured = 0;
-  let turns = 0;
-  let tools = 0;
-  let cost = 0;
-  let input = 0;
-  let output = 0;
-  let reasoning = 0;
-  let cacheRead = 0;
-  let cacheWrite = 0;
-  for (const entry of entries) {
-    turns += Number.isFinite(entry.turns) ? entry.turns : 0;
-    tools += Number.isFinite(entry.toolCalls) ? entry.toolCalls : 0;
-    const spend = measuredSpend(entry);
-    if (!spend)
-      continue;
-    measured += 1;
-    cost += spend.cost;
-    input += spend.input;
-    output += spend.output;
-    reasoning += spend.reasoning;
-    cacheRead += spend.cacheRead;
-    cacheWrite += spend.cacheWrite;
-  }
-  if (measured === 0)
-    return { iterations: entries.length, measured, turns, tools };
-  return { iterations: entries.length, measured, turns, tools, cost, input, output, reasoning, cacheRead, cacheWrite };
-};
-function buildSpendLedger(goal, nowMs) {
-  const entries = goal.loopHistory ?? [];
-  const dropped = goal.loopHistoryDropped ?? 0;
+function buildLoopDossier(goal, nowMs) {
   const isLoop = Boolean(goal.loopEnabled);
-  const totals = totalsOf(entries);
-  const stamp = isoOf(nowMs);
-  const lines = [];
-  lines.push(isLoop ? "# Goal loop spend ledger" : "# Goal spend ledger");
-  lines.push("");
-  lines.push(`_Generated ${stamp} from the goal-loop plugin's record. Every figure below is the record's own measurement \u2014 the usage delta the harness attributed to each landed iteration (arm \u2192 advance). A measurement the record does not carry renders as ${GAP}, never estimated. The session id is omitted on purpose._`);
-  lines.push("");
-  lines.push(isLoop ? "## Objective" : "## Condition");
-  lines.push("");
-  lines.push(...quote(isLoop ? goal.loopObjective ?? goal.condition : goal.condition));
-  lines.push("");
-  lines.push(dropped > 0 ? `## Per-iteration spend (${entries.length} most recent of ${entries.length + dropped} landed iterations)` : `## Per-iteration spend (${entries.length} landed iteration${entries.length === 1 ? "" : "s"})`);
-  if (dropped > 0)
-    lines.push(`_${dropped} earlier iteration record${dropped === 1 ? "" : "s"} dropped by the loop-history retention cap (${MAX_LOOP_HISTORY_ENTRIES} kept); the rows and totals below cover the retained iterations only \u2014 the dropped ones are not $0.00, they are unknown._`);
-  lines.push("");
-  if (entries.length === 0) {
-    lines.push("None \u2014 this record has not landed an iteration, so there is nothing to attribute. No figures are claimed.");
-    lines.push("");
-  } else {
-    lines.push("| iteration | ended | spend | in | out | reasoning | cache read | cache write | tools | sha |", "| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |");
-    for (const entry of entries) {
-      const spend = measuredSpend(entry);
-      lines.push(`| v${entry.version} | ${isoOf(entry.endedAt)} | ${costCell(spend)} | ${count(spend?.input)} | ${count(spend?.output)} | ${count(spend?.reasoning)} | ${count(spend?.cacheRead)} | ${count(spend?.cacheWrite)} | ${toolsCell(entry)} | ${shortSha(entry.sha)} |`);
-    }
-    lines.push("");
-  }
-  lines.push("## Totals");
-  lines.push("");
-  lines.push(`- Iterations recorded: ${totals.iterations}${dropped > 0 ? ` (+ ${dropped} dropped by the retention cap; totals cover the retained iterations only)` : ""}`);
-  lines.push(`- Turns: ${totals.turns} \xB7 Tool calls: ${totals.tools}`);
-  if (totals.measured === 0) {
-    lines.push("- Spend across iterations: no iteration carried a measurement");
-    lines.push(`- In tokens: ${GAP} \xB7 Out tokens: ${GAP} \xB7 Reasoning tokens: ${GAP}`);
-    lines.push(`- Cache read: ${GAP} \xB7 Cache write: ${GAP}`);
-  } else {
-    const partial = totals.measured < totals.iterations ? ` (${totals.measured} of ${totals.iterations} iterations measured \u2014 the unmeasured iterations are not $0.00; they are unknown)` : "";
-    lines.push(`- Spend across measured iterations: ${formatCost(totals.cost ?? 0)}${partial}`);
-    lines.push(`- In tokens: ${count(totals.input)} \xB7 Out tokens: ${count(totals.output)} \xB7 Reasoning tokens: ${count(totals.reasoning)}`);
-    lines.push(`- Cache read: ${count(totals.cacheRead)} \xB7 Cache write: ${count(totals.cacheWrite)}`);
-    if (totals.measured < totals.iterations) {
-      lines.push(`- Token totals sum the ${totals.measured} measured iterations only; adding the ${totals.iterations - totals.measured} unmeasured ones would be inventing numbers.`);
-    }
-  }
-  lines.push("");
-  lines.push("---");
-  lines.push("_goal-loop spend ledger \xB7 source: plugin record \xB7 the figures are the record's own measurements; cost is the host's reported usage delta, not a re-price; nothing was estimated, sampled, probed, or re-verified; an iteration counts as measured only when its full usage snapshot is present and finite; a measurement the record does not carry renders as " + GAP + "._");
-  return {
-    markdown: lines.join(`
-`),
-    iterations: totals.iterations,
-    measured: totals.measured,
-    ...totals.cost !== undefined ? { spendTotal: totals.cost } : {}
-  };
-}
-function exportSpendLedger(goal, nowMs, dir) {
-  const targetDir = resolve4(dir);
-  const ledger = buildSpendLedger(goal, nowMs);
-  const bytes = Buffer.byteLength(ledger.markdown, "utf8");
-  for (let attempt = 0;attempt < MAX_EXPORT_ATTEMPTS; attempt++) {
-    const path = join4(targetDir, spendLedgerName(nowMs, attempt));
-    try {
-      writeFileSync4(path, ledger.markdown, { encoding: "utf8", flag: "wx" });
-      return {
-        path,
-        bytes,
-        attempts: attempt + 1,
-        iterations: ledger.iterations,
-        measured: ledger.measured,
-        ...ledger.spendTotal !== undefined ? { spendTotal: ledger.spendTotal } : {}
-      };
-    } catch (error) {
-      const code = error?.code;
-      if (code === "EEXIST")
-        continue;
-      throw error;
-    }
-  }
-  throw new Error(`no free spend ledger filename after ${MAX_EXPORT_ATTEMPTS} attempts in ${targetDir}`);
-}
-function spendSummaryLine(result) {
-  if (result.iterations === 0)
-    return "no landed iterations to report";
-  if (result.measured === 0)
-    return `spend ledger written: no iteration carried a measurement (0 of ${result.iterations})`;
-  const spend = formatCost(result.spendTotal ?? 0);
-  if (result.measured < result.iterations)
-    return `spend ledger written: ${spend} across ${result.measured} of ${result.iterations} measured iterations`;
-  return `spend ledger written: ${spend} across ${result.iterations} iteration${result.iterations === 1 ? "" : "s"}`;
+  return [
+    ...dossierHead(goal, isLoop, isoOf(nowMs)),
+    ...dossierIterations(goal, isLoop),
+    ...dossierVerdictTrail(goal),
+    ...dossierTail(goal, nowMs)
+  ].join(`
+`);
 }
 
-// src/core/dossier-index.ts
-import { createHash } from "crypto";
-import { readdirSync, readFileSync, writeFileSync as writeFileSync5 } from "fs";
-import { join as join5, resolve as resolve5 } from "path";
-var dossierIndexName = (nowMs, attempt = 0) => {
-  const suffix = attempt > 0 ? `-${attempt + 1}` : "";
-  return `goal-dossier-index-${fileStampOf(nowMs)}${suffix}.md`;
-};
-var STAMP = String.raw`\d{8}-\d{6}(?:-[1-9]\d*)?`;
-var KIND_PATTERNS = [
-  ["dossier", new RegExp(`^goal-dossier-${STAMP}\\.md$`)],
-  ["review", new RegExp(`^goal-dossier-review-${STAMP}\\.md$`)],
-  ["sealed", new RegExp(`^goal-dossier-sealed-${STAMP}\\.md$`)],
-  ["spend ledger", new RegExp(`^goal-spend-ledger-${STAMP}\\.md$`)],
-  ["index", new RegExp(`^goal-dossier-index-${STAMP}\\.md$`)]
+// src/core/errors.ts
+function formatValue(value) {
+  if (typeof value === "bigint")
+    return `${value}n`;
+  if (typeof value === "symbol" || typeof value === "function")
+    return String(value);
+  const json = JSON.stringify(value);
+  return json === undefined ? String(value) : json;
+}
+function errorMessage(error) {
+  if (error instanceof Error)
+    return error.message;
+  if (typeof error === "object" && error !== null && "message" in error)
+    return String(error.message);
+  return String(error);
+}
+
+// src/tui-error.ts
+var USER_ERROR_MAX_LENGTH = 200;
+var STACK_FRAME = /^\s*at\s+/;
+var ERROR_PREFIX = /^(?:[A-Za-z][A-Za-z0-9]*Error):\s*/;
+var NULLISH = new Set(["null", "undefined", "[object Object]"]);
+var SYSTEM_PHRASES = [
+  [/^ENOENT\b/, "file or directory not found"],
+  [/^EACCES\b/, "permission denied"],
+  [/^EPERM\b/, "operation not permitted"],
+  [/^ENOTDIR\b/, "path is not a directory"],
+  [/^EISDIR\b/, "path is a directory"],
+  [/^EEXIST\b/, "file already exists"]
 ];
-var dossierArtifactKind = (name) => {
-  for (const [kind, pattern] of KIND_PATTERNS) {
-    if (pattern.test(name))
-      return kind;
-  }
-  return;
-};
-function scanDossierArtifacts(dir) {
-  const targetDir = resolve5(dir);
-  const candidates = [];
-  for (const item of readdirSync(targetDir, { withFileTypes: true })) {
-    if (!item.isFile())
-      continue;
-    if (dossierArtifactKind(item.name) === undefined)
-      continue;
-    candidates.push(item.name);
-  }
-  const entries = [];
-  let skipped = 0;
-  for (const name of candidates) {
-    const kind = dossierArtifactKind(name);
-    try {
-      const bytes = readFileSync(join5(targetDir, name));
-      entries.push({ name, kind, bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") });
-    } catch {
-      skipped += 1;
-    }
-  }
-  entries.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
-  return { entries, skipped };
+function userFacingError(error, maxLength = USER_ERROR_MAX_LENGTH) {
+  const raw = errorMessage(error);
+  const plain = raw.split(`
+`).filter((line) => !STACK_FRAME.test(line)).join(" ").replace(ERROR_PREFIX, "").replace(/\s+/g, " ").trim();
+  const friendly = SYSTEM_PHRASES.find(([pattern]) => pattern.test(plain))?.[1] ?? plain;
+  if (!friendly || NULLISH.has(friendly))
+    return "an unexpected error occurred";
+  const width = Number.isFinite(maxLength) && maxLength > 1 ? Math.floor(maxLength) : USER_ERROR_MAX_LENGTH;
+  return friendly.length > width ? `${friendly.slice(0, width - 1)}\u2026` : friendly;
 }
-function buildDossierIndex(entries, nowMs, skipped = 0) {
-  if (!Number.isInteger(skipped) || skipped < 0)
-    throw new Error(`skipped must be a non-negative integer, got ${skipped}`);
-  const stamp = isoOf(nowMs);
-  const totalBytes = entries.reduce((sum, entry) => sum + entry.bytes, 0);
-  const lines = [];
-  lines.push("# Goal dossier index");
-  lines.push("");
-  lines.push(`_Generated ${stamp}. Every row below is a file the dossier family exported into the directory this index was written from, read at generation time: file name, kind, bytes (UTF-8), sha256 of the exact bytes read. The directory path is omitted on purpose. This index inventories; it does not verify \u2014 a file can change after generation and a matching digest here proves nothing about the present._`);
-  lines.push("");
-  lines.push(`## Artifacts (${entries.length} file${entries.length === 1 ? "" : "s"}, ${totalBytes} bytes)`);
-  lines.push("");
-  if (entries.length === 0) {
-    lines.push("None \u2014 the directory holds no exported dossier artifacts the dossier family recognizes. No rows are claimed.");
-    lines.push("");
-  } else {
-    lines.push("| file | kind | bytes | sha256 |", "| --- | --- | ---: | --- |");
-    for (const entry of entries) {
-      lines.push(`| ${inlineCode(entry.name)} | ${entry.kind} | ${entry.bytes} | ${entry.sha256} |`);
-    }
-    lines.push("");
-  }
-  if (skipped > 0) {
-    lines.push(`- ${skipped} matching file${skipped === 1 ? "" : "s"} could not be read (I/O error) and ${skipped === 1 ? "is" : "are"} not listed above; ${skipped === 1 ? "its" : "their"} bytes and digests are unknown, not zero.`);
-    lines.push("");
-  }
-  lines.push("---");
-  lines.push("_goal-loop dossier index \xB7 source: the files at generation time \xB7 sha256 computed over the exact bytes read \xB7 nothing was estimated or inferred; an unreadable file is counted, never guessed \xB7 this index inventories, it does not verify._");
-  return {
-    markdown: lines.join(`
-`),
-    artifacts: entries.length,
-    bytes: totalBytes,
-    skipped
-  };
-}
-function exportDossierIndex(nowMs, dir) {
-  const targetDir = resolve5(dir);
-  const scan = scanDossierArtifacts(targetDir);
-  const built = buildDossierIndex(scan.entries, nowMs, scan.skipped);
-  const bytes = Buffer.byteLength(built.markdown, "utf8");
-  for (let attempt = 0;attempt < MAX_EXPORT_ATTEMPTS; attempt++) {
-    const path = join5(targetDir, dossierIndexName(nowMs, attempt));
-    try {
-      writeFileSync5(path, built.markdown, { encoding: "utf8", flag: "wx" });
-      return {
-        path,
-        bytes,
-        attempts: attempt + 1,
-        artifacts: built.artifacts,
-        artifactBytes: built.bytes,
-        skipped: built.skipped
-      };
-    } catch (error) {
-      const code = error?.code;
-      if (code === "EEXIST")
-        continue;
-      throw error;
-    }
-  }
-  throw new Error(`no free dossier index filename after ${MAX_EXPORT_ATTEMPTS} attempts in ${targetDir}`);
-}
-function dossierIndexSummaryLine(result) {
-  const skipped = result.skipped > 0 ? `; ${result.skipped} unreadable (not listed)` : "";
-  if (result.artifacts === 0)
-    return `dossier index written: no artifacts found${skipped}`;
-  return `dossier index written: ${result.artifacts} artifact${result.artifacts === 1 ? "" : "s"}, ${result.artifactBytes} bytes${skipped}`;
-}
-
-// src/core/dossier-attest.ts
-var ANSWERS = new Set(["yes", "no", "unknown"]);
-var cellAnswer = (raw) => {
-  const flat = raw.trim().toLowerCase();
-  return ANSWERS.has(flat) ? flat : "unknown";
-};
-var splitRow = (line) => {
-  const cells = line.split("|").map((cell) => cell.trim());
-  if (cells.length >= 2 && cells[0] === "" && cells[cells.length - 1] === "")
-    cells.shift(), cells.pop();
-  if (cells.length < 5)
-    return null;
-  return cells;
-};
-var SHA_RE = /^[0-9a-f]{4,64}$/i;
-function parseAttestationAppendix(markdown) {
-  const lines = markdown.split(`
-`);
-  const heading = lines.findIndex((line) => line.startsWith("## Attestation"));
-  if (heading === -1)
-    return { kind: "unsealed" };
-  const section = [];
-  for (let index = heading + 1;index < lines.length; index += 1) {
-    const line = lines[index];
-    if (line.startsWith("## "))
-      break;
-    section.push(line);
-  }
-  const body = section.join(`
-`);
-  const stamp = /at ([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.Z+-]+):/.exec(body)?.[1];
-  const directory = /against `([^`]+)`, at/.exec(body)?.[1];
-  const gap = section.some((line) => line.includes("The record quotes no sha"));
-  const rows = [];
-  let malformed = 0;
-  for (const line of section) {
-    if (!line.startsWith("|"))
-      continue;
-    const cells = splitRow(line);
-    if (!cells) {
-      malformed += 1;
-      continue;
-    }
-    const first = cells[0].toLowerCase();
-    if (first === "sha" || /^-+$/.test(first))
-      continue;
-    const sha = cells[0];
-    if (!SHA_RE.test(sha)) {
-      malformed += 1;
-      continue;
-    }
-    const iterations = (cells[1].match(/\d+/g) ?? []).map(Number);
-    rows.push({
-      sha,
-      iterations,
-      exists: cellAnswer(cells[2]),
-      onThisLine: cellAnswer(cells[3]),
-      underSeal: cellAnswer(cells[4])
-    });
-  }
-  if (rows.length === 0 && !gap)
-    return { kind: "unparsable" };
-  return { kind: "sealed", stamp, directory, rows, gap, malformed };
-}
-var verifyCell4 = (status) => status === "present" ? "yes" : status === "missing" ? "no" : "unknown";
-var reachCell3 = (status) => status === "ancestor" ? "yes" : status === "unreached" ? "no" : "unknown";
-var signCell3 = (status) => status === "verified" ? "yes" : status === "unverified" ? "no" : "unknown";
-var shasAsGoal = (rows) => ({
-  loopHistory: rows.flatMap((row, index) => row.iterations.length > 0 ? row.iterations.map((version) => ({ version, sha: row.sha })) : [{ version: index + 1, sha: row.sha }])
-});
-function attestSealedDossier(markdown, directory, probes = {}) {
-  const parsed = parseAttestationAppendix(markdown);
-  if (parsed.kind !== "sealed")
-    return parsed;
-  const verifyProbe = probes.verify ?? gitCatFileProbe(directory);
-  const reachProbe = probes.reach ?? gitAncestorProbe(directory);
-  const signProbe = probes.sign ?? gitSignProbe(directory);
-  const seen = new Set;
-  const uniqRows = parsed.rows.filter((row) => {
-    if (seen.has(row.sha))
-      return false;
-    seen.add(row.sha);
-    return true;
-  });
-  const synthetic = shasAsGoal(uniqRows);
-  const verification = verifyRecord(synthetic, verifyProbe);
-  const reach = reachRecord(synthetic, reachProbe);
-  const sign = signRecord(synthetic, signProbe);
-  const reachBySha = new Map(reach.checks.map((check) => [check.sha, check.status]));
-  const signBySha = new Map(sign.checks.map((check) => [check.sha, check.status]));
-  const verifyBySha = new Map(verification.checks.map((check) => [check.sha, check.status]));
-  const rows = uniqRows.map((row) => {
-    const now = {
-      exists: verifyCell4(verifyBySha.get(row.sha) ?? "unknown"),
-      onThisLine: reachCell3(reachBySha.get(row.sha) ?? "unknown"),
-      underSeal: signCell3(signBySha.get(row.sha) ?? "unknown")
-    };
-    const seal = { exists: row.exists, onThisLine: row.onThisLine, underSeal: row.underSeal };
-    const wasClean = seal.exists === "yes" && seal.onThisLine === "yes" && seal.underSeal === "yes";
-    const flipped = [];
-    if (wasClean) {
-      if (now.exists === "no")
-        flipped.push("exists");
-      if (now.onThisLine === "no")
-        flipped.push("on this line");
-      if (now.underSeal === "no")
-        flipped.push("under seal");
-    }
-    const nowClean = now.exists === "yes" && now.onThisLine === "yes" && now.underSeal === "yes";
-    const verdict = !wasClean ? "was-not-clean" : flipped.length > 0 ? "regressed" : nowClean ? "held" : "unknown";
-    return { sha: row.sha, shortSha: shortSha(row.sha), iterations: row.iterations, seal, now, verdict, flipped };
-  });
-  const sealedClean = rows.filter((row) => row.seal.exists === "yes" && row.seal.onThisLine === "yes" && row.seal.underSeal === "yes").length;
-  const held = rows.filter((row) => row.verdict === "held").length;
-  const regressed = rows.filter((row) => row.verdict === "regressed").length;
-  const unknown = rows.filter((row) => row.verdict === "unknown").length;
-  const wasNotClean = rows.length - sealedClean;
-  return {
-    kind: "attested",
-    rows,
-    unique: rows.length,
-    sealedClean,
-    held,
-    regressed,
-    unknown,
-    wasNotClean,
-    stamp: parsed.stamp,
-    sealDirectory: parsed.directory,
-    malformed: parsed.malformed
-  };
-}
-function attestSummaryLine(attestation) {
-  if (attestation.unique === 0)
-    return "sealed dossier quotes no shas to attest";
-  if (attestation.sealedClean === 0)
-    return `nothing held: no sha was clean at seal time (${attestation.unique} quoted)`;
-  if (attestation.regressed > 0)
-    return `attestation drifted: ${attestation.regressed} of ${attestation.sealedClean} sealed-clean shas regressed since sealing`;
-  if (attestation.unknown > 0)
-    return `attestation unverifiable: ${attestation.held} held, ${attestation.unknown} of ${attestation.sealedClean} could not answer`;
-  return `attestation holds: ${attestation.held} of ${attestation.sealedClean} sealed-clean shas still clean`;
-}
-function attestationReportMarkdown(result, nowMs, directory, fileName) {
-  const stamp = stampOf(nowMs);
-  const lines = [
-    "# /goal-loop sealed dossier attestation",
-    "",
-    `- Generated: ${stamp}`,
-    `- Repository: ${directory}`,
-    `- File re-attested: ${fileName}`,
-    result.stamp !== undefined ? `- Sealed at: ${result.stamp}${result.sealDirectory !== undefined ? ` against ${result.sealDirectory}` : ""}` : "- Sealed at: unknown (the appendix does not carry a stamp this parser can read)",
-    `- Shas named by the appendix: ${result.unique} unique`,
-    "",
-    "| sha | sealed (exists \xB7 line \xB7 seal) | now (exists \xB7 line \xB7 seal) | verdict |",
-    "| --- | --- | --- | --- |"
-  ];
-  for (const row of result.rows) {
-    const sealCell = `${row.seal.exists} \xB7 ${row.seal.onThisLine} \xB7 ${row.seal.underSeal}`;
-    const nowCell = `${row.now.exists} \xB7 ${row.now.onThisLine} \xB7 ${row.now.underSeal}`;
-    const verdictCell = row.verdict === "regressed" ? `regressed (${row.flipped.join(", ")})` : row.verdict;
-    lines.push(`| ${row.shortSha} | ${sealCell} | ${nowCell} | ${verdictCell} |`);
-  }
-  if (result.rows.length === 0)
-    lines.push("| \u2014 | \u2014 | \u2014 | \u2014 |");
-  lines.push("", `- Held: ${result.held} \xB7 regressed: ${result.regressed} \xB7 unknown: ${result.unknown} \xB7 was not clean at seal time: ${result.wasNotClean}`, result.malformed > 0 ? `- ${result.malformed} table-looking row(s) could not be read and are excluded from every count` : "- Every table row parsed", "", "This report re-probes the shas the file names \u2014 existence in the object store, membership of this line of history, and git's signature check \u2014 against the repository at the directory named above, right now. It cannot audit the bytes around the table: an editor who rewrites appendix cells can make the file claim anything, and this report detects divergence between seal-time answers and fresh ones, not tampering with the file itself. A verdict of `regressed` means git answered yes at seal time and no right now on the named question; `unknown` means git could not answer and is counted as neither; `was-not-clean` is a sha that never qualified. Existence is not ancestry, ancestry is not the seal. The strongest thing this document can say is `held`, and it says only that three `git` processes answered yes to three questions, now.", "");
-  return lines.join(`
-`);
-}
-var SEALED_NAME_RE = /^goal-dossier-sealed-(\d{8})-(\d{6})(?:-([1-9]\d*))?\.md$/;
-function selectNewestSealedDossier(entries) {
-  let best;
-  for (const entry of entries) {
-    const match = SEALED_NAME_RE.exec(entry.name);
-    if (!match)
-      continue;
-    const stamp = `${match[1]}-${match[2]}`;
-    const attempt = match[3] !== undefined ? Number(match[3]) : 1;
-    if (!best || stamp > best.stamp || stamp === best.stamp && attempt > best.attempt || stamp === best.stamp && attempt === best.attempt && entry.mtimeMs > best.mtimeMs) {
-      best = { name: entry.name, stamp, attempt, mtimeMs: entry.mtimeMs };
-    }
-  }
-  return best?.name;
-}
-
-// src/tui.tsx
-import { readFileSync as readFileSync3, readdirSync as readdirSync2, statSync } from "fs";
-import { join as join7 } from "path";
 
 // src/status-dialog.tsx
 import { createElement as _$createElement3, setProp as _$setProp3, insertNode as _$insertNode2, createTextNode as _$createTextNode2, insert as _$insert3, effect as _$effect3, memo as _$memo3, createComponent as _$createComponent2, use as _$use } from "@opentui/solid";
@@ -1952,7 +1115,7 @@ import { For as For2, Show as Show2, createEffect, createMemo as createMemo2, cr
 import { TextAttributes as TextAttributes3 } from "@opentui/core";
 
 // src/core/find.ts
-var fold = (text) => text.toLowerCase();
+var fold = memoizeBounded((text) => text.toLowerCase(), 8192);
 var contains = (foldText, foldQuery) => foldText.includes(foldQuery);
 var isBlank = (query) => query.trim().length === 0;
 var findMatches = (texts, query) => {
@@ -2011,6 +1174,7 @@ var matchLabel = (count) => {
 // src/core/hud.ts
 var RETRY_HOT_THRESHOLD = 3;
 var isRetryStuck = (goal) => goal.retries >= RETRY_HOT_THRESHOLD;
+var currentTurnCount = (goal) => Math.max(totalVerdictCount(goal), nonNegative(goal.turns));
 var isCompactHot = (goal) => {
   const pending = goal.loopCompact;
   return Boolean(pending && pending.landedAt === undefined && pending.misses >= 2);
@@ -2028,7 +1192,20 @@ var compactMarker = (compact, ascii = false) => {
     return { text: "unmeasurable", tone: "unknown" };
   return { text: "pending", tone: "pending" };
 };
-var stateWord = (goal) => goal.status === "paused" ? "paused" : goal.evaluating ? "checking" : goal.waiting ? "waiting" : goal.queued ? "queued" : isRetryStuck(goal) ? "stuck" : "active";
+var waitingOnSubagents = (goal) => goal.status === "active" && goal.waiting === true && (goal.waitingSubagents ?? 0) > 0;
+var stateWord = (goal) => {
+  if (goal.status === "paused")
+    return "paused";
+  if (goal.evaluating)
+    return "checking";
+  if (goal.waiting) {
+    const count = goal.waitingSubagents ?? 0;
+    return count > 1 ? `waiting for ${count} subagents` : count === 1 ? "waiting for subagent" : "waiting";
+  }
+  if (goal.queued)
+    return "queued";
+  return isRetryStuck(goal) ? "stuck" : "active";
+};
 var compactMarkerFg = (theme, tone, mono) => {
   if (mono)
     return theme.text.muted;
@@ -2042,7 +1219,7 @@ var compactMarkerFg = (theme, tone, mono) => {
 var hudArmEnabled = (hasGoal, statusDialogOpen) => hasGoal && !statusDialogOpen;
 var fitLadder = (rungs, budget, ellipsis = "\u2026") => {
   for (const rung of rungs) {
-    if (stringWidth(rung) <= budget)
+    if (cellWidth(rung) <= budget)
       return rung;
   }
   return truncate(rungs[rungs.length - 1], Math.max(0, Math.floor(budget)), ellipsis);
@@ -2079,7 +1256,8 @@ var nextMenuIndex = (index, delta, rows) => {
 };
 var pillModel = (goal, elapsed, ascii = false, budget = Number.POSITIVE_INFINITY, phase) => {
   const state = stateWord(goal);
-  const turns = goal.turns > 0 ? ` \xB7 ${goal.turns} turn${goal.turns === 1 ? "" : "s"}` : "";
+  const count = currentTurnCount(goal);
+  const turns = count > 0 ? ` \xB7 ${count} turn${count === 1 ? "" : "s"} evaluated` : "";
   const retrying = isRetryStuck(goal) ? ` \xB7 retry ${goal.retries}` : "";
   const tone = goal.status === "paused" ? "paused" : isRetryStuck(goal) ? "retrying" : isCompactHot(goal) ? "hot" : goal.evaluating ? "evaluating" : goal.waiting ? "waiting" : "armed";
   const glyph = stateGlyph(goal, ascii, phase);
@@ -2125,7 +1303,7 @@ var terminalPill = (goal, elapsed, ascii = false, budget) => {
   })() : `${glyph} goal ${word} \xB7 ${span}`;
   if (budget !== undefined && Number.isFinite(budget)) {
     const cap = Math.max(1, Math.floor(budget));
-    if (stringWidth(text) > cap)
+    if (cellWidth(text) > cap)
       return { text: truncate(text, cap, ascii ? "..." : "\u2026"), tone };
   }
   return { text, tone };
@@ -2235,7 +1413,7 @@ var remediationFor = (goal) => {
     if (cause === "cap")
       return { tone: "warning", text: `turn cap reached \xB7 /goal clear or set a new goal - a message will not extend it` };
     if (cause === "stall")
-      return { tone: "warning", text: `no tool use for ${Math.max(0, Math.floor(goal.stall))} turns \xB7 send a message to resume, or /goal clear` };
+      return { tone: "warning", text: `no tool use for ${Math.floor(nonNegative(goal.stall))} turns \xB7 send a message to resume, or /goal clear` };
     if (cause === "repeated_failure")
       return { tone: "warning", text: `repeated not_met failure signature \xB7 rotate strategy, narrow scope, or produce a diagnostic artifact, then send a message to resume (or /goal clear)` };
     if (cause === "usage_limit")
@@ -2265,7 +1443,7 @@ var remediationFor = (goal) => {
   return;
 };
 var EVALUATOR_HINT_CARD = "the evaluator reads only the transcript";
-var EVALUATOR_HINT_FULL = "the evaluator reads only the transcript - it cannot run commands; prove the condition with visible output";
+var EVALUATOR_HINT_FULL = `${EVALUATOR_HINT_CARD} - it cannot run commands; prove the condition with visible output`;
 var evaluatorHint = (goal) => {
   if (goal.status !== "active")
     return null;
@@ -2401,15 +1579,16 @@ var dossierOutline = (markdown) => {
       headings.push({ line: i, title: raw.slice(3) });
     }
   }
-  const seen = new Map;
+  const used = new Set;
   const out = [];
   for (let i = 0;i < headings.length; i += 1) {
     const heading = headings[i];
     const endLine = i + 1 < headings.length ? headings[i + 1].line : lines.length;
     const base = slugOf(heading.title);
-    const count = seen.get(base) ?? 0;
-    seen.set(base, count + 1);
-    const id = count === 0 ? base : `${base}-${count + 1}`;
+    let id = base;
+    for (let n = 2;used.has(id); n += 1)
+      id = `${base}-${n}`;
+    used.add(id);
     out.push({
       id,
       label: labelOf(heading.title),
@@ -2423,6 +1602,446 @@ var dossierOutline = (markdown) => {
   return out;
 };
 
+// src/core/verify-record.ts
+import { execFileSync } from "child_process";
+
+// src/core/record-attestation.ts
+function recordShaMentions(goal) {
+  const mentions = [];
+  const index = new Map;
+  for (const entry of goal.loopHistory ?? []) {
+    const sha = typeof entry.sha === "string" ? entry.sha.trim() : "";
+    if (!sha)
+      continue;
+    const at = index.get(sha);
+    if (at !== undefined) {
+      mentions[at].iterations.push(entry.version);
+      continue;
+    }
+    index.set(sha, mentions.length);
+    mentions.push({ sha, iterations: [entry.version] });
+  }
+  return mentions;
+}
+function sweepRecordMentions(goal, probe, positive, negative) {
+  const checks = recordShaMentions(goal).map((m) => {
+    let answer;
+    try {
+      answer = probe(m.sha);
+    } catch {
+      answer = "unknown";
+    }
+    const status = answer === true ? positive : answer === false ? negative : "unknown";
+    return { sha: m.sha, shortSha: shortSha(m.sha), iterations: m.iterations, status };
+  });
+  let positiveCount = 0;
+  let negativeCount = 0;
+  let unknown = 0;
+  let mentions = 0;
+  for (const check of checks) {
+    if (check.status === positive)
+      positiveCount += 1;
+    else if (check.status === negative)
+      negativeCount += 1;
+    else
+      unknown += 1;
+    mentions += check.iterations.length;
+  }
+  return { checks, unique: checks.length, mentions, positive: positiveCount, negative: negativeCount, unknown };
+}
+function renderRecordReport(goal, input, format, nowMs, directory) {
+  const stamp = stampOf(nowMs);
+  const conditionCell = conditionCellOf(goal.condition);
+  const statusCell = (status) => recordStatusCell(status, format.positive, format.negative);
+  const lines = [
+    format.title,
+    "",
+    `- Generated: ${stamp}`,
+    `- Repository: ${directory}`,
+    `- Condition: ${conditionCell}`,
+    `- Shas quoted by the record: ${input.unique} unique across ${input.mentions} mention${input.mentions === 1 ? "" : "s"}`,
+    "",
+    `| sha | quoted at | ${format.columnHeader} |`,
+    "| --- | --- | --- |"
+  ];
+  for (const check of input.checks) {
+    lines.push(`| ${check.shortSha} | ${iterationList(check.iterations)} | ${statusCell(check.status)} |`);
+  }
+  if (input.checks.length === 0)
+    lines.push("| \u2014 | \u2014 | \u2014 |");
+  lines.push("", format.countsLine, "", format.footer, "");
+  return lines.join(`
+`);
+}
+function recordSummaryLine(counts, format) {
+  if (counts.unique === 0)
+    return format.none;
+  if (counts.negative === 0 && counts.unknown === 0)
+    return format.success(counts);
+  if (counts.negative > 0)
+    return format.failure(counts);
+  return format.unknown(counts);
+}
+function recordAckSegment(counts, ascii, format) {
+  const ok = ascii ? "+" : "\u2713";
+  const bad = ascii ? "-" : "\u2717";
+  if (counts.unique === 0)
+    return ascii ? format.noneAscii : format.noneUnicode;
+  if (counts.negative > 0)
+    return ` (${bad} ${counts.negative} of ${counts.unique} ${format.negative})`;
+  if (counts.unknown > 0)
+    return ` (! ${counts.unknown} of ${counts.unique} ${format.unknown})`;
+  return ` (${ok} ${counts.positive}/${counts.unique} ${format.positive})`;
+}
+function recordCellHelpers() {
+  const cell = (status, positive, negative) => recordStatusCell(status, positive, negative);
+  return {
+    verifyCell: (status) => cell(status, "present", "missing"),
+    reachCell: (status) => cell(status, "ancestor", "unreached"),
+    signCell: (status) => cell(status, "verified", "unverified")
+  };
+}
+
+// src/core/verify-record.ts
+var GIT_TIMEOUT_MS = 1e4;
+function gitCatFileProbe(cwd) {
+  return (sha) => {
+    try {
+      execFileSync("git", ["-C", cwd, "cat-file", "-e", sha], { stdio: "ignore", timeout: GIT_TIMEOUT_MS });
+      return true;
+    } catch (error) {
+      const status = error?.status;
+      if (typeof status === "number")
+        return false;
+      return "unknown";
+    }
+  };
+}
+function verifyRecord(goal, probe) {
+  const swept = sweepRecordMentions(goal, probe, "present", "missing");
+  return {
+    checks: swept.checks,
+    unique: swept.unique,
+    mentions: swept.mentions,
+    present: swept.positive,
+    missing: swept.negative,
+    unknown: swept.unknown
+  };
+}
+function verifyReportMarkdown(goal, verification, nowMs, directory) {
+  return renderRecordReport(goal, verification, {
+    title: "# /goal-loop record verification",
+    columnHeader: "resolves",
+    countsLine: `- Present: ${verification.present} \xB7 missing: ${verification.missing} \xB7 unknown: ${verification.unknown}`,
+    footer: "Existence is not ancestry: a sha that resolves here may still belong to a rewritten history elsewhere. A sha that does not resolve is an unresolvable receipt, not proof of misconduct \u2014 the record says what HEAD was, this report says what the repository still holds. Unknown means git could not answer (no binary, not a repository, timed out) \u2014 never counted as missing. Existence is checked at the directory named above, at generation time, and says nothing about the working tree's cleanliness.",
+    positive: "present",
+    negative: "missing"
+  }, nowMs, directory);
+}
+function verifySummaryLine(verification) {
+  return recordSummaryLine({
+    unique: verification.unique,
+    positive: verification.present,
+    negative: verification.missing,
+    unknown: verification.unknown
+  }, {
+    none: "record quotes no shas to verify",
+    success: (v) => `record verifies: ${v.positive} of ${v.unique} shas resolve`,
+    failure: (v) => `record does not verify: ${v.negative} of ${v.unique} shas unresolvable`,
+    unknown: (v) => `record unverifiable: ${v.unknown} of ${v.unique} shas could not be checked`
+  });
+}
+function verifyAckSegment(verification, ascii) {
+  return recordAckSegment({
+    unique: verification.unique,
+    positive: verification.present,
+    negative: verification.missing,
+    unknown: verification.unknown
+  }, ascii, {
+    noneAscii: " (no shas)",
+    noneUnicode: " (no shas to verify)",
+    negative: "unresolvable",
+    unknown: "unknown",
+    positive: "resolve"
+  });
+}
+
+// src/core/reach-record.ts
+import { execFileSync as execFileSync2 } from "child_process";
+var REACH_TIMEOUT_MS = 1e4;
+function gitAncestorProbe(cwd) {
+  return (sha) => {
+    try {
+      execFileSync2("git", ["-C", cwd, "merge-base", "--is-ancestor", sha, "HEAD"], { stdio: "ignore", timeout: REACH_TIMEOUT_MS });
+      return true;
+    } catch (error) {
+      const status = error?.status;
+      if (status === 0)
+        return true;
+      if (status === 1)
+        return false;
+      return "unknown";
+    }
+  };
+}
+function reachRecord(goal, probe) {
+  const swept = sweepRecordMentions(goal, probe, "ancestor", "unreached");
+  return {
+    checks: swept.checks,
+    unique: swept.unique,
+    mentions: swept.mentions,
+    ancestors: swept.positive,
+    unreached: swept.negative,
+    unknown: swept.unknown
+  };
+}
+function reachReportMarkdown(goal, reach, nowMs, directory) {
+  return renderRecordReport(goal, reach, {
+    title: "# /goal-loop record ancestry",
+    columnHeader: "on this line",
+    countsLine: `- On this line (ancestor of HEAD): ${reach.ancestors} \xB7 not on this line: ${reach.unreached} \xB7 unknown: ${reach.unknown}`,
+    footer: "Not on this line is not misconduct: the sha may live on another branch, may have been rebased away, or this record may predate the merge that carried it. Existence is not ancestry, and ancestry is not content \u2014 a sha that belongs to this history may still carry a tree you have not read, and a sha that resolves here may still belong elsewhere. This report asks one question, per sha, of the repository at the directory named above, at generation time, and says nothing about which ref the work landed on, signatures, the working tree's cleanliness, or the content of any commit. Unknown means git could not answer (no binary, not a repository, unparseable sha, timed out) \u2014 never counted as \u201Cno\u201D.",
+    positive: "ancestor",
+    negative: "unreached"
+  }, nowMs, directory);
+}
+function reachSummaryLine(reach) {
+  return recordSummaryLine({
+    unique: reach.unique,
+    positive: reach.ancestors,
+    negative: reach.unreached,
+    unknown: reach.unknown
+  }, {
+    none: "record quotes no shas to place on this line",
+    success: (v) => `record reaches HEAD: ${v.positive} of ${v.unique} shas on this line`,
+    failure: (v) => `record does not reach HEAD: ${v.negative} of ${v.unique} shas not on this line`,
+    unknown: (v) => `record unverifiable: ${v.unknown} of ${v.unique} shas could not be placed`
+  });
+}
+function reachAckSegment(reach, ascii) {
+  return recordAckSegment({
+    unique: reach.unique,
+    positive: reach.ancestors,
+    negative: reach.unreached,
+    unknown: reach.unknown
+  }, ascii, {
+    noneAscii: " (no shas)",
+    noneUnicode: " (no shas to place)",
+    negative: "not on this line",
+    unknown: "unknown",
+    positive: "on this line"
+  });
+}
+
+// src/core/sign-record.ts
+import { execFileSync as execFileSync3 } from "child_process";
+var SIGN_TIMEOUT_MS = 1e4;
+function gitSignProbe(cwd) {
+  return (sha) => {
+    try {
+      execFileSync3("git", ["-C", cwd, "cat-file", "-e", sha], { stdio: "ignore", timeout: SIGN_TIMEOUT_MS });
+    } catch {
+      return "unknown";
+    }
+    try {
+      execFileSync3("git", ["-C", cwd, "verify-commit", sha], { stdio: "ignore", timeout: SIGN_TIMEOUT_MS });
+      return true;
+    } catch (error) {
+      const status = error?.status;
+      return typeof status === "number" ? false : "unknown";
+    }
+  };
+}
+function signRecord(goal, probe) {
+  const swept = sweepRecordMentions(goal, probe, "verified", "unverified");
+  return {
+    checks: swept.checks,
+    unique: swept.unique,
+    mentions: swept.mentions,
+    verified: swept.positive,
+    unverified: swept.negative,
+    unknown: swept.unknown
+  };
+}
+function signReportMarkdown(goal, sign, nowMs, directory) {
+  return renderRecordReport(goal, sign, {
+    title: "# /goal-loop record signatures",
+    columnHeader: "under seal",
+    countsLine: `- Under seal (git verified): ${sign.verified} \xB7 not under seal: ${sign.unverified} \xB7 unknown: ${sign.unknown}`,
+    footer: "A signature attests integrity only as strongly as the key and the trust configured at the probed directory \u2014 git decides by its own rules. `verified` means git's configured rules accepted the commit's signature, nothing more, nothing less. Anything else \u2014 an unsigned commit, an expired or untrusted key, a bad signature \u2014 is `not under seal`, never proof of forgery; most commits are unsigned, and git's thresholds differ across machines and time. An unresolvable object has no signature to judge and reads `unknown`, never `not under seal`. Unknown means git could not answer (no binary, not a repository, unparseable sha, timed out) \u2014 never counted as \u201Cno\u201D. Existence is not ancestry, ancestry is not content, content is not intent \u2014 the EC and ED reports are the other halves, and none substitutes for another. This report asks one question, per sha, of the repository at the directory named above, at generation time \u2014 it says nothing about the key's origin, the author's intent, the commit's content, or the working tree's cleanliness.",
+    positive: "verified",
+    negative: "unverified"
+  }, nowMs, directory);
+}
+function signSummaryLine(sign) {
+  return recordSummaryLine({
+    unique: sign.unique,
+    positive: sign.verified,
+    negative: sign.unverified,
+    unknown: sign.unknown
+  }, {
+    none: "record quotes no shas to attest",
+    success: (v) => `record under seal: ${v.positive} of ${v.unique} shas verify`,
+    failure: (v) => `record not under seal: ${v.negative} of ${v.unique} shas do not verify`,
+    unknown: (v) => `record unverifiable: ${v.unknown} of ${v.unique} shas could not be attested`
+  });
+}
+function signAckSegment(sign, ascii) {
+  return recordAckSegment({
+    unique: sign.unique,
+    positive: sign.verified,
+    negative: sign.unverified,
+    unknown: sign.unknown
+  }, ascii, {
+    noneAscii: " (no shas)",
+    noneUnicode: " (no shas to attest)",
+    negative: "unsigned",
+    unknown: "unknown",
+    positive: "signed"
+  });
+}
+
+// src/core/dossier-seal.ts
+import { writeFileSync as writeFileSync2 } from "fs";
+import { join as join2, resolve as resolve2 } from "path";
+
+// src/core/dossier-export.ts
+import { writeFileSync } from "fs";
+import { join, resolve } from "path";
+var MAX_EXPORT_ATTEMPTS = 100;
+var dossierExportName = (nowMs, attempt = 0) => artifactName("dossier", nowMs, attempt);
+function exportLoopDossier(goal, nowMs, dir) {
+  const content = buildLoopDossier(goal, nowMs);
+  const targetDir = resolve(dir);
+  const bytes = Buffer.byteLength(content, "utf8");
+  for (let attempt = 0;attempt < MAX_EXPORT_ATTEMPTS; attempt++) {
+    const path = join(targetDir, dossierExportName(nowMs, attempt));
+    try {
+      writeFileSync(path, content, { encoding: "utf8", flag: "wx" });
+      return { path, bytes, attempts: attempt + 1 };
+    } catch (error) {
+      const code = error?.code;
+      if (code === "EEXIST")
+        continue;
+      throw error;
+    }
+  }
+  throw new Error(`no free dossier filename after ${MAX_EXPORT_ATTEMPTS} attempts in ${targetDir}`);
+}
+
+// src/core/dossier-seal.ts
+var sealedDossierName = (nowMs, attempt = 0) => artifactName("dossier-sealed", nowMs, attempt);
+var { verifyCell: verifyCell2, reachCell, signCell } = recordCellHelpers();
+var cleanShaCount = (verification, reach, sign) => {
+  const reachStatus = new Map(reach.checks.map((c) => [c.sha, c.status]));
+  const signStatus = new Map(sign.checks.map((c) => [c.sha, c.status]));
+  let clean = 0;
+  for (const check of verification.checks) {
+    if (check.status === "present" && reachStatus.get(check.sha) === "ancestor" && signStatus.get(check.sha) === "verified") {
+      clean += 1;
+    }
+  }
+  return clean;
+};
+function attestationAppendix(_goal, verification, reach, sign, nowMs, directory) {
+  const stamp = stampOf(nowMs);
+  const lines = [
+    "## Attestation (freshly probed at seal time)",
+    "",
+    `_The bookkeeping above is the record's own and was not re-verified; it renders what the record holds, nothing more. The shas the record quotes were re-probed here, fresh, against \`${directory}\`, at ${stamp}: existence (the object store), ancestry (this line), and the seal (git's signature check). \`unknown\` means git could not answer and is never counted as a pass or a fail. No question substitutes for another._`,
+    ""
+  ];
+  const droppedLoop = _goal.loopHistoryDropped ?? 0;
+  const droppedVerdicts = _goal.historyDropped ?? 0;
+  if (droppedLoop > 0 || droppedVerdicts > 0) {
+    const bits = [];
+    if (droppedLoop > 0)
+      bits.push(`${droppedLoop} earlier iteration record${droppedLoop === 1 ? "" : "s"}`);
+    if (droppedVerdicts > 0)
+      bits.push(`${droppedVerdicts} earlier verdict${droppedVerdicts === 1 ? "" : "s"}`);
+    lines.push(`_${bits.join(" and ")} dropped by the retention caps; the shas they quoted are not re-probed here and are never implied held._`, "");
+  }
+  if (verification.unique === 0) {
+    lines.push("The record quotes no sha \u2014 there is nothing to seal. An unshaded record cannot be re-probed, and none is claimed.", "");
+    return lines;
+  }
+  const reachStatus = new Map(reach.checks.map((c) => [c.sha, c.status]));
+  const signStatus = new Map(sign.checks.map((c) => [c.sha, c.status]));
+  lines.push("| sha | iterations | exists | on this line | under seal |", "| --- | --- | --- | --- | --- |");
+  for (const check of verification.checks) {
+    lines.push(`| ${check.shortSha} | ${iterationList(check.iterations)} | ${verifyCell2(check.status)} | ${reachCell(reachStatus.get(check.sha) ?? "unknown")} | ${signCell(signStatus.get(check.sha) ?? "unknown")} |`);
+  }
+  const clean = cleanShaCount(verification, reach, sign);
+  lines.push("", `- Existence: ${verification.present} of ${verification.unique} shas resolve (${verification.unknown} unknown \u2014 never counted as present)`, `- Ancestry: ${reach.ancestors} of ${reach.unique} shas on this line (${reach.unknown} unknown)`, `- Seal: ${sign.verified} of ${sign.unique} shas under seal (${sign.unverified} not under seal \u2014 not an accusation; ${sign.unknown} unknown)`, `- All three: ${clean} of ${verification.unique} shas clean (present \xB7 on this line \xB7 under seal)`, "", "A clean row is the strongest thing this appendix can say: the object resolves, it belongs to this line, and git verified a signature on it at seal time. Anything short of that is not an accusation \u2014 existence is not ancestry, ancestry is not the seal, and most commits are unsigned. The loop that produced this record may be running right now; this file is a snapshot of its receipts at the moment it was written, and the stamp above travels with it.", "");
+  return lines;
+}
+function sealRecord(goal, directory, nowMs, probes = {}) {
+  const verifyProbe = probes.verify ?? gitCatFileProbe(directory);
+  const reachProbe = probes.reach ?? gitAncestorProbe(directory);
+  const signProbe = probes.sign ?? gitSignProbe(directory);
+  const verification = verifyRecord(goal, verifyProbe);
+  const reach = reachRecord(goal, reachProbe);
+  const sign = signRecord(goal, signProbe);
+  const clean = cleanShaCount(verification, reach, sign);
+  const base = buildLoopDossier(goal, nowMs);
+  const appendix = attestationAppendix(goal, verification, reach, sign, nowMs, directory);
+  const markdown = `${base}
+
+${appendix.join(`
+`)}`;
+  return { markdown, verification, reach, sign, unique: verification.unique, clean };
+}
+function exportSealedDossier(goal, nowMs, dir, probes = {}) {
+  const targetDir = resolve2(dir);
+  const seal = sealRecord(goal, targetDir, nowMs, probes);
+  const bytes = Buffer.byteLength(seal.markdown, "utf8");
+  for (let attempt = 0;attempt < MAX_EXPORT_ATTEMPTS; attempt++) {
+    const path = join2(targetDir, sealedDossierName(nowMs, attempt));
+    try {
+      writeFileSync2(path, seal.markdown, { encoding: "utf8", flag: "wx" });
+      return {
+        path,
+        bytes,
+        attempts: attempt + 1,
+        unique: seal.unique,
+        clean: seal.clean,
+        verification: seal.verification,
+        reach: seal.reach,
+        sign: seal.sign
+      };
+    } catch (error) {
+      const code = error?.code;
+      if (code === "EEXIST")
+        continue;
+      throw error;
+    }
+  }
+  throw new Error(`no free sealed-dossier filename after ${MAX_EXPORT_ATTEMPTS} attempts in ${targetDir}`);
+}
+function sealSummaryLine(seal) {
+  if (seal.unique === 0)
+    return "record quotes no shas to seal";
+  const hard = seal.verification.missing + seal.reach.unreached + seal.sign.unverified;
+  const unknown = seal.verification.unknown + seal.reach.unknown + seal.sign.unknown;
+  if (hard === 0 && unknown === 0)
+    return `record sealed: ${seal.clean} of ${seal.unique} shas pass all three checks`;
+  if (hard > 0)
+    return `record sealed with gaps: ${seal.clean} of ${seal.unique} shas pass all three checks`;
+  return `record sealed, unverifiable: ${unknown} of ${3 * seal.unique} checks could not answer`;
+}
+function sealAckSegment(seal, ascii) {
+  const ok = ascii ? "+" : "\u2713";
+  const bad = ascii ? "-" : "\u2717";
+  if (seal.unique === 0)
+    return ascii ? " (no shas)" : " (no shas to seal)";
+  const hard = seal.verification.missing + seal.reach.unreached + seal.sign.unverified;
+  if (hard > 0)
+    return ` (${bad} ${seal.clean} of ${seal.unique} sealed)`;
+  if (seal.clean < seal.unique)
+    return ` (! ${seal.clean} of ${seal.unique} sealed)`;
+  return ` (${ok} ${seal.clean}/${seal.unique} sealed)`;
+}
+
 // src/tui-history.tsx
 import { createElement as _$createElement2, setProp as _$setProp2, insert as _$insert2, effect as _$effect2, memo as _$memo2, insertNode as _$insertNode, createComponent as _$createComponent, createTextNode as _$createTextNode } from "@opentui/solid";
 import { TextAttributes as TextAttributes2 } from "@opentui/core";
@@ -2435,7 +2054,6 @@ var quoteSha = (sha) => {
   const trimmed = sha.trim();
   return trimmed.length > 0 ? trimmed.slice(0, 7) : undefined;
 };
-var nonNegative = (n) => Number.isFinite(n) ? Math.max(0, n) : 0;
 function iterationAttestation(entry, durationMs) {
   const turns = nonNegative(entry.turns);
   const tools = nonNegative(entry.toolCalls);
@@ -3116,7 +2734,6 @@ var WhyLedger = (props) => {
   const rows = () => props.history.filter((entry) => entry.reason.trim().length > 0).slice(-WHY_LIMIT);
   const now = () => props.nowMs?.() ?? Date.now();
   const furniture = (entry) => `${entry.verdict.replace("_", " ")} \xB7 turn ${entry.turn} \xB7 ${relativeTime(entry.at, now())}${shaSuffix(entry)}${spendSuffix(entry)}`;
-  const furnitureWidth = () => rows().reduce((max, entry) => Math.max(max, stringWidth(furniture(entry))), 0);
   return _$createComponent(Show, {
     get when() {
       return rows().length > 0;
@@ -3129,12 +2746,11 @@ var WhyLedger = (props) => {
         children: (entry, index) => {
           const interactive = props.onCopyReason !== undefined;
           return (() => {
-            var _el$34 = _$createElement2("box"), _el$35 = _$createElement2("text"), _el$36 = _$createElement2("text"), _el$37 = _$createElement2("text");
+            var _el$34 = _$createElement2("box"), _el$35 = _$createElement2("box"), _el$36 = _$createElement2("text"), _el$37 = _$createElement2("text"), _el$38 = _$createElement2("box"), _el$39 = _$createElement2("box"), _el$40 = _$createElement2("text");
             _$insertNode(_el$34, _el$35);
-            _$insertNode(_el$34, _el$36);
-            _$insertNode(_el$34, _el$37);
-            _$setProp2(_el$34, "flexDirection", "row");
-            _$setProp2(_el$34, "gap", 2);
+            _$insertNode(_el$34, _el$39);
+            _$setProp2(_el$34, "flexDirection", "column");
+            _$setProp2(_el$34, "gap", 0);
             _$setProp2(_el$34, "onMouseUp", interactive ? (event) => {
               if (event.button !== 0)
                 return;
@@ -3143,17 +2759,20 @@ var WhyLedger = (props) => {
             } : undefined);
             _$setProp2(_el$34, "onMouseOver", interactive ? () => setHovered(entry.at) : undefined);
             _$setProp2(_el$34, "onMouseOut", interactive ? () => setHovered(null) : undefined);
-            _$insert2(_el$34, () => label(theme(), index() === 0 ? "why" : ""), _el$35);
-            _$setProp2(_el$35, "wrapMode", "none");
-            _$setProp2(_el$35, "flexShrink", 0);
-            _$insert2(_el$35, () => verdictEntryGlyph(entry, ascii()));
+            _$insertNode(_el$35, _el$36);
+            _$insertNode(_el$35, _el$37);
+            _$insertNode(_el$35, _el$38);
+            _$setProp2(_el$35, "flexDirection", "row");
+            _$setProp2(_el$35, "gap", 2);
+            _$insert2(_el$35, () => label(theme(), index() === 0 ? "why" : ""), _el$36);
             _$setProp2(_el$36, "wrapMode", "none");
             _$setProp2(_el$36, "flexShrink", 0);
-            _$insert2(_el$36, () => furniture(entry));
-            _$setProp2(_el$37, "wrapMode", "word");
-            _$setProp2(_el$37, "flexGrow", 1);
-            _$insert2(_el$37, () => truncate(entry.reason, WHY_REASON_MAX, ascii() ? "..." : "\u2026"));
-            _$insert2(_el$34, interactive ? _$createComponent(Affordance, {
+            _$insert2(_el$36, () => verdictEntryGlyph(entry, ascii()));
+            _$setProp2(_el$37, "wrapMode", "none");
+            _$setProp2(_el$37, "flexShrink", 0);
+            _$insert2(_el$37, () => furniture(entry));
+            _$setProp2(_el$38, "flexGrow", 1);
+            _$insert2(_el$35, interactive ? _$createComponent(Affordance, {
               get theme() {
                 return theme();
               },
@@ -3166,20 +2785,25 @@ var WhyLedger = (props) => {
                 return _$memo2(() => copied() === entry.at)() ? ascii() ? "+ copied" : "\u2713 copied" : null;
               }
             }) : null, null);
+            _$insertNode(_el$39, _el$40);
+            _$setProp2(_el$39, "flexDirection", "row");
+            _$setProp2(_el$39, "gap", 2);
+            _$insert2(_el$39, () => label(theme(), ""), _el$40);
+            _$setProp2(_el$40, "wrapMode", "word");
+            _$setProp2(_el$40, "flexGrow", 1);
+            _$insert2(_el$40, () => truncate(entry.reason, WHY_REASON_MAX, ascii() ? "..." : "\u2026"));
             _$effect2((_p$) => {
-              var _v$21 = colorFor(theme(), entry, mono()), _v$22 = TextAttributes2.BOLD, _v$23 = theme().text.muted, _v$24 = furnitureWidth(), _v$25 = theme().text.base;
-              _v$21 !== _p$.e && (_p$.e = _$setProp2(_el$35, "fg", _v$21, _p$.e));
-              _v$22 !== _p$.t && (_p$.t = _$setProp2(_el$35, "attributes", _v$22, _p$.t));
-              _v$23 !== _p$.a && (_p$.a = _$setProp2(_el$36, "fg", _v$23, _p$.a));
-              _v$24 !== _p$.o && (_p$.o = _$setProp2(_el$36, "width", _v$24, _p$.o));
-              _v$25 !== _p$.i && (_p$.i = _$setProp2(_el$37, "fg", _v$25, _p$.i));
+              var _v$21 = colorFor(theme(), entry, mono()), _v$22 = TextAttributes2.BOLD, _v$23 = theme().text.muted, _v$24 = theme().text.base;
+              _v$21 !== _p$.e && (_p$.e = _$setProp2(_el$36, "fg", _v$21, _p$.e));
+              _v$22 !== _p$.t && (_p$.t = _$setProp2(_el$36, "attributes", _v$22, _p$.t));
+              _v$23 !== _p$.a && (_p$.a = _$setProp2(_el$37, "fg", _v$23, _p$.a));
+              _v$24 !== _p$.o && (_p$.o = _$setProp2(_el$40, "fg", _v$24, _p$.o));
               return _p$;
             }, {
               e: undefined,
               t: undefined,
               a: undefined,
-              o: undefined,
-              i: undefined
+              o: undefined
             });
             return _el$34;
           })();
@@ -3218,57 +2842,57 @@ var VerdictTrail = (props) => {
       return trail().shown.length > 0;
     },
     get children() {
-      var _el$38 = _$createElement2("box"), _el$39 = _$createElement2("box"), _el$40 = _$createElement2("box"), _el$41 = _$createElement2("text"), _el$42 = _$createTextNode(` `), _el$43 = _$createTextNode(` of `), _el$44 = _$createTextNode(` verdict`);
-      _$insertNode(_el$38, _el$39);
-      _$setProp2(_el$38, "flexDirection", "column");
-      _$setProp2(_el$38, "gap", 0);
-      _$insertNode(_el$39, _el$40);
-      _$insertNode(_el$39, _el$41);
-      _$setProp2(_el$39, "flexDirection", "row");
-      _$setProp2(_el$39, "gap", 2);
-      _$insert2(_el$39, () => label(props.theme, "trail"), _el$40);
-      _$setProp2(_el$40, "flexDirection", "row");
-      _$setProp2(_el$40, "flexShrink", 0);
-      _$insert2(_el$40, _$createComponent(For, {
+      var _el$41 = _$createElement2("box"), _el$42 = _$createElement2("box"), _el$43 = _$createElement2("box"), _el$44 = _$createElement2("text"), _el$45 = _$createTextNode(` `), _el$46 = _$createTextNode(` of `), _el$47 = _$createTextNode(` verdict`);
+      _$insertNode(_el$41, _el$42);
+      _$setProp2(_el$41, "flexDirection", "column");
+      _$setProp2(_el$41, "gap", 0);
+      _$insertNode(_el$42, _el$43);
+      _$insertNode(_el$42, _el$44);
+      _$setProp2(_el$42, "flexDirection", "row");
+      _$setProp2(_el$42, "gap", 2);
+      _$insert2(_el$42, () => label(props.theme, "trail"), _el$43);
+      _$setProp2(_el$43, "flexDirection", "row");
+      _$setProp2(_el$43, "flexShrink", 0);
+      _$insert2(_el$43, _$createComponent(For, {
         get each() {
           return trail().shown;
         },
         children: (entry) => {
           const copyable = interactive() && copyHint(entry);
           return (() => {
-            var _el$45 = _$createElement2("box"), _el$46 = _$createElement2("text");
-            _$insertNode(_el$45, _el$46);
-            _$setProp2(_el$45, "flexDirection", "row");
-            _$setProp2(_el$45, "onMouseUp", copyable ? (event) => {
+            var _el$48 = _$createElement2("box"), _el$49 = _$createElement2("text");
+            _$insertNode(_el$48, _el$49);
+            _$setProp2(_el$48, "flexDirection", "row");
+            _$setProp2(_el$48, "onMouseUp", copyable ? (event) => {
               if (event.button !== 0)
                 return;
               event.stopPropagation();
               copyAt(entry);
             } : undefined);
-            _$setProp2(_el$46, "wrapMode", "none");
-            _$insert2(_el$46, () => verdictEntryGlyph(entry, ascii()));
-            _$effect2((_$p) => _$setProp2(_el$46, "fg", colorFor(props.theme, entry, mono()), _$p));
-            return _el$45;
+            _$setProp2(_el$49, "wrapMode", "none");
+            _$insert2(_el$49, () => verdictEntryGlyph(entry, ascii()));
+            _$effect2((_$p) => _$setProp2(_el$49, "fg", colorFor(props.theme, entry, mono()), _$p));
+            return _el$48;
           })();
         }
       }));
-      _$insertNode(_el$41, _el$42);
-      _$insertNode(_el$41, _el$43);
-      _$insertNode(_el$41, _el$44);
-      _$setProp2(_el$41, "wrapMode", "none");
-      _$setProp2(_el$41, "flexShrink", 0);
-      _$insert2(_el$41, () => trail().shown.length, _el$43);
-      _$insert2(_el$41, total, _el$44);
-      _$insert2(_el$41, () => total() === 1 ? "" : "s", null);
-      _$insert2(_el$41, (() => {
+      _$insertNode(_el$44, _el$45);
+      _$insertNode(_el$44, _el$46);
+      _$insertNode(_el$44, _el$47);
+      _$setProp2(_el$44, "wrapMode", "none");
+      _$setProp2(_el$44, "flexShrink", 0);
+      _$insert2(_el$44, () => trail().shown.length, _el$46);
+      _$insert2(_el$44, total, _el$47);
+      _$insert2(_el$44, () => total() === 1 ? "" : "s", null);
+      _$insert2(_el$44, (() => {
         var _c$5 = _$memo2(() => dropped() > 0);
         return () => _c$5() ? ` \xB7 ${dropped()} older dropped (retention cap)` : "";
       })(), null);
-      _$insert2(_el$41, () => {
+      _$insert2(_el$44, () => {
         const t = copiedTurn();
         return t === null ? "" : ascii() ? ` \xB7 turn ${t} \xB7 + copied` : ` \xB7 turn ${t} \xB7 \u2713 copied`;
       }, null);
-      _$insert2(_el$38, _$createComponent(WhyLedger, {
+      _$insert2(_el$41, _$createComponent(WhyLedger, {
         get theme() {
           return props.theme;
         },
@@ -3288,8 +2912,8 @@ var VerdictTrail = (props) => {
           return props.nowMs;
         }
       }), null);
-      _$effect2((_$p) => _$setProp2(_el$41, "fg", props.theme.text.muted, _$p));
-      return _el$38;
+      _$effect2((_$p) => _$setProp2(_el$44, "fg", props.theme.text.muted, _$p));
+      return _el$41;
     }
   });
 };
@@ -3318,56 +2942,56 @@ var HistoryBlock = (props) => {
     return parts.join(" \xB7 ");
   };
   return (() => {
-    var _el$47 = _$createElement2("box"), _el$48 = _$createElement2("box");
-    _$insertNode(_el$47, _el$48);
-    _$setProp2(_el$47, "flexDirection", "column");
-    _$setProp2(_el$47, "gap", 0);
-    _$setProp2(_el$48, "flexDirection", "row");
-    _$setProp2(_el$48, "gap", 2);
-    _$insert2(_el$48, () => label(theme(), "history"), null);
-    _$insert2(_el$48, _$createComponent(Show, {
+    var _el$50 = _$createElement2("box"), _el$51 = _$createElement2("box");
+    _$insertNode(_el$50, _el$51);
+    _$setProp2(_el$50, "flexDirection", "column");
+    _$setProp2(_el$50, "gap", 0);
+    _$setProp2(_el$51, "flexDirection", "row");
+    _$setProp2(_el$51, "gap", 2);
+    _$insert2(_el$51, () => label(theme(), "history"), null);
+    _$insert2(_el$51, _$createComponent(Show, {
       get when() {
         return last();
       },
       get fallback() {
         return (() => {
-          var _el$49 = _$createElement2("text"), _el$50 = _$createTextNode(`no verdicts yet \xB7 `), _el$51 = _$createTextNode(` elapsed`);
-          _$insertNode(_el$49, _el$50);
-          _$insertNode(_el$49, _el$51);
-          _$setProp2(_el$49, "wrapMode", "none");
-          _$insert2(_el$49, elapsed, _el$51);
-          _$effect2((_$p) => _$setProp2(_el$49, "fg", theme().text.faint, _$p));
-          return _el$49;
+          var _el$52 = _$createElement2("text"), _el$53 = _$createTextNode(`no verdicts yet \xB7 `), _el$54 = _$createTextNode(` elapsed`);
+          _$insertNode(_el$52, _el$53);
+          _$insertNode(_el$52, _el$54);
+          _$setProp2(_el$52, "wrapMode", "none");
+          _$insert2(_el$52, elapsed, _el$54);
+          _$effect2((_$p) => _$setProp2(_el$52, "fg", theme().text.faint, _$p));
+          return _el$52;
         })();
       },
       children: (entry) => (() => {
-        var _el$52 = _$createElement2("box"), _el$53 = _$createElement2("text"), _el$54 = _$createElement2("text");
-        _$insertNode(_el$52, _el$53);
-        _$insertNode(_el$52, _el$54);
-        _$setProp2(_el$52, "flexDirection", "row");
-        _$setProp2(_el$52, "gap", 2);
-        _$setProp2(_el$52, "flexGrow", 1);
-        _$setProp2(_el$53, "wrapMode", "none");
-        _$setProp2(_el$53, "flexShrink", 0);
-        _$insert2(_el$53, () => verdictEntryGlyph(entry(), ascii()));
-        _$setProp2(_el$54, "wrapMode", "word");
-        _$setProp2(_el$54, "flexGrow", 1);
-        _$insert2(_el$54, () => `last ${entry().verdict.replace("_", " ")} (turn ${entry().turn}) \xB7 ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"} \xB7 ${countsText()} \xB7 ${elapsed()} elapsed${streakSuffix()}`);
+        var _el$55 = _$createElement2("box"), _el$56 = _$createElement2("text"), _el$57 = _$createElement2("text");
+        _$insertNode(_el$55, _el$56);
+        _$insertNode(_el$55, _el$57);
+        _$setProp2(_el$55, "flexDirection", "row");
+        _$setProp2(_el$55, "gap", 2);
+        _$setProp2(_el$55, "flexGrow", 1);
+        _$setProp2(_el$56, "wrapMode", "none");
+        _$setProp2(_el$56, "flexShrink", 0);
+        _$insert2(_el$56, () => verdictEntryGlyph(entry(), ascii()));
+        _$setProp2(_el$57, "wrapMode", "word");
+        _$setProp2(_el$57, "flexGrow", 1);
+        _$insert2(_el$57, () => `last ${entry().verdict.replace("_", " ")} (turn ${entry().turn}) \xB7 ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"} \xB7 ${countsText()} \xB7 ${elapsed()} elapsed${streakSuffix()}`);
         _$effect2((_p$) => {
-          var _v$26 = colorFor(theme(), entry(), mono()), _v$27 = TextAttributes2.BOLD, _v$28 = theme().text.base;
-          _v$26 !== _p$.e && (_p$.e = _$setProp2(_el$53, "fg", _v$26, _p$.e));
-          _v$27 !== _p$.t && (_p$.t = _$setProp2(_el$53, "attributes", _v$27, _p$.t));
-          _v$28 !== _p$.a && (_p$.a = _$setProp2(_el$54, "fg", _v$28, _p$.a));
+          var _v$25 = colorFor(theme(), entry(), mono()), _v$26 = TextAttributes2.BOLD, _v$27 = theme().text.base;
+          _v$25 !== _p$.e && (_p$.e = _$setProp2(_el$56, "fg", _v$25, _p$.e));
+          _v$26 !== _p$.t && (_p$.t = _$setProp2(_el$56, "attributes", _v$26, _p$.t));
+          _v$27 !== _p$.a && (_p$.a = _$setProp2(_el$57, "fg", _v$27, _p$.a));
           return _p$;
         }, {
           e: undefined,
           t: undefined,
           a: undefined
         });
-        return _el$52;
+        return _el$55;
       })()
     }), null);
-    _$insert2(_el$47, _$createComponent(VerdictTrail, {
+    _$insert2(_el$50, _$createComponent(VerdictTrail, {
       get theme() {
         return theme();
       },
@@ -3386,8 +3010,8 @@ var HistoryBlock = (props) => {
         return props.goal.historyDropped;
       }
     }), null);
-    _$effect2((_$p) => _$setProp2(_el$47, "marginTop", props.marginTop, _$p));
-    return _el$47;
+    _$effect2((_$p) => _$setProp2(_el$50, "marginTop", props.marginTop, _$p));
+    return _el$50;
   })();
 };
 
@@ -4903,19 +4527,19 @@ var cardRowPlan = (goal, contextOpen = false, maxRows = Number.POSITIVE_INFINITY
   };
 };
 var hudCardRows = (goal, contextOpen = false, maxRows = Number.POSITIVE_INFINITY, width = 64) => cardRowPlan(goal, contextOpen, maxRows, width).rows;
-var pinBudget = (terminalWidth, pillText) => Math.floor(terminalWidth) - stringWidth(pillText) - stringWidth(PIN_PREFIX) - 1;
+var pinBudget = (terminalWidth, pillText) => Math.floor(terminalWidth) - cellWidth(pillText) - cellWidth(PIN_PREFIX) - 1;
 var DIALOG_FOOTER_FULL_HINT = "up/down scroll \xB7 pgup/pgdn \xB7 home/end \xB7 p pin \xB7 c copy \xB7 x older";
 var DIALOG_FOOTER_SHORT_HINT = "up/down scroll \xB7 p pin \xB7 c copy \xB7 x older";
 var footerCopyLabel = (copied, roomy, ascii = false) => copied ? ascii ? "+ copied" : "\u2713 copied" : roomy ? "copy condition" : "copy";
 var footerPinLabel = (pinned, roomy) => pinned ? roomy ? "unpin condition" : "unpin" : roomy ? "pin condition" : "pin";
-var footerButtonCells = (label) => stringWidth(label) + 4;
+var footerButtonCells = (label) => cellWidth(label) + 4;
 var footerClearLabel = (roomy) => roomy ? "clear goal" : "clear";
 var dialogFooterTier = (width, copied, pinned) => {
   const budget = Math.floor(width) - 2;
   const buttons = (roomy) => footerButtonCells(footerCopyLabel(copied, roomy)) + footerButtonCells(footerPinLabel(pinned, roomy)) + footerButtonCells(footerClearLabel(roomy)) + 4;
   return {
-    wide: stringWidth(DIALOG_FOOTER_FULL_HINT) + buttons(true) <= budget,
-    roomy: stringWidth(DIALOG_FOOTER_SHORT_HINT) + buttons(true) <= budget
+    wide: cellWidth(DIALOG_FOOTER_FULL_HINT) + buttons(true) <= budget,
+    roomy: cellWidth(DIALOG_FOOTER_SHORT_HINT) + buttons(true) <= budget
   };
 };
 var DialogFooter = (props) => {
@@ -5743,52 +5367,80 @@ var scrollbarTrackOptions = (theme, mono) => {
 
 // src/core/entries.ts
 var stripVolatile = (key, value) => key === "elapsedMs" ? undefined : value;
+var CHEAP_KEYS = [
+  "version",
+  "id",
+  "sessionID",
+  "directory",
+  "condition",
+  "status",
+  "setAt",
+  "startedAt",
+  "turns",
+  "stall",
+  "retries",
+  "checkins",
+  "evaluating",
+  "waiting",
+  "queued"
+];
 var goalsEqual = (a, b) => {
   if (a === b)
     return true;
   if (!a || !b)
     return false;
+  for (const key of CHEAP_KEYS) {
+    if (a[key] !== b[key])
+      return false;
+  }
+  if (a.history.length !== b.history.length)
+    return false;
   return JSON.stringify(a, stripVolatile) === JSON.stringify(b, stripVolatile);
 };
 var ENTRY_CAP = 64;
 function pruneSnapshotEntries(entries, keep, cap = ENTRY_CAP) {
+  const keys = Object.keys(entries);
+  if (keys.length <= cap)
+    return entries;
   let changed = false;
   const out = {};
   for (const [sessionID, entry] of Object.entries(entries)) {
     out[sessionID] = entry;
   }
-  const keys = Object.keys(out);
-  if (keys.length > cap) {
-    const rank = (k) => {
-      const g = out[k].goal;
-      return g !== null && isLive(g.status) ? 1 : 0;
-    };
-    const sorted = keys.slice().sort((a, b) => rank(a) - rank(b) || out[a].receivedAt - out[b].receivedAt);
-    let overflow = keys.length - cap;
-    for (const k of sorted) {
-      if (overflow <= 0)
-        break;
-      if (k === keep || rank(k) === 1)
-        continue;
-      delete out[k];
-      overflow--;
-      changed = true;
-    }
+  const rank = (k) => {
+    const g = out[k].goal;
+    return g !== null && isLive(g.status) ? 1 : 0;
+  };
+  const sorted = keys.slice().sort((a, b) => rank(a) - rank(b) || out[a].receivedAt - out[b].receivedAt);
+  let overflow = keys.length - cap;
+  for (const k of sorted) {
+    if (overflow <= 0)
+      break;
+    if (k === keep || rank(k) === 1)
+      continue;
+    delete out[k];
+    overflow--;
+    changed = true;
   }
   return changed ? out : entries;
 }
+var shouldKeepPlanningPlaceholder = (previous, next, sessionID, fromPull) => isPlanningSnapshot(previous, sessionID) && fromPull && (next === null || !isLive(next.status));
+var PLANNING_PULL_GRACE_MS = 35000;
+var isStalePlanningPull = (planningAt, next, nowMs, graceMs = PLANNING_PULL_GRACE_MS) => planningAt !== undefined && nowMs - planningAt >= 0 && nowMs - planningAt < graceMs && (next === null || !isLive(next.status) || next.setAt < planningAt);
 function dropSessions(entries, ids, keep) {
   if (ids.length === 0)
     return entries;
+  const drop = new Set(ids);
   const out = {};
+  let removed = false;
   for (const [sessionID, entry] of Object.entries(entries)) {
-    if (ids.includes(sessionID) && sessionID !== keep)
+    if (drop.has(sessionID) && sessionID !== keep) {
+      removed = true;
       continue;
+    }
     out[sessionID] = entry;
   }
-  if (Object.keys(out).length === Object.keys(entries).length)
-    return entries;
-  return out;
+  return removed ? out : entries;
 }
 function terminalStampOf(existing, goal, now) {
   if (goal !== null && !isLive(goal.status))
@@ -5869,14 +5521,10 @@ var isNoticeKind = (value) => isString(value) && NOTICE_KINDS.has(value);
 var NOTICE_LEVELS = new Set(["info", "success", "warning", "error"]);
 var isNoticeLevel = (value) => isString(value) && NOTICE_LEVELS.has(value);
 var isUsageSnapshot = (value) => isRecord(value) && isFiniteNumber(value.cost) && isFiniteNumber(value.input) && isFiniteNumber(value.output) && isFiniteNumber(value.reasoning) && isFiniteNumber(value.cacheRead) && isFiniteNumber(value.cacheWrite);
-var VERIFY_CHECK_TYPES = new Set(["typecheck", "tests", "lint", "build", "smoke", "custom", "goal-declared"]);
-var VERIFY_SOURCES = new Set(["configured", "legacy", "goal-declared"]);
-var VERIFY_EVIDENCE_MODES = new Set(["command", "artifact", "either"]);
-var VERIFY_RUN_STATES = new Set(["executed", "artifact", "reused", "skipped"]);
 var VERIFY_EXECUTION_MODES = new Set(["command", "artifact", "reused-command", "reused-artifact", "skipped"]);
 var isStringArray = (value) => Array.isArray(value) && value.every(isString);
 var isVerifyCheckType = (value) => isString(value) && VERIFY_CHECK_TYPES.has(value);
-var isVerifyCheckEvidence = (value) => isRecord(value) && isString(value.id) && isVerifyCheckType(value.type) && isString(value.command) && isBoolean(value.required) && isBoolean(value.scoped) && isBoolean(value.pass) && (value.code === null || isFiniteNumber(value.code)) && (value.label === undefined || isString(value.label)) && (value.timedOut === undefined || isBoolean(value.timedOut)) && (value.tail === undefined || isString(value.tail)) && (value.reason === undefined || isString(value.reason)) && (value.source === undefined || isString(value.source) && VERIFY_SOURCES.has(value.source)) && (value.evidenceMode === undefined || isString(value.evidenceMode) && VERIFY_EVIDENCE_MODES.has(value.evidenceMode)) && (value.runState === undefined || isString(value.runState) && VERIFY_RUN_STATES.has(value.runState)) && (value.scopeDecision === undefined || isString(value.scopeDecision)) && (value.nextAction === undefined || isString(value.nextAction)) && (value.durationMs === undefined || isFiniteNumber(value.durationMs)) && (value.reused === undefined || isBoolean(value.reused)) && (value.reusedFrom === undefined || isString(value.reusedFrom)) && (value.parallel === undefined || isBoolean(value.parallel)) && (value.concurrency === undefined || isFiniteNumber(value.concurrency)) && (value.skipped === undefined || isBoolean(value.skipped)) && (value.artifactPatterns === undefined || isStringArray(value.artifactPatterns)) && (value.artifactMatched === undefined || isStringArray(value.artifactMatched)) && (value.artifactMissing === undefined || isStringArray(value.artifactMissing)) && (value.executionMode === undefined || isString(value.executionMode) && VERIFY_EXECUTION_MODES.has(value.executionMode));
+var isVerifyCheckEvidence = (value) => isRecord(value) && isString(value.id) && isVerifyCheckType(value.type) && isString(value.command) && isBoolean(value.required) && isBoolean(value.scoped) && isBoolean(value.pass) && (value.code === null || isFiniteNumber(value.code)) && (value.label === undefined || isString(value.label)) && (value.timedOut === undefined || isBoolean(value.timedOut)) && (value.tail === undefined || isString(value.tail)) && (value.reason === undefined || isString(value.reason)) && (value.source === undefined || isString(value.source) && VERIFY_CHECK_SOURCES.has(value.source)) && (value.evidenceMode === undefined || isString(value.evidenceMode) && VERIFY_EVIDENCE_MODES.has(value.evidenceMode)) && (value.runState === undefined || isString(value.runState) && VERIFY_RUN_STATES.has(value.runState)) && (value.scopeDecision === undefined || isString(value.scopeDecision)) && (value.nextAction === undefined || isString(value.nextAction)) && (value.durationMs === undefined || isFiniteNumber(value.durationMs)) && (value.reused === undefined || isBoolean(value.reused)) && (value.reusedFrom === undefined || isString(value.reusedFrom)) && (value.parallel === undefined || isBoolean(value.parallel)) && (value.concurrency === undefined || isFiniteNumber(value.concurrency)) && (value.skipped === undefined || isBoolean(value.skipped)) && (value.artifactPatterns === undefined || isStringArray(value.artifactPatterns)) && (value.artifactMatched === undefined || isStringArray(value.artifactMatched)) && (value.artifactMissing === undefined || isStringArray(value.artifactMissing)) && (value.executionMode === undefined || isString(value.executionMode) && VERIFY_EXECUTION_MODES.has(value.executionMode));
 var isVerifyTiming = (value) => isRecord(value) && isFiniteNumber(value.totalMs) && isFiniteNumber(value.concurrency) && isBoolean(value.parallel) && isFiniteNumber(value.reused) && isFiniteNumber(value.executed) && isFiniteNumber(value.skipped);
 var isMalformedGoalCheck = (value) => isRecord(value) && isString(value.raw) && isString(value.reason);
 var isVerdictVerificationMatrix = (value) => isRecord(value) && isString(value.profile) && isBoolean(value.broadGoal) && isBoolean(value.pass) && Array.isArray(value.checks) && value.checks.every(isVerifyCheckEvidence) && Array.isArray(value.missing) && value.missing.every(isString) && (value.coverageReasons === undefined || isStringArray(value.coverageReasons)) && (value.timing === undefined || isVerifyTiming(value.timing)) && (value.malformedGoalChecks === undefined || Array.isArray(value.malformedGoalChecks) && value.malformedGoalChecks.every(isMalformedGoalCheck));
@@ -6029,7 +5677,7 @@ var defaultSleep = (ms, signal) => new Promise((resolve) => {
   };
   signal.addEventListener("abort", onAbort, { once: true });
 });
-var errorMessage = (error) => error instanceof Error ? error.message : String(error);
+var errorMessage2 = (error) => error instanceof Error ? error.message : String(error);
 var pumpRpcEvent = async (options) => {
   const { name, signal, subscribe, handle, catchUp, log } = options;
   const sleep = options.sleep ?? defaultSleep;
@@ -6041,33 +5689,33 @@ var pumpRpcEvent = async (options) => {
         try {
           handle(event);
         } catch (error) {
-          log?.("rpc event handler failed", { name, error: errorMessage(error) });
+          log?.("rpc event handler failed", { name, error: errorMessage2(error) });
         }
       }
       log?.("rpc event stream ended", { name });
     } catch (error) {
-      log?.("rpc event stream dropped", { name, error: errorMessage(error) });
+      log?.("rpc event stream dropped", { name, error: errorMessage2(error) });
     }
     if (signal.aborted)
       return;
     try {
       catchUp?.();
     } catch (error) {
-      log?.("rpc catch-up failed", { name, error: errorMessage(error) });
+      log?.("rpc catch-up failed", { name, error: errorMessage2(error) });
     }
     await sleep(RPC_RESUBSCRIBE_DELAY_MS, signal);
   }
 };
 
 // src/core/mirror.ts
-import { mkdirSync, readFileSync as readFileSync2, renameSync, rmSync, writeFileSync as writeFileSync6 } from "fs";
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync as writeFileSync3 } from "fs";
 import { tmpdir } from "os";
-import { join as join6 } from "path";
+import { join as join3 } from "path";
 var fileFor = (dir, sessionID) => {
   const safe = sessionID.replace(/[^a-zA-Z0-9_-]/g, "_");
-  return join6(dir, `${safe}.json`);
+  return join3(dir, `${safe}.json`);
 };
-var createGoalMirror = (dir = join6(tmpdir(), "goal-loop-mirror")) => {
+var createGoalMirror = (dir = join3(tmpdir(), "goal-loop-mirror")) => {
   const ensured = new Set;
   const write = (snapshot) => {
     const target = fileFor(dir, snapshot.sessionID);
@@ -6078,7 +5726,7 @@ var createGoalMirror = (dir = join6(tmpdir(), "goal-loop-mirror")) => {
         mkdirSync(dir, { recursive: true, mode: 448 });
         ensured.add(dir);
       }
-      writeFileSync6(tmp, body, { mode: 384 });
+      writeFileSync3(tmp, body, { mode: 384 });
       renameSync(tmp, target);
     };
     try {
@@ -6100,7 +5748,7 @@ var createGoalMirror = (dir = join6(tmpdir(), "goal-loop-mirror")) => {
   };
   const read = (sessionID, directory) => {
     try {
-      const raw = readFileSync2(fileFor(dir, sessionID), "utf8");
+      const raw = readFileSync(fileFor(dir, sessionID), "utf8");
       const parsed = parseGoalSnapshot(JSON.parse(raw));
       if (!parsed)
         return;
@@ -6115,6 +5763,939 @@ var createGoalMirror = (dir = join6(tmpdir(), "goal-loop-mirror")) => {
   };
   return { write, remove, read };
 };
+
+// src/tui-actions.ts
+import { readFileSync as readFileSync3, readdirSync as readdirSync2, statSync } from "fs";
+import { join as join7 } from "path";
+
+// src/core/dossier-review.ts
+import { writeFileSync as writeFileSync4 } from "fs";
+import { join as join4, resolve as resolve3 } from "path";
+var reviewName = (nowMs, attempt = 0) => artifactName("dossier-review", nowMs, attempt);
+var { verifyCell: verifyCell3, reachCell: reachCell2, signCell: signCell2 } = recordCellHelpers();
+var reviewVerdict = (exists, onThisLine, underSeal) => {
+  if (exists === "no" || onThisLine === "no" || underSeal === "no")
+    return "gaps";
+  if (exists === "yes" && onThisLine === "yes" && underSeal === "yes")
+    return "clean";
+  return "unknown";
+};
+function buildReview(goal, directory, nowMs, probes = {}) {
+  const verifyProbe = probes.verify ?? gitCatFileProbe(directory);
+  const reachProbe = probes.reach ?? gitAncestorProbe(directory);
+  const signProbe = probes.sign ?? gitSignProbe(directory);
+  const verification = verifyRecord(goal, verifyProbe);
+  const reach = reachRecord(goal, reachProbe);
+  const sign = signRecord(goal, signProbe);
+  const base = buildLoopDossier(goal, nowMs);
+  const stamp = stampOf(nowMs);
+  const reachBySha = new Map(reach.checks.map((check) => [check.sha, check.status]));
+  const signBySha = new Map(sign.checks.map((check) => [check.sha, check.status]));
+  const rows = verification.checks.map((check) => {
+    const exists = verifyCell3(check.status);
+    const onThisLine = reachCell2(reachBySha.get(check.sha) ?? "unknown");
+    const underSeal = signCell2(signBySha.get(check.sha) ?? "unknown");
+    return {
+      sha: check.sha,
+      shortSha: shortSha(check.sha),
+      iterations: check.iterations,
+      exists,
+      onThisLine,
+      underSeal,
+      verdict: reviewVerdict(exists, onThisLine, underSeal)
+    };
+  });
+  const clean = rows.filter((row) => row.verdict === "clean").length;
+  const gaps = rows.filter((row) => row.verdict === "gaps").length;
+  const unknown = rows.filter((row) => row.verdict === "unknown").length;
+  const appendix = [
+    "## Review (freshly probed at generation time)",
+    "",
+    `_The bookkeeping above is the record's own and was not re-verified; it renders what the record holds, nothing more. The shas the record quotes were re-probed here, fresh, against \`${directory}\`, at ${stamp}: existence (the object store), ancestry (this line), and the seal (git's signature check). A verdict of \`clean\` requires a yes on all three; any \`no\` makes the row \`gaps\`; a row with no \`no\` but at least one question git could not answer is \`unknown\` \u2014 never collapsed into either. Existence is not ancestry, ancestry is not the seal; no question substitutes for another._`,
+    ""
+  ];
+  if (verification.unique === 0) {
+    appendix.push("The record quotes no sha \u2014 there is nothing to review. An unshaded record cannot be re-probed, and none is claimed.", "");
+  } else {
+    appendix.push("| sha | quoted at | exists | on this line | under seal | verdict |", "| --- | --- | --- | --- | --- | --- |");
+    for (const row of rows) {
+      appendix.push(`| ${row.shortSha} | ${iterationList(row.iterations)} | ${row.exists} | ${row.onThisLine} | ${row.underSeal} | ${row.verdict} |`);
+    }
+    appendix.push("", `- Existence: ${verification.present} of ${verification.unique} shas resolve (${verification.unknown} unknown \u2014 never counted as present)`, `- Ancestry: ${reach.ancestors} of ${reach.unique} shas on this line (${reach.unknown} unknown)`, `- Seal: ${sign.verified} of ${sign.unique} shas under seal (${sign.unverified} not under seal \u2014 not an accusation; ${sign.unknown} unknown)`, `- All three: ${clean} of ${verification.unique} shas clean (present \xB7 on this line \xB7 under seal) \xB7 ${gaps} with gaps \xB7 ${unknown} unverifiable`, "", "A clean row is the strongest thing this review can say: the object resolves, it belongs to this line, and git verified a signature on it at generation time. Anything short of that is not an accusation \u2014 existence is not ancestry, ancestry is not the seal, and most commits are unsigned. This file is a snapshot of the record's receipts at the moment it was written, and the stamp above travels with it. For a re-check weeks later, `goal.dossier.attest` answers whether what a sealed copy attests still holds.", "");
+  }
+  const markdown = `${base}
+
+${appendix.join(`
+`)}`;
+  return { markdown, verification, reach, sign, unique: verification.unique, clean, gaps, unknown };
+}
+function exportReview(goal, nowMs, dir, probes = {}) {
+  const targetDir = resolve3(dir);
+  const review = buildReview(goal, targetDir, nowMs, probes);
+  const bytes = Buffer.byteLength(review.markdown, "utf8");
+  for (let attempt = 0;attempt < MAX_EXPORT_ATTEMPTS; attempt++) {
+    const path = join4(targetDir, reviewName(nowMs, attempt));
+    try {
+      writeFileSync4(path, review.markdown, { encoding: "utf8", flag: "wx" });
+      return {
+        path,
+        bytes,
+        attempts: attempt + 1,
+        unique: review.unique,
+        clean: review.clean,
+        gaps: review.gaps,
+        unknown: review.unknown,
+        verification: review.verification,
+        reach: review.reach,
+        sign: review.sign
+      };
+    } catch (error) {
+      const code = error?.code;
+      if (code === "EEXIST")
+        continue;
+      throw error;
+    }
+  }
+  throw new Error(`no free review filename after ${MAX_EXPORT_ATTEMPTS} attempts in ${targetDir}`);
+}
+function reviewSummaryLine(review) {
+  if (review.unique === 0)
+    return "record quotes no shas to review";
+  if (review.gaps > 0)
+    return `review written with gaps: ${review.clean} of ${review.unique} shas clean on all three questions`;
+  if (review.unknown > 0)
+    return `review unverifiable: ${review.clean} of ${review.unique} shas clean, ${review.unknown} could not answer`;
+  return `review written: ${review.clean} of ${review.unique} shas clean on all three questions`;
+}
+
+// src/core/spend-ledger.ts
+import { writeFileSync as writeFileSync5 } from "fs";
+import { join as join5, resolve as resolve4 } from "path";
+var spendLedgerName = (nowMs, attempt = 0) => artifactName("spend-ledger", nowMs, attempt);
+var measuredSpend = (entry) => {
+  const spend = entry.spend;
+  if (!spend)
+    return;
+  const fields = [spend.cost, spend.input, spend.output, spend.reasoning, spend.cacheRead, spend.cacheWrite];
+  if (!fields.every((n) => Number.isFinite(n) && n >= 0))
+    return;
+  return spend;
+};
+var count = (n) => n !== undefined && Number.isFinite(n) ? String(Math.round(n)) : GAP;
+var costCell = (spend) => spend ? formatCost(spend.cost) : GAP;
+var toolsCell = (entry) => Number.isFinite(entry.toolCalls) ? String(entry.toolCalls) : GAP;
+var totalsOf = (entries) => {
+  let measured = 0;
+  let turns = 0;
+  let tools = 0;
+  let cost = 0;
+  let input = 0;
+  let output = 0;
+  let reasoning = 0;
+  let cacheRead = 0;
+  let cacheWrite = 0;
+  for (const entry of entries) {
+    turns += Number.isFinite(entry.turns) ? entry.turns : 0;
+    tools += Number.isFinite(entry.toolCalls) ? entry.toolCalls : 0;
+    const spend = measuredSpend(entry);
+    if (!spend)
+      continue;
+    measured += 1;
+    cost += spend.cost;
+    input += spend.input;
+    output += spend.output;
+    reasoning += spend.reasoning;
+    cacheRead += spend.cacheRead;
+    cacheWrite += spend.cacheWrite;
+  }
+  if (measured === 0)
+    return { iterations: entries.length, measured, turns, tools };
+  return { iterations: entries.length, measured, turns, tools, cost, input, output, reasoning, cacheRead, cacheWrite };
+};
+function buildSpendLedger(goal, nowMs) {
+  const entries = goal.loopHistory ?? [];
+  const dropped = goal.loopHistoryDropped ?? 0;
+  const isLoop = Boolean(goal.loopEnabled);
+  const totals = totalsOf(entries);
+  const stamp = isoOf(nowMs);
+  const lines = [];
+  lines.push(isLoop ? "# Goal loop spend ledger" : "# Goal spend ledger");
+  lines.push("");
+  lines.push(`_Generated ${stamp} from the goal-loop plugin's record. Every figure below is the record's own measurement \u2014 the usage delta the harness attributed to each landed iteration (arm \u2192 advance). A measurement the record does not carry renders as ${GAP}, never estimated. The session id is omitted on purpose._`);
+  lines.push("");
+  lines.push(isLoop ? "## Objective" : "## Condition");
+  lines.push("");
+  lines.push(...quote(isLoop ? goal.loopObjective ?? goal.condition : goal.condition));
+  lines.push("");
+  lines.push(dropped > 0 ? `## Per-iteration spend (${entries.length} most recent of ${entries.length + dropped} landed iterations)` : `## Per-iteration spend (${entries.length} landed iteration${entries.length === 1 ? "" : "s"})`);
+  if (dropped > 0)
+    lines.push(`_${dropped} earlier iteration record${dropped === 1 ? "" : "s"} dropped by the loop-history retention cap (${MAX_LOOP_HISTORY_ENTRIES} kept); the rows and totals below cover the retained iterations only \u2014 the dropped ones are not $0.00, they are unknown._`);
+  lines.push("");
+  if (entries.length === 0) {
+    lines.push("None \u2014 this record has not landed an iteration, so there is nothing to attribute. No figures are claimed.");
+    lines.push("");
+  } else {
+    lines.push("| iteration | ended | spend | in | out | reasoning | cache read | cache write | tools | sha |", "| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |");
+    for (const entry of entries) {
+      const spend = measuredSpend(entry);
+      lines.push(`| v${entry.version} | ${isoOf(entry.endedAt)} | ${costCell(spend)} | ${count(spend?.input)} | ${count(spend?.output)} | ${count(spend?.reasoning)} | ${count(spend?.cacheRead)} | ${count(spend?.cacheWrite)} | ${toolsCell(entry)} | ${shortSha(entry.sha)} |`);
+    }
+    lines.push("");
+  }
+  lines.push("## Totals");
+  lines.push("");
+  lines.push(`- Iterations recorded: ${totals.iterations}${dropped > 0 ? ` (+ ${dropped} dropped by the retention cap; totals cover the retained iterations only)` : ""}`);
+  lines.push(`- Turns: ${totals.turns} \xB7 Tool calls: ${totals.tools}`);
+  if (totals.measured === 0) {
+    lines.push("- Spend across iterations: no iteration carried a measurement");
+    lines.push(`- In tokens: ${GAP} \xB7 Out tokens: ${GAP} \xB7 Reasoning tokens: ${GAP}`);
+    lines.push(`- Cache read: ${GAP} \xB7 Cache write: ${GAP}`);
+  } else {
+    const partial = totals.measured < totals.iterations ? ` (${totals.measured} of ${totals.iterations} iterations measured \u2014 the unmeasured iterations are not $0.00; they are unknown)` : "";
+    lines.push(`- Spend across measured iterations: ${formatCost(totals.cost ?? 0)}${partial}`);
+    lines.push(`- In tokens: ${count(totals.input)} \xB7 Out tokens: ${count(totals.output)} \xB7 Reasoning tokens: ${count(totals.reasoning)}`);
+    lines.push(`- Cache read: ${count(totals.cacheRead)} \xB7 Cache write: ${count(totals.cacheWrite)}`);
+    if (totals.measured < totals.iterations) {
+      lines.push(`- Token totals sum the ${totals.measured} measured iterations only; adding the ${totals.iterations - totals.measured} unmeasured ones would be inventing numbers.`);
+    }
+  }
+  lines.push("");
+  lines.push("---");
+  lines.push("_goal-loop spend ledger \xB7 source: plugin record \xB7 the figures are the record's own measurements; cost is the host's reported usage delta, not a re-price; nothing was estimated, sampled, probed, or re-verified; an iteration counts as measured only when its full usage snapshot is present and finite; a measurement the record does not carry renders as " + GAP + "._");
+  return {
+    markdown: lines.join(`
+`),
+    iterations: totals.iterations,
+    measured: totals.measured,
+    ...totals.cost !== undefined ? { spendTotal: totals.cost } : {}
+  };
+}
+function exportSpendLedger(goal, nowMs, dir) {
+  const targetDir = resolve4(dir);
+  const ledger = buildSpendLedger(goal, nowMs);
+  const bytes = Buffer.byteLength(ledger.markdown, "utf8");
+  for (let attempt = 0;attempt < MAX_EXPORT_ATTEMPTS; attempt++) {
+    const path = join5(targetDir, spendLedgerName(nowMs, attempt));
+    try {
+      writeFileSync5(path, ledger.markdown, { encoding: "utf8", flag: "wx" });
+      return {
+        path,
+        bytes,
+        attempts: attempt + 1,
+        iterations: ledger.iterations,
+        measured: ledger.measured,
+        ...ledger.spendTotal !== undefined ? { spendTotal: ledger.spendTotal } : {}
+      };
+    } catch (error) {
+      const code = error?.code;
+      if (code === "EEXIST")
+        continue;
+      throw error;
+    }
+  }
+  throw new Error(`no free spend ledger filename after ${MAX_EXPORT_ATTEMPTS} attempts in ${targetDir}`);
+}
+function spendSummaryLine(result) {
+  if (result.iterations === 0)
+    return "no landed iterations to report";
+  if (result.measured === 0)
+    return `spend ledger written: no iteration carried a measurement (0 of ${result.iterations})`;
+  const spend = formatCost(result.spendTotal ?? 0);
+  if (result.measured < result.iterations)
+    return `spend ledger written: ${spend} across ${result.measured} of ${result.iterations} measured iterations`;
+  return `spend ledger written: ${spend} across ${result.iterations} iteration${result.iterations === 1 ? "" : "s"}`;
+}
+
+// src/core/dossier-index.ts
+import { createHash } from "crypto";
+import { readdirSync, readFileSync as readFileSync2, writeFileSync as writeFileSync6 } from "fs";
+import { join as join6, resolve as resolve5 } from "path";
+var dossierIndexName = (nowMs, attempt = 0) => artifactName("dossier-index", nowMs, attempt);
+var STAMP = String.raw`\d{8}-\d{6}(?:-[1-9]\d*)?`;
+var KIND_PATTERNS = [
+  ["dossier", new RegExp(`^goal-dossier-${STAMP}\\.md$`)],
+  ["review", new RegExp(`^goal-dossier-review-${STAMP}\\.md$`)],
+  ["sealed", new RegExp(`^goal-dossier-sealed-${STAMP}\\.md$`)],
+  ["spend ledger", new RegExp(`^goal-spend-ledger-${STAMP}\\.md$`)],
+  ["index", new RegExp(`^goal-dossier-index-${STAMP}\\.md$`)]
+];
+var dossierArtifactKind = (name) => {
+  for (const [kind, pattern] of KIND_PATTERNS) {
+    if (pattern.test(name))
+      return kind;
+  }
+  return;
+};
+function scanDossierArtifacts(dir) {
+  const targetDir = resolve5(dir);
+  const candidates = [];
+  for (const item of readdirSync(targetDir, { withFileTypes: true })) {
+    if (!item.isFile())
+      continue;
+    if (dossierArtifactKind(item.name) === undefined)
+      continue;
+    candidates.push(item.name);
+  }
+  const entries = [];
+  let skipped = 0;
+  for (const name of candidates) {
+    const kind = dossierArtifactKind(name);
+    try {
+      const bytes = readFileSync2(join6(targetDir, name));
+      entries.push({ name, kind, bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") });
+    } catch {
+      skipped += 1;
+    }
+  }
+  entries.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+  return { entries, skipped };
+}
+function buildDossierIndex(entries, nowMs, skipped = 0) {
+  if (!Number.isInteger(skipped) || skipped < 0)
+    throw new Error(`skipped must be a non-negative integer, got ${formatValue(skipped)}`);
+  const stamp = isoOf(nowMs);
+  const totalBytes = entries.reduce((sum, entry) => sum + entry.bytes, 0);
+  const lines = [];
+  lines.push("# Goal dossier index");
+  lines.push("");
+  lines.push(`_Generated ${stamp}. Every row below is a file the dossier family exported into the directory this index was written from, read at generation time: file name, kind, bytes (UTF-8), sha256 of the exact bytes read. The directory path is omitted on purpose. This index inventories; it does not verify \u2014 a file can change after generation and a matching digest here proves nothing about the present._`);
+  lines.push("");
+  lines.push(`## Artifacts (${entries.length} file${entries.length === 1 ? "" : "s"}, ${totalBytes} bytes)`);
+  lines.push("");
+  if (entries.length === 0) {
+    lines.push("None \u2014 the directory holds no exported dossier artifacts the dossier family recognizes. No rows are claimed.");
+    lines.push("");
+  } else {
+    lines.push("| file | kind | bytes | sha256 |", "| --- | --- | ---: | --- |");
+    for (const entry of entries) {
+      lines.push(`| ${inlineCode(entry.name)} | ${entry.kind} | ${entry.bytes} | ${entry.sha256} |`);
+    }
+    lines.push("");
+  }
+  if (skipped > 0) {
+    lines.push(`- ${skipped} matching file${skipped === 1 ? "" : "s"} could not be read (I/O error) and ${skipped === 1 ? "is" : "are"} not listed above; ${skipped === 1 ? "its" : "their"} bytes and digests are unknown, not zero.`);
+    lines.push("");
+  }
+  lines.push("---");
+  lines.push("_goal-loop dossier index \xB7 source: the files at generation time \xB7 sha256 computed over the exact bytes read \xB7 nothing was estimated or inferred; an unreadable file is counted, never guessed \xB7 this index inventories, it does not verify._");
+  return {
+    markdown: lines.join(`
+`),
+    artifacts: entries.length,
+    bytes: totalBytes,
+    skipped
+  };
+}
+function exportDossierIndex(nowMs, dir) {
+  const targetDir = resolve5(dir);
+  const scan = scanDossierArtifacts(targetDir);
+  const built = buildDossierIndex(scan.entries, nowMs, scan.skipped);
+  const bytes = Buffer.byteLength(built.markdown, "utf8");
+  for (let attempt = 0;attempt < MAX_EXPORT_ATTEMPTS; attempt++) {
+    const path = join6(targetDir, dossierIndexName(nowMs, attempt));
+    try {
+      writeFileSync6(path, built.markdown, { encoding: "utf8", flag: "wx" });
+      return {
+        path,
+        bytes,
+        attempts: attempt + 1,
+        artifacts: built.artifacts,
+        artifactBytes: built.bytes,
+        skipped: built.skipped
+      };
+    } catch (error) {
+      const code = error?.code;
+      if (code === "EEXIST")
+        continue;
+      throw error;
+    }
+  }
+  throw new Error(`no free dossier index filename after ${MAX_EXPORT_ATTEMPTS} attempts in ${targetDir}`);
+}
+function dossierIndexSummaryLine(result) {
+  const skipped = result.skipped > 0 ? `; ${result.skipped} unreadable (not listed)` : "";
+  if (result.artifacts === 0)
+    return `dossier index written: no artifacts found${skipped}`;
+  return `dossier index written: ${result.artifacts} artifact${result.artifacts === 1 ? "" : "s"}, ${result.artifactBytes} bytes${skipped}`;
+}
+
+// src/core/dossier-attest.ts
+var ANSWERS = new Set(["yes", "no", "unknown"]);
+var cellAnswer = (raw) => {
+  const flat = raw.trim().toLowerCase();
+  return ANSWERS.has(flat) ? flat : "unknown";
+};
+var splitRow = (line) => {
+  const cells = line.split("|").map((cell) => cell.trim());
+  if (cells.length >= 2 && cells[0] === "" && cells[cells.length - 1] === "")
+    cells.shift(), cells.pop();
+  if (cells.length < 5)
+    return null;
+  return cells;
+};
+var SHA_RE = /^[0-9a-f]{4,64}$/i;
+function parseAttestationAppendix(markdown) {
+  const lines = markdown.split(`
+`);
+  const heading = lines.findIndex((line) => line.startsWith("## Attestation"));
+  if (heading === -1)
+    return { kind: "unsealed" };
+  const section = [];
+  for (let index = heading + 1;index < lines.length; index += 1) {
+    const line = lines[index];
+    if (line.startsWith("## "))
+      break;
+    section.push(line);
+  }
+  const body = section.join(`
+`);
+  const stamp = /at ([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.Z+-]+):/.exec(body)?.[1];
+  const directory = /against `([^`]+)`, at/.exec(body)?.[1];
+  const gap = section.some((line) => line.includes("The record quotes no sha"));
+  const rows = [];
+  let malformed = 0;
+  for (const line of section) {
+    if (!line.startsWith("|"))
+      continue;
+    const cells = splitRow(line);
+    if (!cells) {
+      malformed += 1;
+      continue;
+    }
+    const first = cells[0].toLowerCase();
+    if (first === "sha" || /^-+$/.test(first))
+      continue;
+    const sha = cells[0];
+    if (!SHA_RE.test(sha)) {
+      malformed += 1;
+      continue;
+    }
+    const iterations = (cells[1].match(/\d+/g) ?? []).map(Number);
+    rows.push({
+      sha,
+      iterations,
+      exists: cellAnswer(cells[2]),
+      onThisLine: cellAnswer(cells[3]),
+      underSeal: cellAnswer(cells[4])
+    });
+  }
+  if (rows.length === 0 && !gap)
+    return { kind: "unparsable" };
+  return { kind: "sealed", stamp, directory, rows, gap, malformed };
+}
+var { verifyCell: verifyCell4, reachCell: reachCell3, signCell: signCell3 } = recordCellHelpers();
+var shasAsGoal = (rows) => ({
+  loopHistory: rows.flatMap((row, index) => row.iterations.length > 0 ? row.iterations.map((version) => ({ version, sha: row.sha })) : [{ version: index + 1, sha: row.sha }])
+});
+function attestSealedDossier(markdown, directory, probes = {}) {
+  const parsed = parseAttestationAppendix(markdown);
+  if (parsed.kind !== "sealed")
+    return parsed;
+  const verifyProbe = probes.verify ?? gitCatFileProbe(directory);
+  const reachProbe = probes.reach ?? gitAncestorProbe(directory);
+  const signProbe = probes.sign ?? gitSignProbe(directory);
+  const seen = new Set;
+  const uniqRows = parsed.rows.filter((row) => {
+    if (seen.has(row.sha))
+      return false;
+    seen.add(row.sha);
+    return true;
+  });
+  const synthetic = shasAsGoal(uniqRows);
+  const verification = verifyRecord(synthetic, verifyProbe);
+  const reach = reachRecord(synthetic, reachProbe);
+  const sign = signRecord(synthetic, signProbe);
+  const reachBySha = new Map(reach.checks.map((check) => [check.sha, check.status]));
+  const signBySha = new Map(sign.checks.map((check) => [check.sha, check.status]));
+  const verifyBySha = new Map(verification.checks.map((check) => [check.sha, check.status]));
+  const rows = uniqRows.map((row) => {
+    const now = {
+      exists: verifyCell4(verifyBySha.get(row.sha) ?? "unknown"),
+      onThisLine: reachCell3(reachBySha.get(row.sha) ?? "unknown"),
+      underSeal: signCell3(signBySha.get(row.sha) ?? "unknown")
+    };
+    const seal = { exists: row.exists, onThisLine: row.onThisLine, underSeal: row.underSeal };
+    const wasClean = seal.exists === "yes" && seal.onThisLine === "yes" && seal.underSeal === "yes";
+    const flipped = [];
+    if (wasClean) {
+      if (now.exists === "no")
+        flipped.push("exists");
+      if (now.onThisLine === "no")
+        flipped.push("on this line");
+      if (now.underSeal === "no")
+        flipped.push("under seal");
+    }
+    const nowClean = now.exists === "yes" && now.onThisLine === "yes" && now.underSeal === "yes";
+    const verdict = !wasClean ? "was-not-clean" : flipped.length > 0 ? "regressed" : nowClean ? "held" : "unknown";
+    return { sha: row.sha, shortSha: shortSha(row.sha), iterations: row.iterations, seal, now, verdict, flipped };
+  });
+  const sealedClean = rows.filter((row) => row.seal.exists === "yes" && row.seal.onThisLine === "yes" && row.seal.underSeal === "yes").length;
+  const held = rows.filter((row) => row.verdict === "held").length;
+  const regressed = rows.filter((row) => row.verdict === "regressed").length;
+  const unknown = rows.filter((row) => row.verdict === "unknown").length;
+  const wasNotClean = rows.length - sealedClean;
+  return {
+    kind: "attested",
+    rows,
+    unique: rows.length,
+    sealedClean,
+    held,
+    regressed,
+    unknown,
+    wasNotClean,
+    stamp: parsed.stamp,
+    sealDirectory: parsed.directory,
+    malformed: parsed.malformed
+  };
+}
+function attestSummaryLine(attestation) {
+  if (attestation.unique === 0)
+    return "sealed dossier quotes no shas to attest";
+  if (attestation.sealedClean === 0)
+    return `nothing held: no sha was clean at seal time (${attestation.unique} quoted)`;
+  if (attestation.regressed > 0)
+    return `attestation drifted: ${attestation.regressed} of ${attestation.sealedClean} sealed-clean shas regressed since sealing`;
+  if (attestation.unknown > 0)
+    return `attestation unverifiable: ${attestation.held} held, ${attestation.unknown} of ${attestation.sealedClean} could not answer`;
+  return `attestation holds: ${attestation.held} of ${attestation.sealedClean} sealed-clean shas still clean`;
+}
+function attestationReportMarkdown(result, nowMs, directory, fileName) {
+  const stamp = stampOf(nowMs);
+  const lines = [
+    "# /goal-loop sealed dossier attestation",
+    "",
+    `- Generated: ${stamp}`,
+    `- Repository: ${directory}`,
+    `- File re-attested: ${fileName}`,
+    result.stamp !== undefined ? `- Sealed at: ${result.stamp}${result.sealDirectory !== undefined ? ` against ${result.sealDirectory}` : ""}` : "- Sealed at: unknown (the appendix does not carry a stamp this parser can read)",
+    `- Shas named by the appendix: ${result.unique} unique`,
+    "",
+    "| sha | sealed (exists \xB7 line \xB7 seal) | now (exists \xB7 line \xB7 seal) | verdict |",
+    "| --- | --- | --- | --- |"
+  ];
+  for (const row of result.rows) {
+    const sealCell = `${row.seal.exists} \xB7 ${row.seal.onThisLine} \xB7 ${row.seal.underSeal}`;
+    const nowCell = `${row.now.exists} \xB7 ${row.now.onThisLine} \xB7 ${row.now.underSeal}`;
+    const verdictCell = row.verdict === "regressed" ? `regressed (${row.flipped.join(", ")})` : row.verdict;
+    lines.push(`| ${row.shortSha} | ${sealCell} | ${nowCell} | ${verdictCell} |`);
+  }
+  if (result.rows.length === 0)
+    lines.push("| \u2014 | \u2014 | \u2014 | \u2014 |");
+  lines.push("", `- Held: ${result.held} \xB7 regressed: ${result.regressed} \xB7 unknown: ${result.unknown} \xB7 was not clean at seal time: ${result.wasNotClean}`, result.malformed > 0 ? `- ${result.malformed} table-looking row(s) could not be read and are excluded from every count` : "- Every table row parsed", "", "This report re-probes the shas the file names \u2014 existence in the object store, membership of this line of history, and git's signature check \u2014 against the repository at the directory named above, right now. It cannot audit the bytes around the table: an editor who rewrites appendix cells can make the file claim anything, and this report detects divergence between seal-time answers and fresh ones, not tampering with the file itself. A verdict of `regressed` means git answered yes at seal time and no right now on the named question; `unknown` means git could not answer and is counted as neither; `was-not-clean` is a sha that never qualified. Existence is not ancestry, ancestry is not the seal. The strongest thing this document can say is `held`, and it says only that three `git` processes answered yes to three questions, now.", "");
+  return lines.join(`
+`);
+}
+var SEALED_NAME_RE = /^goal-dossier-sealed-(\d{8})-(\d{6})(?:-([1-9]\d*))?\.md$/;
+function sealedDossierCandidates(names, statMtimeMs) {
+  const out = [];
+  for (const name of names) {
+    if (!SEALED_NAME_RE.test(name))
+      continue;
+    out.push({ name, mtimeMs: statMtimeMs(name) });
+  }
+  return out;
+}
+function selectNewestSealedDossier(entries) {
+  let best;
+  for (const entry of entries) {
+    const match = SEALED_NAME_RE.exec(entry.name);
+    if (!match)
+      continue;
+    const stamp = `${match[1]}-${match[2]}`;
+    const attempt = match[3] !== undefined ? Number(match[3]) : 1;
+    if (!best || stamp > best.stamp || stamp === best.stamp && attempt > best.attempt || stamp === best.stamp && attempt === best.attempt && entry.mtimeMs > best.mtimeMs) {
+      best = { name: entry.name, stamp, attempt, mtimeMs: entry.mtimeMs };
+    }
+  }
+  return best?.name;
+}
+
+// src/tui-actions.ts
+function createDossierActions(deps) {
+  const { safeToast, toastError } = deps;
+  const copyReport = (report) => {
+    try {
+      return deps.copyToClipboard(report);
+    } catch {
+      return false;
+    }
+  };
+  const exportDossier = (sessionID, goal) => {
+    if (!goal || !sessionID)
+      return;
+    try {
+      const result = exportLoopDossier(goal, Date.now(), process.cwd());
+      safeToast({ title: "dossier exported", message: result.path, variant: "success", duration: 5000, sessionID });
+    } catch (error) {
+      toastError("export failed", error, sessionID);
+    }
+  };
+  const verifyRecordAction = (sessionID, goal) => {
+    if (!goal || !sessionID)
+      return;
+    try {
+      const directory = process.cwd();
+      const verification = verifyRecord(goal, gitCatFileProbe(directory));
+      const report = verifyReportMarkdown(goal, verification, Date.now(), directory);
+      const copied = copyReport(report);
+      const summary = verifySummaryLine(verification);
+      const title = verification.missing > 0 ? "record does not verify" : verification.unknown > 0 ? "record unverifiable" : verification.unique === 0 ? "nothing to verify" : "record verified";
+      const variant = verification.missing > 0 ? "error" : verification.unknown > 0 ? "warning" : "success";
+      safeToast({ title, message: copied ? summary : `${summary} \xB7 clipboard unavailable`, variant, duration: 6000, sessionID });
+      return verification;
+    } catch (error) {
+      toastError("verify failed", error, sessionID);
+      return;
+    }
+  };
+  const reachRecordAction = (sessionID, goal) => {
+    if (!goal || !sessionID)
+      return;
+    try {
+      const directory = process.cwd();
+      const reach = reachRecord(goal, gitAncestorProbe(directory));
+      const report = reachReportMarkdown(goal, reach, Date.now(), directory);
+      const copied = copyReport(report);
+      const summary = reachSummaryLine(reach);
+      const title = reach.unreached > 0 ? "record does not reach HEAD" : reach.unknown > 0 ? "record unverifiable" : reach.unique === 0 ? "nothing to place" : "record reaches HEAD";
+      const variant = reach.unreached > 0 || reach.unknown > 0 ? "warning" : "success";
+      safeToast({ title, message: copied ? summary : `${summary} \xB7 clipboard unavailable`, variant, duration: 6000, sessionID });
+      return reach;
+    } catch (error) {
+      toastError("reach check failed", error, sessionID);
+      return;
+    }
+  };
+  const signRecordAction = (sessionID, goal) => {
+    if (!goal || !sessionID)
+      return;
+    try {
+      const directory = process.cwd();
+      const sign = signRecord(goal, gitSignProbe(directory));
+      const report = signReportMarkdown(goal, sign, Date.now(), directory);
+      const copied = copyReport(report);
+      const summary = signSummaryLine(sign);
+      const title = sign.unverified > 0 ? "record not under seal" : sign.unknown > 0 ? "record unverifiable" : sign.unique === 0 ? "nothing to attest" : "record under seal";
+      const variant = sign.unverified > 0 || sign.unknown > 0 ? "warning" : "success";
+      safeToast({ title, message: copied ? summary : `${summary} \xB7 clipboard unavailable`, variant, duration: 6000, sessionID });
+      return sign;
+    } catch (error) {
+      toastError("sign check failed", error, sessionID);
+      return;
+    }
+  };
+  const attestSealedDossierAction = (sessionID) => {
+    try {
+      const directory = process.cwd();
+      let candidates;
+      try {
+        candidates = sealedDossierCandidates(readdirSync2(directory), (name) => {
+          try {
+            return statSync(join7(directory, name)).mtimeMs;
+          } catch {
+            return 0;
+          }
+        });
+      } catch (error) {
+        toastError("attest failed", error, sessionID, `cannot read ${directory}`);
+        return;
+      }
+      const newest = selectNewestSealedDossier(candidates);
+      if (!newest) {
+        safeToast({ title: "no sealed dossier", message: `no goal-dossier-sealed-*.md in ${directory} \u2014 seal one first with goal.dossier.seal`, variant: "warning", duration: 6000, sessionID });
+        return;
+      }
+      let markdown;
+      try {
+        markdown = readFileSync3(join7(directory, newest), "utf8");
+      } catch (error) {
+        toastError("attest failed", error, sessionID, `cannot read ${newest}`);
+        return;
+      }
+      const result = attestSealedDossier(markdown, directory);
+      if (result.kind === "unsealed") {
+        safeToast({ title: "not a sealed dossier", message: `${newest} carries no attestation appendix`, variant: "warning", duration: 6000, sessionID });
+        return;
+      }
+      if (result.kind === "unparsable") {
+        safeToast({ title: "attestation unreadable", message: `${newest}: the appendix heading is present but no row parses`, variant: "warning", duration: 6000, sessionID });
+        return;
+      }
+      const report = attestationReportMarkdown(result, Date.now(), directory, newest);
+      const copied = copyReport(report);
+      const summary = attestSummaryLine(result);
+      const title = result.regressed > 0 ? "attestation drifted" : result.unknown > 0 ? "attestation unverifiable" : result.unique === 0 ? "nothing to attest" : "attestation holds";
+      const variant = result.regressed > 0 || result.unknown > 0 ? "warning" : "success";
+      safeToast({ title, message: copied ? summary : `${summary} \xB7 clipboard unavailable`, variant, duration: 6000, sessionID });
+    } catch (error) {
+      toastError("attest failed", error, sessionID);
+    }
+  };
+  const reviewRecordAction = (sessionID, goal) => {
+    if (!goal || !sessionID)
+      return;
+    try {
+      const result = exportReview(goal, Date.now(), process.cwd());
+      const summary = reviewSummaryLine(result);
+      const title = result.unique === 0 ? "nothing to review" : result.gaps > 0 ? "review written with gaps" : result.unknown > 0 ? "review unverifiable" : "review written";
+      const variant = result.gaps > 0 || result.unknown > 0 ? "warning" : "success";
+      safeToast({ title, message: `${result.path} \xB7 ${summary}`, variant, duration: 6000, sessionID });
+    } catch (error) {
+      toastError("review failed", error, sessionID);
+    }
+  };
+  const spendLedgerAction = (sessionID, goal) => {
+    if (!goal || !sessionID)
+      return;
+    try {
+      const result = exportSpendLedger(goal, Date.now(), process.cwd());
+      const summary = spendSummaryLine(result);
+      const title = result.iterations === 0 ? "nothing to report" : result.measured < result.iterations ? "spend ledger written (partial)" : "spend ledger written";
+      const variant = result.iterations === 0 || result.measured < result.iterations ? "warning" : "success";
+      safeToast({ title, message: `${result.path} \xB7 ${summary}`, variant, duration: 6000, sessionID });
+    } catch (error) {
+      toastError("spend report failed", error, sessionID);
+    }
+  };
+  const sealRecordAction = (sessionID, goal) => {
+    if (!goal || !sessionID)
+      return;
+    try {
+      const result = exportSealedDossier(goal, Date.now(), process.cwd());
+      const summary = sealSummaryLine(result);
+      const title = result.unique === 0 ? "nothing to seal" : result.clean === result.unique ? "record sealed" : "record sealed with gaps";
+      const variant = result.clean === result.unique ? "success" : "warning";
+      safeToast({ title, message: `${result.path} \xB7 ${summary}`, variant, duration: 6000, sessionID });
+      return result;
+    } catch (error) {
+      toastError("seal failed", error, sessionID);
+      return;
+    }
+  };
+  const dossierIndexAction = (sessionID) => {
+    try {
+      const result = exportDossierIndex(Date.now(), process.cwd());
+      const summary = dossierIndexSummaryLine(result);
+      const title = result.artifacts === 0 ? "no artifacts found" : result.skipped > 0 ? "index written with gaps" : "dossier index written";
+      const variant = result.artifacts === 0 || result.skipped > 0 ? "warning" : "success";
+      safeToast({ title, message: `${result.path} \xB7 ${summary}`, variant, duration: 6000, sessionID });
+    } catch (error) {
+      toastError("index failed", error, sessionID);
+    }
+  };
+  return { exportDossier, verifyRecordAction, reachRecordAction, signRecordAction, attestSealedDossierAction, reviewRecordAction, spendLedgerAction, sealRecordAction, dossierIndexAction };
+}
+
+// src/tui-keymap.ts
+function registerGlobalKeymap(deps) {
+  const { addLayer, live, currentSession, entries, statusDialogOpen, setContextOpen, setHudSession, togglePin, copyToClipboard, requestStatus, requestClearGoal, runDossierAction, exportDossier, verifyRecordAction, reachRecordAction, signRecordAction, sealRecordAction, attestSealedDossierAction, reviewRecordAction, spendLedgerAction, dossierIndexAction } = deps;
+  addLayer(() => ({
+    mode: "global",
+    commands: [
+      {
+        id: "goal.status",
+        title: "Goal: show status",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+        run: () => requestStatus()
+      },
+      {
+        id: "goal.clear",
+        title: "Goal: clear",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession())),
+        run: () => requestClearGoal(currentSession())
+      },
+      {
+        id: "goal.loop.status",
+        title: "Goal loop: show status",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession())?.loopEnabled),
+        run: () => requestStatus()
+      },
+      {
+        id: "goal.hud.toggle",
+        title: "Goal HUD: toggle card",
+        group: "Goal",
+        palette: true,
+        enabled: () => hudArmEnabled(Boolean(live(currentSession())), statusDialogOpen()),
+        run: () => {
+          try {
+            if (statusDialogOpen())
+              return;
+            const sessionID = currentSession();
+            setContextOpen(false);
+            setHudSession((current) => sessionID && current === sessionID ? undefined : sessionID);
+          } catch {}
+        }
+      },
+      {
+        id: "goal.pin.toggle",
+        title: "Goal: toggle pinned condition",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession())),
+        run: () => {
+          try {
+            togglePin(currentSession());
+          } catch {}
+        }
+      },
+      {
+        id: "goal.condition.copy",
+        title: "Goal: copy condition",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal?.condition),
+        run: () => {
+          try {
+            const sessionID = currentSession();
+            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
+            if (goal?.condition && sessionID)
+              copyToClipboard(goal.condition, sessionID);
+          } catch {}
+        }
+      },
+      {
+        id: "goal.reason.copy",
+        title: "Goal: copy evaluator reason",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean((live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal)?.reason),
+        run: () => {
+          try {
+            const sessionID = currentSession();
+            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
+            if (goal?.reason && sessionID)
+              copyToClipboard(goal.reason, sessionID, "reason");
+          } catch {}
+        }
+      },
+      {
+        id: "goal.summary.copy",
+        title: "Goal: copy latest loop summary",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean((live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal)?.loopHistory?.at(-1)?.summary),
+        run: () => {
+          try {
+            const sessionID = currentSession();
+            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
+            const summary = goal?.loopHistory?.at(-1)?.summary;
+            if (summary && sessionID)
+              copyToClipboard(summary, sessionID, "summary");
+          } catch {}
+        }
+      },
+      {
+        id: "goal.dossier.copy",
+        title: "Goal: copy loop dossier (markdown)",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+        run: () => {
+          try {
+            const sessionID = currentSession();
+            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
+            if (goal && sessionID)
+              copyToClipboard(buildLoopDossier(goal, Date.now()), sessionID, "dossier");
+          } catch {}
+        }
+      },
+      {
+        id: "goal.dossier.export",
+        title: "Goal: export loop dossier (markdown file)",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+        run: () => runDossierAction(exportDossier)
+      },
+      {
+        id: "goal.dossier.verify",
+        title: "Goal: verify the record (shas + markdown report)",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+        run: () => runDossierAction(verifyRecordAction)
+      },
+      {
+        id: "goal.dossier.reach",
+        title: "Goal: verify the record reaches HEAD (shas + markdown report)",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+        run: () => runDossierAction(reachRecordAction)
+      },
+      {
+        id: "goal.dossier.sign",
+        title: "Goal: verify the record's signatures (shas + markdown report)",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+        run: () => runDossierAction(signRecordAction)
+      },
+      {
+        id: "goal.dossier.seal",
+        title: "Goal: seal the dossier with a fresh attestation (file)",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+        run: () => runDossierAction(sealRecordAction)
+      },
+      {
+        id: "goal.dossier.attest",
+        title: "Goal: attest a sealed dossier against HEAD (drift report)",
+        group: "Goal",
+        palette: true,
+        enabled: () => true,
+        run: () => {
+          try {
+            attestSealedDossierAction(currentSession());
+          } catch {}
+        }
+      },
+      {
+        id: "goal.dossier.review",
+        title: "Goal: review the dossier in one file (every question git can answer)",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+        run: () => runDossierAction(reviewRecordAction)
+      },
+      {
+        id: "goal.dossier.spend",
+        title: "Goal: export the spend ledger (markdown report)",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+        run: () => runDossierAction(spendLedgerAction)
+      },
+      {
+        id: "goal.dossier.index",
+        title: "Goal: index the exported dossier artifacts (markdown)",
+        group: "Goal",
+        palette: true,
+        enabled: () => true,
+        run: () => {
+          try {
+            dossierIndexAction(currentSession());
+          } catch {}
+        }
+      },
+      {
+        id: "goal.loop.clear",
+        title: "Goal loop: clear",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession())?.loopEnabled),
+        run: () => requestClearGoal(currentSession())
+      }
+    ]
+  }));
+}
 
 // src/rpc.ts
 import { Rpc } from "@opencode/plugin/rpc";
@@ -6352,6 +6933,11 @@ var dialogStatusCommands = (deps) => {
 // src/tui.tsx
 var TICK_MS = 15000;
 var ATTENTION_KINDS = new Set(["achieved", "impossible", "failed", "paused"]);
+var logUiError = (where, error) => {
+  try {
+    console.error(`goal-loop: ${where}`, error);
+  } catch {}
+};
 var elapsedOf = (g, receivedAt, nowMs) => g.status === "active" ? g.elapsedMs + Math.max(0, nowMs - (receivedAt ?? nowMs)) : g.elapsedMs;
 var ClampedColumn = (props) => {
   const dimensions = useTerminalDimensions2();
@@ -6368,6 +6954,221 @@ var ClampedColumn = (props) => {
     return _el$;
   })();
 };
+var AGENT_ICONS = {
+  thinking: {
+    nerd: "\uDB81\uDEA9",
+    ascii: "*",
+    label: "Thinking"
+  },
+  reading: {
+    nerd: "\uDB80\uDE1E",
+    ascii: "?",
+    label: "Reading"
+  },
+  writing: {
+    nerd: "\uDB80\uDFEB",
+    ascii: "~",
+    label: "Editing"
+  },
+  executing: {
+    nerd: "\uF489",
+    ascii: "$",
+    label: "Running"
+  },
+  web: {
+    nerd: "\uDB81\uDD9F",
+    ascii: "@",
+    label: "Fetching"
+  },
+  memory: {
+    nerd: "\uDB80\uDEDA",
+    ascii: "#",
+    label: "Context"
+  },
+  waiting: {
+    nerd: "\uDB80\uDFE4",
+    ascii: "!",
+    label: "Approval"
+  },
+  done: {
+    nerd: "\uDB80\uDD2C",
+    ascii: "+",
+    label: "Done"
+  },
+  error: {
+    nerd: "\uDB80\uDD56",
+    ascii: "x",
+    label: "Failed"
+  },
+  delegating: {
+    nerd: "\uF0C0",
+    ascii: "&",
+    label: "Delegating"
+  }
+};
+var READ = /read|grep|find|ls|cat|glob|inspect/;
+var WRITE = /write|edit|patch|replace|create|delete/;
+var EXEC = /bash|exec|run|shell|test|build/;
+var WEB = /web|search|fetch|curl|http|scrape/;
+var MEMORY = /memory|rag|embed|compact|history/;
+var DELEGATE = /task|subagent|delegate|spawn|agent/;
+var resolveToolIntent = (toolName) => {
+  const name = typeof toolName === "string" ? toolName.toLowerCase() : "";
+  if (DELEGATE.test(name))
+    return "delegating";
+  if (READ.test(name))
+    return "reading";
+  if (WRITE.test(name))
+    return "writing";
+  if (EXEC.test(name))
+    return "executing";
+  if (WEB.test(name))
+    return "web";
+  if (MEMORY.test(name))
+    return "memory";
+  return "thinking";
+};
+var intentGlyph = (intent, ascii = false) => (AGENT_ICONS[intent] ?? AGENT_ICONS.thinking)[ascii ? "ascii" : "nerd"];
+var withIntentGlyph = (text, intent, ascii = false) => ({
+  glyph: intentGlyph(intent, ascii),
+  rest: text.slice(1)
+});
+var activityWord = (intent) => (AGENT_ICONS[intent] ?? AGENT_ICONS.thinking).label.toLowerCase();
+var activityBadgeCells = (intent) => cellWidth(` ${activityWord(intent)} `);
+var intentAccent = (intent) => {
+  switch (intent) {
+    case "reading":
+    case "web":
+    case "delegating":
+      return "info";
+    case "writing":
+    case "executing":
+    case "waiting":
+      return "warning";
+    case "done":
+      return "success";
+    case "error":
+      return "error";
+    default:
+      return "muted";
+  }
+};
+var NO_ACTIVITY = {
+  calls: {},
+  notice: undefined
+};
+var applyIntentSignal = (map, signal) => {
+  const current = map[signal.sessionID] ?? NO_ACTIVITY;
+  let next;
+  switch (signal.type) {
+    case "tool-input":
+      next = {
+        calls: {
+          ...current.calls,
+          [signal.callID]: resolveToolIntent(signal.name)
+        },
+        notice: undefined
+      };
+      break;
+    case "tool-progress":
+      next = signal.callID in current.calls ? current : {
+        calls: {
+          ...current.calls,
+          [signal.callID]: "executing"
+        },
+        notice: current.notice
+      };
+      break;
+    case "tool-success": {
+      if (!(signal.callID in current.calls)) {
+        next = current;
+        break;
+      }
+      const calls = {
+        ...current.calls
+      };
+      delete calls[signal.callID];
+      next = {
+        calls,
+        notice: current.notice
+      };
+      break;
+    }
+    case "tool-failed": {
+      const calls = {
+        ...current.calls
+      };
+      delete calls[signal.callID];
+      next = {
+        calls,
+        notice: "error"
+      };
+      break;
+    }
+    case "permission-asked":
+      next = {
+        calls: current.calls,
+        notice: "waiting"
+      };
+      break;
+    case "permission-replied":
+      next = current.notice === "waiting" ? {
+        calls: current.calls,
+        notice: undefined
+      } : current;
+      break;
+    case "execution-started":
+      next = {
+        calls: {},
+        notice: "thinking"
+      };
+      break;
+    case "execution-succeeded":
+      next = {
+        calls: {},
+        notice: "done"
+      };
+      break;
+    case "execution-failed":
+      next = {
+        calls: {},
+        notice: "error"
+      };
+      break;
+    case "execution-interrupted":
+      next = NO_ACTIVITY;
+      break;
+  }
+  if (next === current)
+    return map;
+  return {
+    ...map,
+    [signal.sessionID]: next
+  };
+};
+var intentForActivity = (activity) => {
+  if (!activity)
+    return;
+  if (activity.notice)
+    return activity.notice;
+  const ids = Object.keys(activity.calls);
+  const newest = ids[ids.length - 1];
+  return newest === undefined ? undefined : activity.calls[newest];
+};
+var INTENT_TTL_MS = 4000;
+var fadeNotice = (map, sessionID) => {
+  const current = map[sessionID];
+  if (current === undefined || current.notice === undefined)
+    return map;
+  return {
+    ...map,
+    [sessionID]: {
+      calls: current.calls,
+      notice: undefined
+    }
+  };
+};
+var NOTICE_SIGNALS = new Set(["permission-asked", "execution-started", "execution-succeeded", "execution-failed", "tool-failed"]);
 var tui_default = Plugin.define({
   id: "goal-loop.tui",
   setup(context) {
@@ -6376,6 +7177,60 @@ var tui_default = Plugin.define({
     const [now, setNow] = createSignal4(Date.now());
     const [statusDialogOpen, setStatusDialogOpen] = createSignal4(false);
     const [others, setOthers] = createSignal4([]);
+    const [activity, setActivity] = createSignal4({});
+    const intentTimers = new Map;
+    const noteSignal = (signal) => {
+      const sid = signal.sessionID;
+      if (!sid)
+        return;
+      setActivity((previous) => applyIntentSignal(previous, signal));
+      if (!NOTICE_SIGNALS.has(signal.type))
+        return;
+      const pending = intentTimers.get(sid);
+      if (pending !== undefined)
+        clearTimeout(pending);
+      intentTimers.set(sid, setTimeout(() => {
+        intentTimers.delete(sid);
+        setActivity((previous) => fadeNotice(previous, sid));
+      }, INTENT_TTL_MS));
+    };
+    const toolEventDisposers = [];
+    toolEventDisposers.push(context.data.on("session.tool.input.started", (event) => noteSignal({
+      type: "tool-input",
+      sessionID: event.data.sessionID,
+      callID: event.data.id,
+      name: event.data.name
+    })), context.data.on("session.tool.progress", (event) => noteSignal({
+      type: "tool-progress",
+      sessionID: event.data.sessionID,
+      callID: event.data.id
+    })), context.data.on("session.tool.success", (event) => noteSignal({
+      type: "tool-success",
+      sessionID: event.data.sessionID,
+      callID: event.data.id
+    })), context.data.on("session.tool.failed", (event) => noteSignal({
+      type: "tool-failed",
+      sessionID: event.data.sessionID,
+      callID: event.data.id
+    })), context.data.on("permission.asked", (event) => noteSignal({
+      type: "permission-asked",
+      sessionID: event.data.sessionID
+    })), context.data.on("permission.replied", (event) => noteSignal({
+      type: "permission-replied",
+      sessionID: event.data.sessionID
+    })), context.data.on("session.execution.started", (event) => noteSignal({
+      type: "execution-started",
+      sessionID: event.data.sessionID
+    })), context.data.on("session.execution.succeeded", (event) => noteSignal({
+      type: "execution-succeeded",
+      sessionID: event.data.sessionID
+    })), context.data.on("session.execution.failed", (event) => noteSignal({
+      type: "execution-failed",
+      sessionID: event.data.sessionID
+    })), context.data.on("session.execution.interrupted", (event) => noteSignal({
+      type: "execution-interrupted",
+      sessionID: event.data.sessionID
+    })));
     const sessionLabel = (sessionID) => {
       try {
         return context.data.session.get(sessionID)?.title ?? sessionID;
@@ -6479,10 +7334,11 @@ var tui_default = Plugin.define({
       try {
         showStatusDialogInner(sessionID, fallback);
       } catch (error) {
+        logUiError("status dialog failed", error);
         try {
           context.ui.toast.show({
             title: "goal plugin error (dialog)",
-            message: String(error instanceof Error ? error.stack ?? error : error).slice(0, 900),
+            message: userFacingError(error),
             variant: "error",
             duration: 30000
           });
@@ -6511,35 +7367,38 @@ var tui_default = Plugin.define({
         return ` \xB7 v${iteration}${cap}`;
       };
       context.ui.dialog.show(() => _$createComponent4(ErrorBoundary, {
-        fallback: (error) => _$createComponent4(ClampedColumn, {
-          get children() {
-            return [(() => {
-              var _el$9 = _$createElement5("text");
-              _$insertNode4(_el$9, _$createTextNode4(`goal detail failed to render`));
-              _$effect5((_p$) => {
-                var _v$5 = TextAttributes5.BOLD, _v$6 = context.theme.text.feedback.warning.base;
-                _v$5 !== _p$.e && (_p$.e = _$setProp5(_el$9, "attributes", _v$5, _p$.e));
-                _v$6 !== _p$.t && (_p$.t = _$setProp5(_el$9, "fg", _v$6, _p$.t));
-                return _p$;
-              }, {
-                e: undefined,
-                t: undefined
-              });
-              return _el$9;
-            })(), (() => {
-              var _el$1 = _$createElement5("text");
-              _$setProp5(_el$1, "wrapMode", "word");
-              _$insert5(_el$1, () => String(error instanceof Error ? error.stack ?? error.message ?? error : error).slice(0, 600));
-              _$effect5((_$p) => _$setProp5(_el$1, "fg", context.theme.text.muted, _$p));
-              return _el$1;
-            })(), (() => {
-              var _el$10 = _$createElement5("text");
-              _$insertNode4(_el$10, _$createTextNode4(`esc to close \xB7 your session is unaffected`));
-              _$effect5((_$p) => _$setProp5(_el$10, "fg", context.theme.text.faint, _$p));
-              return _el$10;
-            })()];
-          }
-        }),
+        fallback: (error) => {
+          logUiError("dialog render failed", error);
+          return _$createComponent4(ClampedColumn, {
+            get children() {
+              return [(() => {
+                var _el$9 = _$createElement5("text");
+                _$insertNode4(_el$9, _$createTextNode4(`goal detail failed to render`));
+                _$effect5((_p$) => {
+                  var _v$5 = TextAttributes5.BOLD, _v$6 = context.theme.text.feedback.warning.base;
+                  _v$5 !== _p$.e && (_p$.e = _$setProp5(_el$9, "attributes", _v$5, _p$.e));
+                  _v$6 !== _p$.t && (_p$.t = _$setProp5(_el$9, "fg", _v$6, _p$.t));
+                  return _p$;
+                }, {
+                  e: undefined,
+                  t: undefined
+                });
+                return _el$9;
+              })(), (() => {
+                var _el$1 = _$createElement5("text");
+                _$setProp5(_el$1, "wrapMode", "word");
+                _$insert5(_el$1, () => userFacingError(error));
+                _$effect5((_$p) => _$setProp5(_el$1, "fg", context.theme.text.muted, _$p));
+                return _el$1;
+              })(), (() => {
+                var _el$10 = _$createElement5("text");
+                _$insertNode4(_el$10, _$createTextNode4(`esc to close \xB7 your session is unaffected`));
+                _$effect5((_$p) => _$setProp5(_el$10, "fg", context.theme.text.faint, _$p));
+                return _el$10;
+              })()];
+            }
+          });
+        },
         get children() {
           return _$createComponent4(ClampedColumn, {
             get children() {
@@ -6736,28 +7595,38 @@ var tui_default = Plugin.define({
       get: (sessionID) => rpc.get({
         sessionID
       }, at(sessionID)),
-      put: (sessionID, goal) => put(sessionID, goal)
+      put: (sessionID, goal) => put(sessionID, goal, true)
     });
-    const goalMirror = createGoalMirror();
+    const goalMirror = process.env.OPENCODE_GOAL_MIRROR === "0" ? undefined : createGoalMirror();
     const refreshFromStorage = async (sessionID) => {
       try {
-        const goal = goalMirror.read(sessionID, context.location?.directory);
+        const goal = goalMirror?.read(sessionID, context.location?.directory);
         if (goal === undefined)
           return false;
-        put(sessionID, goal);
+        put(sessionID, goal, true);
         return true;
       } catch {
         return false;
       }
     };
-    const put = (sessionID, goal) => {
+    const planningSeenAt = new Map;
+    const put = (sessionID, goal, fromPull = false) => {
+      let planningInFlight = false;
       try {
         const previous = entries()[sessionID]?.goal;
+        if (isPlanningSnapshot(goal, sessionID)) {
+          planningSeenAt.set(sessionID, Date.now());
+          if (planningSeenAt.size > 64)
+            planningSeenAt.clear();
+        }
+        planningInFlight = shouldKeepPlanningPlaceholder(previous, goal, sessionID, fromPull);
+        if (!planningInFlight && fromPull && isStalePlanningPull(planningSeenAt.get(sessionID), goal, Date.now()))
+          planningInFlight = true;
         const unchanged = previous && goal ? goalsEqual(previous, goal) : false;
         const wasLive = previous != null && isLive(previous.status);
         const nowTerminal = goal !== null && goal !== undefined && !isLive(goal.status);
         const gone = goal === null || goal === undefined || nowTerminal;
-        if (!unchanged && wasLive && gone) {
+        if (!planningInFlight && !unchanged && wasLive && gone) {
           releaseCompletion(sessionID);
           if (goal && goal.status !== "cleared")
             noteTerminal(sessionID, goal);
@@ -6769,6 +7638,8 @@ var tui_default = Plugin.define({
         if (!unchanged && goal && goal.loopCompact?.landedAt !== undefined && wasPending)
           noteLanding(sessionID);
       } catch {}
+      if (planningInFlight)
+        return;
       const mergedGoal = preserveCarriedFields(entries()[sessionID]?.goal, goal);
       const mergedNow = Date.now();
       return setEntries((previous) => applySnapshot(previous, sessionID, mergedGoal, mergedNow, statusDialogSession()));
@@ -6812,6 +7683,16 @@ var tui_default = Plugin.define({
           variant: options.variant ?? "info"
         });
       } catch {}
+    };
+    const toastError = (title, error, sessionID, detail) => {
+      logUiError(title, error);
+      safeToast({
+        title,
+        message: detail ? `${detail}: ${userFacingError(error)}` : userFacingError(error),
+        variant: "error",
+        duration: 5000,
+        sessionID
+      });
     };
     const onNotice = (notice) => {
       try {
@@ -7083,342 +7964,30 @@ var tui_default = Plugin.define({
           sessionID
         });
       } catch (error) {
-        safeToast({
-          title: "copy failed",
-          message: String(error instanceof Error ? error : error).slice(0, 200),
-          variant: "error",
-          duration: 5000,
-          sessionID
-        });
+        toastError("copy failed", error, sessionID);
       }
     };
-    const exportDossier = (sessionID, goal) => {
-      if (!goal || !sessionID)
-        return;
-      try {
-        const result = exportLoopDossier(goal, Date.now(), process.cwd());
-        safeToast({
-          title: "dossier exported",
-          message: result.path,
-          variant: "success",
-          duration: 5000,
-          sessionID
-        });
-      } catch (error) {
-        safeToast({
-          title: "export failed",
-          message: String(error instanceof Error ? error : error).slice(0, 200),
-          variant: "error",
-          duration: 5000,
-          sessionID
-        });
-      }
-    };
-    const verifyRecordAction = (sessionID, goal) => {
-      if (!goal || !sessionID)
-        return;
-      try {
-        const directory = process.cwd();
-        const verification = verifyRecord(goal, gitCatFileProbe(directory));
-        const report = verifyReportMarkdown(goal, verification, Date.now(), directory);
-        let copied = false;
+    const {
+      exportDossier,
+      verifyRecordAction,
+      reachRecordAction,
+      signRecordAction,
+      attestSealedDossierAction,
+      reviewRecordAction,
+      spendLedgerAction,
+      sealRecordAction,
+      dossierIndexAction
+    } = createDossierActions({
+      copyToClipboard: (report) => {
         try {
-          copied = context.renderer.copyToClipboardOSC52(report);
+          return context.renderer.copyToClipboardOSC52(report);
         } catch {
-          copied = false;
+          return false;
         }
-        const summary = verifySummaryLine(verification);
-        const title = verification.missing > 0 ? "record does not verify" : verification.unknown > 0 ? "record unverifiable" : verification.unique === 0 ? "nothing to verify" : "record verified";
-        const variant = verification.missing > 0 ? "error" : verification.unknown > 0 ? "warning" : "success";
-        safeToast({
-          title,
-          message: copied ? summary : `${summary} \xB7 clipboard unavailable`,
-          variant,
-          duration: 6000,
-          sessionID
-        });
-        return verification;
-      } catch (error) {
-        safeToast({
-          title: "verify failed",
-          message: String(error instanceof Error ? error : error).slice(0, 200),
-          variant: "error",
-          duration: 5000,
-          sessionID
-        });
-        return;
-      }
-    };
-    const reachRecordAction = (sessionID, goal) => {
-      if (!goal || !sessionID)
-        return;
-      try {
-        const directory = process.cwd();
-        const reach = reachRecord(goal, gitAncestorProbe(directory));
-        const report = reachReportMarkdown(goal, reach, Date.now(), directory);
-        let copied = false;
-        try {
-          copied = context.renderer.copyToClipboardOSC52(report);
-        } catch {
-          copied = false;
-        }
-        const summary = reachSummaryLine(reach);
-        const title = reach.unreached > 0 ? "record does not reach HEAD" : reach.unknown > 0 ? "record unverifiable" : reach.unique === 0 ? "nothing to place" : "record reaches HEAD";
-        const variant = reach.unreached > 0 || reach.unknown > 0 ? "warning" : "success";
-        safeToast({
-          title,
-          message: copied ? summary : `${summary} \xB7 clipboard unavailable`,
-          variant,
-          duration: 6000,
-          sessionID
-        });
-        return reach;
-      } catch (error) {
-        safeToast({
-          title: "reach check failed",
-          message: String(error instanceof Error ? error : error).slice(0, 200),
-          variant: "error",
-          duration: 5000,
-          sessionID
-        });
-        return;
-      }
-    };
-    const signRecordAction = (sessionID, goal) => {
-      if (!goal || !sessionID)
-        return;
-      try {
-        const directory = process.cwd();
-        const sign = signRecord(goal, gitSignProbe(directory));
-        const report = signReportMarkdown(goal, sign, Date.now(), directory);
-        let copied = false;
-        try {
-          copied = context.renderer.copyToClipboardOSC52(report);
-        } catch {
-          copied = false;
-        }
-        const summary = signSummaryLine(sign);
-        const title = sign.unverified > 0 ? "record not under seal" : sign.unknown > 0 ? "record unverifiable" : sign.unique === 0 ? "nothing to attest" : "record under seal";
-        const variant = sign.unverified > 0 || sign.unknown > 0 ? "warning" : "success";
-        safeToast({
-          title,
-          message: copied ? summary : `${summary} \xB7 clipboard unavailable`,
-          variant,
-          duration: 6000,
-          sessionID
-        });
-        return sign;
-      } catch (error) {
-        safeToast({
-          title: "sign check failed",
-          message: String(error instanceof Error ? error : error).slice(0, 200),
-          variant: "error",
-          duration: 5000,
-          sessionID
-        });
-        return;
-      }
-    };
-    const attestSealedDossierAction = (sessionID) => {
-      try {
-        const directory = process.cwd();
-        let candidates;
-        try {
-          candidates = readdirSync2(directory).map((name) => {
-            try {
-              return {
-                name,
-                mtimeMs: statSync(join7(directory, name)).mtimeMs
-              };
-            } catch {
-              return {
-                name,
-                mtimeMs: 0
-              };
-            }
-          });
-        } catch (error) {
-          safeToast({
-            title: "attest failed",
-            message: `cannot read ${directory}: ${String(error instanceof Error ? error : error).slice(0, 160)}`,
-            variant: "error",
-            duration: 5000,
-            sessionID
-          });
-          return;
-        }
-        const newest = selectNewestSealedDossier(candidates);
-        if (!newest) {
-          safeToast({
-            title: "no sealed dossier",
-            message: `no goal-dossier-sealed-*.md in ${directory} \u2014 seal one first with goal.dossier.seal`,
-            variant: "warning",
-            duration: 6000,
-            sessionID
-          });
-          return;
-        }
-        let markdown;
-        try {
-          markdown = readFileSync3(join7(directory, newest), "utf8");
-        } catch (error) {
-          safeToast({
-            title: "attest failed",
-            message: `cannot read ${newest}: ${String(error instanceof Error ? error : error).slice(0, 160)}`,
-            variant: "error",
-            duration: 5000,
-            sessionID
-          });
-          return;
-        }
-        const result = attestSealedDossier(markdown, directory);
-        if (result.kind === "unsealed") {
-          safeToast({
-            title: "not a sealed dossier",
-            message: `${newest} carries no attestation appendix`,
-            variant: "warning",
-            duration: 6000,
-            sessionID
-          });
-          return;
-        }
-        if (result.kind === "unparsable") {
-          safeToast({
-            title: "attestation unreadable",
-            message: `${newest}: the appendix heading is present but no row parses`,
-            variant: "warning",
-            duration: 6000,
-            sessionID
-          });
-          return;
-        }
-        const report = attestationReportMarkdown(result, Date.now(), directory, newest);
-        let copied = false;
-        try {
-          copied = context.renderer.copyToClipboardOSC52(report);
-        } catch {
-          copied = false;
-        }
-        const summary = attestSummaryLine(result);
-        const title = result.regressed > 0 ? "attestation drifted" : result.unknown > 0 ? "attestation unverifiable" : result.unique === 0 ? "nothing to attest" : "attestation holds";
-        const variant = result.regressed > 0 || result.unknown > 0 ? "warning" : "success";
-        safeToast({
-          title,
-          message: copied ? summary : `${summary} \xB7 clipboard unavailable`,
-          variant,
-          duration: 6000,
-          sessionID
-        });
-      } catch (error) {
-        safeToast({
-          title: "attest failed",
-          message: String(error instanceof Error ? error : error).slice(0, 200),
-          variant: "error",
-          duration: 5000,
-          sessionID
-        });
-      }
-    };
-    const reviewRecordAction = (sessionID, goal) => {
-      if (!goal || !sessionID)
-        return;
-      try {
-        const result = exportReview(goal, Date.now(), process.cwd());
-        const summary = reviewSummaryLine(result);
-        const title = result.unique === 0 ? "nothing to review" : result.gaps > 0 ? "review written with gaps" : result.unknown > 0 ? "review unverifiable" : "review written";
-        const variant = result.gaps > 0 || result.unknown > 0 ? "warning" : "success";
-        safeToast({
-          title,
-          message: `${result.path} \xB7 ${summary}`,
-          variant,
-          duration: 6000,
-          sessionID
-        });
-      } catch (error) {
-        safeToast({
-          title: "review failed",
-          message: String(error instanceof Error ? error : error).slice(0, 200),
-          variant: "error",
-          duration: 5000,
-          sessionID
-        });
-      }
-    };
-    const spendLedgerAction = (sessionID, goal) => {
-      if (!goal || !sessionID)
-        return;
-      try {
-        const result = exportSpendLedger(goal, Date.now(), process.cwd());
-        const summary = spendSummaryLine(result);
-        const title = result.iterations === 0 ? "nothing to report" : result.measured < result.iterations ? "spend ledger written (partial)" : "spend ledger written";
-        const variant = result.iterations === 0 || result.measured < result.iterations ? "warning" : "success";
-        safeToast({
-          title,
-          message: `${result.path} \xB7 ${summary}`,
-          variant,
-          duration: 6000,
-          sessionID
-        });
-      } catch (error) {
-        safeToast({
-          title: "spend report failed",
-          message: String(error instanceof Error ? error : error).slice(0, 200),
-          variant: "error",
-          duration: 5000,
-          sessionID
-        });
-      }
-    };
-    const sealRecordAction = (sessionID, goal) => {
-      if (!goal || !sessionID)
-        return;
-      try {
-        const result = exportSealedDossier(goal, Date.now(), process.cwd());
-        const summary = sealSummaryLine(result);
-        const title = result.unique === 0 ? "nothing to seal" : result.clean === result.unique ? "record sealed" : "record sealed with gaps";
-        const variant = result.clean === result.unique ? "success" : "warning";
-        safeToast({
-          title,
-          message: `${result.path} \xB7 ${summary}`,
-          variant,
-          duration: 6000,
-          sessionID
-        });
-        return result;
-      } catch (error) {
-        safeToast({
-          title: "seal failed",
-          message: String(error instanceof Error ? error : error).slice(0, 200),
-          variant: "error",
-          duration: 5000,
-          sessionID
-        });
-        return;
-      }
-    };
-    const dossierIndexAction = (sessionID) => {
-      try {
-        const result = exportDossierIndex(Date.now(), process.cwd());
-        const summary = dossierIndexSummaryLine(result);
-        const title = result.artifacts === 0 ? "no artifacts found" : result.skipped > 0 ? "index written with gaps" : "dossier index written";
-        const variant = result.artifacts === 0 || result.skipped > 0 ? "warning" : "success";
-        safeToast({
-          title,
-          message: `${result.path} \xB7 ${summary}`,
-          variant,
-          duration: 6000,
-          sessionID
-        });
-      } catch (error) {
-        safeToast({
-          title: "index failed",
-          message: String(error instanceof Error ? error : error).slice(0, 200),
-          variant: "error",
-          duration: 5000,
-          sessionID
-        });
-      }
-    };
+      },
+      safeToast,
+      toastError
+    });
     const requestClearGoal = (sessionID) => {
       if (!sessionID)
         return;
@@ -7435,13 +8004,7 @@ var tui_default = Plugin.define({
         }).then((ok) => {
           if (ok !== true)
             return;
-          const clearFailed = (error) => safeToast({
-            title: "clear failed",
-            message: String(error instanceof Error ? error : error).slice(0, 200),
-            variant: "error",
-            duration: 5000,
-            sessionID
-          });
+          const clearFailed = (error) => toastError("clear failed", error, sessionID);
           try {
             rpc.clear({
               sessionID
@@ -7494,7 +8057,11 @@ var tui_default = Plugin.define({
           try {
             const g = goal();
             const landingSfx = () => landingSuffix(motionDisabled(process.env));
-            const budget = Math.max(8, mountWidthOr() - 1 - (landingNow() ? stringWidth(landingSfx()) : 0) - 2);
+            const badgeCells = () => {
+              const intent = activeIntent();
+              return intent ? activityBadgeCells(intent) : 0;
+            };
+            const budget = Math.max(8, mountWidthOr() - 1 - (landingNow() ? cellWidth(landingSfx()) : 0) - 2 - badgeCells());
             if (g)
               return pillModel(g, elapsed(), motionDisabled(process.env), budget, motionOk ? breathPhase() : undefined);
             const t = terminal();
@@ -7516,20 +8083,64 @@ var tui_default = Plugin.define({
           const g = goal();
           return g ? base + pinSuffix(g.condition, pinBudget(mountWidthOr(), base), motionDisabled(process.env)) : base;
         };
+        const activeIntent = () => {
+          const intent = props.sessionID ? intentForActivity(activity()[props.sessionID]) : undefined;
+          if (!intent)
+            return;
+          const g = goal();
+          if (!g || g.status !== "active" || isRetryStuck(g) || g.waiting === true || g.queued === true)
+            return;
+          return intent;
+        };
+        const pillCells = () => {
+          const text = pillText();
+          const g = goal();
+          const override = activeIntent() ?? (g !== undefined && waitingOnSubagents(g) ? "delegating" : undefined);
+          if (!override)
+            return {
+              glyph: text.slice(0, 1),
+              rest: text.slice(1)
+            };
+          return withIntentGlyph(text, override, motionDisabled(process.env));
+        };
+        const activityWordText = () => {
+          const intent = activeIntent();
+          return intent ? ` ${activityWord(intent)} ` : "";
+        };
+        const glyphColor = () => {
+          const intent = activeIntent();
+          if (!intent || motionDisabled(process.env))
+            return color();
+          switch (intentAccent(intent)) {
+            case "info":
+              return context.theme.text.feedback.info.base;
+            case "warning":
+              return context.theme.text.feedback.warning.base;
+            case "success":
+              return context.theme.text.feedback.success?.base ?? context.theme.text.feedback.info.base;
+            case "error":
+              return context.theme.text.feedback.error?.base ?? context.theme.text.feedback.warning.base;
+            default:
+              return context.theme.text.muted;
+          }
+        };
         const workingNow = () => {
           const g = goal();
           return g !== undefined && g.status === "active" && g.waiting !== true && !isRetryStuck(g);
         };
-        const animated = () => {
+        const motionFlags = () => {
           const g = goal();
-          return pillMotionNeeded({
-            working: workingNow(),
+          return {
             evaluating: g?.evaluating === true,
             hot: g !== undefined && isCompactHot(g),
             flashing: props.sessionID !== undefined && flashing().has(props.sessionID),
             landing: landingNow()
-          });
+          };
         };
+        const animated = () => pillMotionNeeded({
+          ...motionFlags(),
+          working: workingNow()
+        });
         createEffect2(() => {
           if (animated() && motionOk) {
             const timer = setInterval(() => setBreathPhase((phase) => (phase + 1) % 4), BREATH_PHASE_MS);
@@ -7538,15 +8149,7 @@ var tui_default = Plugin.define({
           }
           setBreathPhase(0);
         });
-        const transientNow = () => {
-          const g = goal();
-          return pillMotionNeeded({
-            evaluating: g?.evaluating === true,
-            hot: g !== undefined && isCompactHot(g),
-            flashing: props.sessionID !== undefined && flashing().has(props.sessionID),
-            landing: landingNow()
-          });
-        };
+        const transientNow = () => pillMotionNeeded(motionFlags());
         const pillAttrs = () => {
           const hoverBold = hovered() ? TextAttributes5.BOLD : 0;
           const g = goal();
@@ -7603,9 +8206,10 @@ var tui_default = Plugin.define({
               },
               get children() {
                 return [(() => {
-                  var _el$12 = _$createElement5("box"), _el$13 = _$createElement5("text"), _el$14 = _$createElement5("text");
+                  var _el$12 = _$createElement5("box"), _el$13 = _$createElement5("text"), _el$14 = _$createElement5("text"), _el$15 = _$createElement5("text");
                   _$insertNode4(_el$12, _el$13);
                   _$insertNode4(_el$12, _el$14);
+                  _$insertNode4(_el$12, _el$15);
                   _$setProp5(_el$12, "position", "absolute");
                   _$setProp5(_el$12, "top", -1);
                   _$setProp5(_el$12, "left", 0);
@@ -7625,20 +8229,28 @@ var tui_default = Plugin.define({
                     } catch {}
                   });
                   _$setProp5(_el$13, "wrapMode", "none");
-                  _$insert5(_el$13, pillText);
+                  _$setProp5(_el$13, "flexShrink", 0);
+                  _$insert5(_el$13, () => pillCells().glyph, null);
+                  _$insert5(_el$13, activityWordText, null);
                   _$setProp5(_el$14, "wrapMode", "none");
-                  _$setProp5(_el$14, "flexShrink", 0);
-                  _$insert5(_el$14, () => cardFor() ? " \u25BE" : " \u25B4");
+                  _$insert5(_el$14, () => pillCells().rest);
+                  _$setProp5(_el$15, "wrapMode", "none");
+                  _$setProp5(_el$15, "flexShrink", 0);
+                  _$insert5(_el$15, () => cardFor() ? " \u25BE" : " \u25B4");
                   _$effect5((_p$) => {
-                    var _v$7 = color(), _v$8 = pillAttrs(), _v$9 = context.theme.text.faint;
+                    var _v$7 = glyphColor(), _v$8 = pillAttrs(), _v$9 = color(), _v$0 = pillAttrs(), _v$1 = context.theme.text.faint;
                     _v$7 !== _p$.e && (_p$.e = _$setProp5(_el$13, "fg", _v$7, _p$.e));
                     _v$8 !== _p$.t && (_p$.t = _$setProp5(_el$13, "attributes", _v$8, _p$.t));
                     _v$9 !== _p$.a && (_p$.a = _$setProp5(_el$14, "fg", _v$9, _p$.a));
+                    _v$0 !== _p$.o && (_p$.o = _$setProp5(_el$14, "attributes", _v$0, _p$.o));
+                    _v$1 !== _p$.i && (_p$.i = _$setProp5(_el$15, "fg", _v$1, _p$.i));
                     return _p$;
                   }, {
                     e: undefined,
                     t: undefined,
-                    a: undefined
+                    a: undefined,
+                    o: undefined,
+                    i: undefined
                   });
                   return _el$12;
                 })(), _$createComponent4(Show4, {
@@ -7646,7 +8258,7 @@ var tui_default = Plugin.define({
                     return cardFor();
                   },
                   children: (g) => (() => {
-                    var _el$16 = _$createElement5("box");
+                    var _el$17 = _$createElement5("box");
                     _$use2((el) => {
                       el.onSizeChange = () => {
                         const w = el.width;
@@ -7656,12 +8268,12 @@ var tui_default = Plugin.define({
                       const w = el.width;
                       if (w > 0)
                         setMountWidth(w);
-                    }, _el$16);
-                    _$setProp5(_el$16, "position", "absolute");
-                    _$setProp5(_el$16, "left", 0);
-                    _$setProp5(_el$16, "right", 0);
-                    _$setProp5(_el$16, "zIndex", 10);
-                    _$insert5(_el$16, _$createComponent4(Show4, {
+                    }, _el$17);
+                    _$setProp5(_el$17, "position", "absolute");
+                    _$setProp5(_el$17, "left", 0);
+                    _$setProp5(_el$17, "right", 0);
+                    _$setProp5(_el$17, "zIndex", 10);
+                    _$insert5(_el$17, _$createComponent4(Show4, {
                       get when() {
                         return mountWidth() !== undefined;
                       },
@@ -7726,15 +8338,15 @@ var tui_default = Plugin.define({
                       }
                     }));
                     _$effect5((_p$) => {
-                      var _v$0 = -(1 + cardRows()), _v$1 = cardRows();
-                      _v$0 !== _p$.e && (_p$.e = _$setProp5(_el$16, "top", _v$0, _p$.e));
-                      _v$1 !== _p$.t && (_p$.t = _$setProp5(_el$16, "height", _v$1, _p$.t));
+                      var _v$10 = -(1 + cardRows()), _v$11 = cardRows();
+                      _v$10 !== _p$.e && (_p$.e = _$setProp5(_el$17, "top", _v$10, _p$.e));
+                      _v$11 !== _p$.t && (_p$.t = _$setProp5(_el$17, "height", _v$11, _p$.t));
                       return _p$;
                     }, {
                       e: undefined,
                       t: undefined
                     });
-                    return _el$16;
+                    return _el$17;
                   })()
                 })];
               }
@@ -7839,249 +8451,51 @@ var tui_default = Plugin.define({
         }
       })
     }));
-    context.keymap.layer(() => ({
-      mode: "global",
-      commands: [{
-        id: "goal.status",
-        title: "Goal: show status",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => {
-          const sessionID = currentSession();
-          if (sessionID)
-            rpc.status({
-              sessionID
-            }, at(sessionID)).catch(() => {});
-        }
-      }, {
-        id: "goal.clear",
-        title: "Goal: clear",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean(live(currentSession())),
-        run: () => requestClearGoal(currentSession())
-      }, {
-        id: "goal.loop.status",
-        title: "Goal loop: show status",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean(live(currentSession())?.loopEnabled),
-        run: () => {
-          const sessionID = currentSession();
-          if (sessionID)
-            rpc.status({
-              sessionID
-            }, at(sessionID)).catch(() => {});
-        }
-      }, {
-        id: "goal.hud.toggle",
-        title: "Goal HUD: toggle card",
-        group: "Goal",
-        palette: true,
-        enabled: () => hudArmEnabled(Boolean(live(currentSession())), statusDialogOpen()),
-        run: () => {
-          try {
-            if (statusDialogOpen())
-              return;
-            const sessionID = currentSession();
-            setContextOpen(false);
-            setHudSession((current) => sessionID && current === sessionID ? undefined : sessionID);
-          } catch {}
-        }
-      }, {
-        id: "goal.pin.toggle",
-        title: "Goal: toggle pinned condition",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean(live(currentSession())),
-        run: () => {
-          try {
-            togglePin(currentSession());
-          } catch {}
-        }
-      }, {
-        id: "goal.condition.copy",
-        title: "Goal: copy condition",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal?.condition),
-        run: () => {
-          try {
-            const sessionID = currentSession();
-            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
-            if (goal?.condition && sessionID)
-              copyToClipboard(goal.condition, sessionID);
-          } catch {}
-        }
-      }, {
-        id: "goal.reason.copy",
-        title: "Goal: copy evaluator reason",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean((live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal)?.reason),
-        run: () => {
-          try {
-            const sessionID = currentSession();
-            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
-            if (goal?.reason && sessionID)
-              copyToClipboard(goal.reason, sessionID, "reason");
-          } catch {}
-        }
-      }, {
-        id: "goal.summary.copy",
-        title: "Goal: copy latest loop summary",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean((live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal)?.loopHistory?.at(-1)?.summary),
-        run: () => {
-          try {
-            const sessionID = currentSession();
-            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
-            const summary = goal?.loopHistory?.at(-1)?.summary;
-            if (summary && sessionID)
-              copyToClipboard(summary, sessionID, "summary");
-          } catch {}
-        }
-      }, {
-        id: "goal.dossier.copy",
-        title: "Goal: copy loop dossier (markdown)",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => {
-          try {
-            const sessionID = currentSession();
-            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
-            if (goal && sessionID)
-              copyToClipboard(buildLoopDossier(goal, Date.now()), sessionID, "dossier");
-          } catch {}
-        }
-      }, {
-        id: "goal.dossier.export",
-        title: "Goal: export loop dossier (markdown file)",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => {
-          try {
-            const sessionID = currentSession();
-            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
-            exportDossier(sessionID, goal);
-          } catch {}
-        }
-      }, {
-        id: "goal.dossier.verify",
-        title: "Goal: verify the record (shas + markdown report)",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => {
-          try {
-            const sessionID = currentSession();
-            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
-            verifyRecordAction(sessionID, goal);
-          } catch {}
-        }
-      }, {
-        id: "goal.dossier.reach",
-        title: "Goal: verify the record reaches HEAD (shas + markdown report)",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => {
-          try {
-            const sessionID = currentSession();
-            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
-            reachRecordAction(sessionID, goal);
-          } catch {}
-        }
-      }, {
-        id: "goal.dossier.sign",
-        title: "Goal: verify the record's signatures (shas + markdown report)",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => {
-          try {
-            const sessionID = currentSession();
-            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
-            signRecordAction(sessionID, goal);
-          } catch {}
-        }
-      }, {
-        id: "goal.dossier.seal",
-        title: "Goal: seal the dossier with a fresh attestation (file)",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => {
-          try {
-            const sessionID = currentSession();
-            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
-            sealRecordAction(sessionID, goal);
-          } catch {}
-        }
-      }, {
-        id: "goal.dossier.attest",
-        title: "Goal: attest a sealed dossier against HEAD (drift report)",
-        group: "Goal",
-        palette: true,
-        enabled: () => true,
-        run: () => {
-          try {
-            attestSealedDossierAction(currentSession());
-          } catch {}
-        }
-      }, {
-        id: "goal.dossier.review",
-        title: "Goal: review the dossier in one file (every question git can answer)",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => {
-          try {
-            const sessionID = currentSession();
-            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
-            reviewRecordAction(sessionID, goal);
-          } catch {}
-        }
-      }, {
-        id: "goal.dossier.spend",
-        title: "Goal: export the spend ledger (markdown report)",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => {
-          try {
-            const sessionID = currentSession();
-            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
-            spendLedgerAction(sessionID, goal);
-          } catch {}
-        }
-      }, {
-        id: "goal.dossier.index",
-        title: "Goal: index the exported dossier artifacts (markdown)",
-        group: "Goal",
-        palette: true,
-        enabled: () => true,
-        run: () => {
-          try {
-            dossierIndexAction(currentSession());
-          } catch {}
-        }
-      }, {
-        id: "goal.loop.clear",
-        title: "Goal loop: clear",
-        group: "Goal",
-        palette: true,
-        enabled: () => Boolean(live(currentSession())?.loopEnabled),
-        run: () => requestClearGoal(currentSession())
-      }]
-    }));
+    const requestStatus = () => {
+      const sessionID = currentSession();
+      if (sessionID)
+        rpc.status({
+          sessionID
+        }, at(sessionID)).catch(() => {});
+    };
+    const runDossierAction = (action) => {
+      try {
+        const sessionID = currentSession();
+        const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
+        action(sessionID, goal);
+      } catch {}
+    };
+    registerGlobalKeymap({
+      addLayer: (factory) => context.keymap.layer(factory),
+      live,
+      currentSession,
+      entries,
+      statusDialogOpen,
+      setContextOpen: (value) => setContextOpen(value),
+      setHudSession: (value) => setHudSession(value),
+      togglePin,
+      copyToClipboard,
+      requestStatus,
+      requestClearGoal,
+      runDossierAction,
+      exportDossier,
+      verifyRecordAction,
+      reachRecordAction,
+      signRecordAction,
+      sealRecordAction,
+      attestSealedDossierAction,
+      reviewRecordAction,
+      spendLedgerAction,
+      dossierIndexAction
+    });
     return () => {
       clearInterval(timer);
       pumpController.abort();
+      for (const dispose of toolEventDisposers)
+        dispose();
+      for (const pending of intentTimers.values())
+        clearTimeout(pending);
+      intentTimers.clear();
       if (statusCopiedTimer)
         clearTimeout(statusCopiedTimer);
       for (const pending of terminalTimers)
@@ -8097,5 +8511,18 @@ var tui_default = Plugin.define({
   }
 });
 export {
-  tui_default as default
+  AGENT_ICONS,
+  INTENT_TTL_MS,
+  NOTICE_SIGNALS,
+  NO_ACTIVITY,
+  activityBadgeCells,
+  activityWord,
+  applyIntentSignal,
+  tui_default as default,
+  fadeNotice,
+  intentAccent,
+  intentForActivity,
+  intentGlyph,
+  resolveToolIntent,
+  withIntentGlyph
 };

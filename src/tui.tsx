@@ -11,31 +11,22 @@ import { Plugin } from "@opencode/plugin/tui"
 import type { ScrollBoxRenderable } from "@opentui/core"
 import { TextAttributes, type ColorInput } from "@opentui/core"
 import { useTerminalDimensions } from "@opentui/solid"
-import stringWidth from "string-width"
 import type { JSX } from "@opentui/solid"
 import { createMemo, createSignal, createEffect, onCleanup, Show, ErrorBoundary } from "solid-js"
-import { goalGlyph } from "./core/format.ts"
+import { cellWidth, goalGlyph } from "./core/format.ts"
 import { buildLoopDossier } from "./core/dossier.ts"
-import { exportLoopDossier } from "./core/dossier-export.ts"
-import { gitCatFileProbe, verifyRecord, verifyReportMarkdown, verifySummaryLine, type VerifyOutcome } from "./core/verify-record.ts"
-import { gitAncestorProbe, reachRecord, reachReportMarkdown, reachSummaryLine, type ReachOutcome } from "./core/reach-record.ts"
-import { gitSignProbe, signRecord, signReportMarkdown, signSummaryLine, type SignOutcome } from "./core/sign-record.ts"
-import { exportSealedDossier, sealSummaryLine, type SealOutcome } from "./core/dossier-seal.ts"
-import { exportReview, reviewSummaryLine } from "./core/dossier-review.ts"
-import { exportSpendLedger, spendSummaryLine } from "./core/spend-ledger.ts"
-import { exportDossierIndex, dossierIndexSummaryLine } from "./core/dossier-index.ts"
-import { attestSealedDossier, attestationReportMarkdown, attestSummaryLine, selectNewestSealedDossier } from "./core/dossier-attest.ts"
-import { readFileSync, readdirSync, statSync } from "node:fs"
-import { join } from "node:path"
-import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
+import { isLive, isPlanningSnapshot, type GoalSnapshot, type Notice } from "./core/types.ts"
+import { userFacingError } from "./tui-error.ts"
 import { StatusDialogBody, foreignLiveRows, FOREIGN_ROWS_VISIBLE } from "./status-dialog.tsx"
 import { HudCard, hudCardRows, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
 import { scrollbarTrackOptions, type HostScrollbarTheme } from "./core/scrollbar.ts"
-import { pillModel, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, staleUnprovenSessionIDs, staleRecentlyTerminalSessionIDs, expiredTerminalSessionIDs, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, breathCrest, BREATH_PHASE_MS, isRetryStuck, achievedAckAccentColor, contextMenuRows, nextMenuIndex, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type NeutralTheme } from "./core/hud.ts"
-import { preserveCarriedFields, applySnapshot, goalsEqual, dropSessions, type GoalSnapshotCacheEntry } from "./core/entries.ts"
+import { pillModel, pinSuffix, motionDisabled, terminalPill, staleUnprovenSessionIDs, staleRecentlyTerminalSessionIDs, expiredTerminalSessionIDs, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, breathCrest, BREATH_PHASE_MS, isRetryStuck, waitingOnSubagents, achievedAckAccentColor, contextMenuRows, nextMenuIndex, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type NeutralTheme } from "./core/hud.ts"
+import { preserveCarriedFields, applySnapshot, goalsEqual, dropSessions, shouldKeepPlanningPlaceholder, isStalePlanningPull, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { makeGoalRefresh } from "./core/repull.ts"
 import { pumpRpcEvent } from "./core/rpc-pump.ts"
 import { createGoalMirror } from "./core/mirror.ts"
+import { createDossierActions } from "./tui-actions.ts"
+import { registerGlobalKeymap } from "./tui-keymap.ts"
 import { GoalRpc } from "./rpc.ts"
 import { dialogStatusCommands } from "./core/dialog-keys.ts"
 import { parseChangedEvent, parseListGoalOutput, parseNotice, sameDirectory } from "./core/wire.ts"
@@ -44,6 +35,20 @@ type Entry = GoalSnapshotCacheEntry
 
 const TICK_MS = 15_000
 const ATTENTION_KINDS: ReadonlySet<string> = new Set(["achieved", "impossible", "failed", "paused"])
+
+/**
+ * Keep the full error — stack included — in the host log, while only `userFacingError()` text reaches
+ * the user. Previously the dialog toast and the render fallback PAINTED the raw stack; that leaked raw
+ * frames (and host paths) into the panel. Logging here preserves the diagnostic that was shown, and the
+ * try/catch keeps a broken console from taking the UI down.
+ */
+const logUiError = (where: string, error: unknown): void => {
+  try {
+    console.error(`goal-loop: ${where}`, error)
+  } catch {
+    // Logging must never take the UI down.
+  }
+}
 
 /** Elapsed wall time for display: the record's elapsed plus the idle time since the snapshot arrived (live goals only). */
 const elapsedOf = (g: GoalSnapshot, receivedAt: number | undefined, nowMs: number) =>
@@ -64,6 +69,230 @@ const ClampedColumn = (props: { children?: JSX.Element }) => {
   )
 }
 
+/**
+ * Live activity icons for the ambient pill — pure data, no I/O, no theme, no host types, so the mapping
+ * is unit-testable headlessly. Kept in the shipped TUI entry (rather than a new src/ file) because the
+ * package-count gate pins the tarball's file list, and the compiled TUI bundles this entry anyway.
+ *
+ * Two arms, mirroring the HUD's other glyph families:
+ *   - `nerd` is the Nerd Font glyph (Unicode Private Use Area). It needs a patched font to render; without
+ *     one the host paints tofu. The caller chooses this arm; nothing auto-detects fonts.
+ *   - `ascii` is the portable arm, used under reduced color (NO_COLOR / TERM=dumb): strictly ASCII so it
+ *     survives every terminal, with done/error demoted to `+` / `x` like the HUD's terminal acknowledgments.
+ *
+ * The original snippet carried a raw `\x1b[38;5;N m` per intent. Those codes are deliberately absent:
+ * goal-loop paints through host theme tokens and drops every chromatic accent under NO_COLOR, so raw ANSI
+ * would break theming. `intentAccent` returns a theme-token *key* instead; the renderer resolves it.
+ */
+
+export type AgentIntent =
+  | "thinking"
+  | "reading"
+  | "writing"
+  | "executing"
+  | "web"
+  | "memory"
+  | "waiting"
+  | "done"
+  | "error"
+  | "delegating"
+
+interface IntentVisual {
+  readonly nerd: string
+  readonly ascii: string
+  readonly label: string
+}
+
+/** One intent per row; the nerd codepoints are the exact glyphs from the design snippet. */
+export const AGENT_ICONS: Record<AgentIntent, IntentVisual> = {
+  thinking:  { nerd: "\udb81\udea9", ascii: "*", label: "Thinking" },
+  reading:   { nerd: "\udb80\ude1e", ascii: "?", label: "Reading" },
+  writing:   { nerd: "\udb80\udfeb", ascii: "~", label: "Editing" },
+  executing: { nerd: "\uf489",       ascii: "$", label: "Running" },
+  web:       { nerd: "\udb81\udd9f", ascii: "@", label: "Fetching" },
+  memory:    { nerd: "\udb80\udeda", ascii: "#", label: "Context" },
+  waiting:   { nerd: "\udb80\udfe4", ascii: "!", label: "Approval" },
+  done:      { nerd: "\udb80\udd2c", ascii: "+", label: "Done" },
+  error:     { nerd: "\udb80\udd56", ascii: "x", label: "Failed" },
+  // The parent handing work to a background subagent/shell. `task` is the host's tool name for a
+  // delegated child; showing it as "thinking" hid the one activity that most changes what the user
+  // should expect (the parent will go quiet while the child runs, and the verdict is deferred).
+  delegating: { nerd: "\uf0c0",       ascii: "&", label: "Delegating" },
+} as const
+
+/** Tool-name → intent. Order matters: the first matching family wins. Case-insensitive; unknown names think. */
+const READ = /read|grep|find|ls|cat|glob|inspect/
+const WRITE = /write|edit|patch|replace|create|delete/
+const EXEC = /bash|exec|run|shell|test|build/
+const WEB = /web|search|fetch|curl|http|scrape/
+const MEMORY = /memory|rag|embed|compact|history/
+const DELEGATE = /task|subagent|delegate|spawn|agent/
+
+export const resolveToolIntent = (toolName: string): AgentIntent => {
+  const name = typeof toolName === "string" ? toolName.toLowerCase() : ""
+  if (DELEGATE.test(name)) return "delegating"
+  if (READ.test(name)) return "reading"
+  if (WRITE.test(name)) return "writing"
+  if (EXEC.test(name)) return "executing"
+  if (WEB.test(name)) return "web"
+  if (MEMORY.test(name)) return "memory"
+  return "thinking"
+}
+
+/** The leading cell for an intent. Unknown intents fall back to thinking rather than painting nothing. */
+export const intentGlyph = (intent: AgentIntent, ascii: boolean = false): string =>
+  (AGENT_ICONS[intent] ?? AGENT_ICONS.thinking)[ascii ? "ascii" : "nerd"]
+
+/**
+ * Split a rendered pill line into its leading cell and the remainder, substituting an intent glyph for
+ * the cell the HUD painted. All HUD glyphs are BMP (one UTF-16 unit) and every nerd glyph is one PUA cell,
+ * so `slice(1)` never splits a surrogate pair and the caret/pinned-condition budget math is unchanged.
+ */
+export const withIntentGlyph = (text: string, intent: AgentIntent, ascii: boolean = false): { readonly glyph: string; readonly rest: string } => ({
+  glyph: intentGlyph(intent, ascii),
+  rest: text.slice(1),
+})
+
+/**
+ * The readable activity word that rides the pill beside its leading icon. Derived from the icon's own
+ * label so the glyph and the word can never drift apart; the label is the one place a human can tell
+ * "reading" from "thinking" when the font is plain ASCII and color is off.
+ */
+export const activityWord = (intent: AgentIntent): string =>
+  (AGENT_ICONS[intent] ?? AGENT_ICONS.thinking).label.toLowerCase()
+
+/** Cells the activity word claims from the pill budget: the word plus its leading and trailing spaces. */
+export const activityBadgeCells = (intent: AgentIntent): number =>
+  cellWidth(` ${activityWord(intent)} `)
+
+/** Theme-token key for the glyph's accent. The renderer resolves the key; no raw color escapes this module. */
+export const intentAccent = (intent: AgentIntent): "muted" | "info" | "warning" | "error" | "success" => {
+  switch (intent) {
+    case "reading":
+    case "web":
+    case "delegating": return "info"
+    case "writing":
+    case "executing":
+    case "waiting": return "warning"
+    case "done": return "success"
+    case "error": return "error"
+    default: return "muted"
+  }
+}
+
+/**
+ * A host event reduced to the one thing the pill cares about: which activity is happening right now.
+ * The TUI layer translates the typed event stream into these signals; the fold below stays pure so the
+ * lifecycle — including long-running tools and parallel calls — is testable without a host or a timer.
+ */
+export type IntentSignal =
+  | { readonly type: "tool-input"; readonly sessionID: string; readonly callID: string; readonly name: string }
+  | { readonly type: "tool-progress"; readonly sessionID: string; readonly callID: string }
+  | { readonly type: "tool-success" | "tool-failed"; readonly sessionID: string; readonly callID: string }
+  | { readonly type: "permission-asked" | "permission-replied"; readonly sessionID: string }
+  | { readonly type: "execution-started" | "execution-succeeded" | "execution-failed" | "execution-interrupted"; readonly sessionID: string }
+
+/** Per-session live activity: running tools keyed by call id, plus one transient approval/outcome notice. */
+export interface ToolActivity {
+  readonly calls: Readonly<Record<string, AgentIntent>>
+  readonly notice: AgentIntent | undefined
+}
+
+export const NO_ACTIVITY: ToolActivity = { calls: {}, notice: undefined }
+export type ActivityMap = Readonly<Record<string, ToolActivity>>
+
+/**
+ * Fold one signal into the activity map. Insertion order is meaningful: `Object.keys` yields the calls in
+ * the order they started, so the newest still-running tool wins on the pill. Completion events remove that
+ * call, which lets the icon fall back to the next running tool — or to the breath when none is left.
+ */
+export const applyIntentSignal = (map: ActivityMap, signal: IntentSignal): ActivityMap => {
+  const current = map[signal.sessionID] ?? NO_ACTIVITY
+  let next: ToolActivity
+  switch (signal.type) {
+    case "tool-input":
+      next = { calls: { ...current.calls, [signal.callID]: resolveToolIntent(signal.name) }, notice: undefined }
+      break
+    case "tool-progress":
+      // A progress beat means the tool is still doing work. If the TUI mounted mid-call we never saw its
+      // name, but "executing" is a truthful fallback for an in-flight tool of unknown family.
+      next = signal.callID in current.calls
+        ? current
+        : { calls: { ...current.calls, [signal.callID]: "executing" }, notice: current.notice }
+      break
+    case "tool-success": {
+      if (!(signal.callID in current.calls)) { next = current; break }
+      const calls = { ...current.calls }
+      delete calls[signal.callID]
+      next = { calls, notice: current.notice }
+      break
+    }
+    case "tool-failed": {
+      const calls = { ...current.calls }
+      delete calls[signal.callID]
+      next = { calls, notice: "error" }
+      break
+    }
+    case "permission-asked":
+      next = { calls: current.calls, notice: "waiting" }
+      break
+    case "permission-replied":
+      next = current.notice === "waiting" ? { calls: current.calls, notice: undefined } : current
+      break
+    case "execution-started":
+      next = { calls: {}, notice: "thinking" }
+      break
+    case "execution-succeeded":
+      next = { calls: {}, notice: "done" }
+      break
+    case "execution-failed":
+      next = { calls: {}, notice: "error" }
+      break
+    case "execution-interrupted":
+      next = NO_ACTIVITY
+      break
+  }
+  if (next === current) return map
+  return { ...map, [signal.sessionID]: next }
+}
+
+/** The icon to paint: an explicit notice (approval/outcome) outranks the newest still-running tool. */
+export const intentForActivity = (activity: ToolActivity | undefined): AgentIntent | undefined => {
+  if (!activity) return undefined
+  if (activity.notice) return activity.notice
+  const ids = Object.keys(activity.calls)
+  const newest = ids[ids.length - 1]
+  return newest === undefined ? undefined : activity.calls[newest]
+}
+
+/**
+ * How long a transient outcome notice (thinking / done / error / approval) rides the pill before it fades.
+ * An in-flight tool is NOT on this timer: its icon lives on the host's tool-result lifecycle instead —
+ * armed by `tool-input` and retired by `tool-success` / `tool-failed`. A delegated `task` can stay pending
+ * for minutes while its child prepares, and the pill must keep naming that work instead of falling back
+ * to the "goal active" breath before a single tool result has been emitted.
+ */
+export const INTENT_TTL_MS = 4_000
+
+/**
+ * Fade a session's transient notice without touching its in-flight calls. Pure so the timer contract is
+ * testable headlessly: a delegated call's icon survives every expiry beat until its actual result lands.
+ */
+export const fadeNotice = (map: ActivityMap, sessionID: string): ActivityMap => {
+  const current = map[sessionID]
+  if (current === undefined || current.notice === undefined) return map
+  return { ...map, [sessionID]: { calls: current.calls, notice: undefined } }
+}
+
+/** Signals that arm a transient notice. Everything else describes a call that lives until its own result. */
+export const NOTICE_SIGNALS: ReadonlySet<IntentSignal["type"]> = new Set([
+  "permission-asked",
+  "execution-started",
+  "execution-succeeded",
+  "execution-failed",
+  "tool-failed",
+])
+
 export default Plugin.define({
   id: "goal-loop.tui",
   setup(context) {
@@ -76,6 +305,43 @@ export default Plugin.define({
     // dialog opens and whenever any goal `changed` event lands while it is open; the host owns session
     // switching, so the block carries no actions.
     const [others, setOthers] = createSignal<readonly GoalSnapshot[]>([])
+    // Live tool activity, keyed by session — the icon that rides the ambient pill's leading cell. This is
+    // view-local like the pin registry: no server state, no RPC, no mirror write. The host's typed event
+    // stream is the only source of truth (`session.tool.called` has no tool name; `session.tool.input.started`
+    // does), and every signal is folded through the pure reducer above. In-flight calls retire on the host's
+    // tool-result events, the same stream that drives the host's own tool output: a delegated `task` keeps its
+    // delegating icon through the child's whole "preparing" phase instead of timing out into the breath.
+    // Only outcome notices get a local fade timer, since no result event ever clears them.
+    const [activity, setActivity] = createSignal<ActivityMap>({})
+    const intentTimers = new Map<string, ReturnType<typeof setTimeout>>()
+    const noteSignal = (signal: IntentSignal): void => {
+      const sid = signal.sessionID
+      if (!sid) return
+      setActivity((previous) => applyIntentSignal(previous, signal))
+      if (!NOTICE_SIGNALS.has(signal.type)) return
+      const pending = intentTimers.get(sid)
+      if (pending !== undefined) clearTimeout(pending)
+      intentTimers.set(sid, setTimeout(() => {
+        intentTimers.delete(sid)
+        setActivity((previous) => fadeNotice(previous, sid))
+      }, INTENT_TTL_MS))
+    }
+    const toolEventDisposers: Array<() => void> = []
+    toolEventDisposers.push(
+      // The only event carrying a tool name: the family decides the glyph (read → reading, bash → running).
+      context.data.on("session.tool.input.started", (event) => noteSignal({ type: "tool-input", sessionID: event.data.sessionID, callID: event.data.id, name: event.data.name })),
+      // A progress beat means the tool is still working, even when its input started long ago.
+      context.data.on("session.tool.progress", (event) => noteSignal({ type: "tool-progress", sessionID: event.data.sessionID, callID: event.data.id })),
+      context.data.on("session.tool.success", (event) => noteSignal({ type: "tool-success", sessionID: event.data.sessionID, callID: event.data.id })),
+      context.data.on("session.tool.failed", (event) => noteSignal({ type: "tool-failed", sessionID: event.data.sessionID, callID: event.data.id })),
+      // Permission prompts are the one approval-shaped intent: the agent is blocked on a human, not working.
+      context.data.on("permission.asked", (event) => noteSignal({ type: "permission-asked", sessionID: event.data.sessionID })),
+      context.data.on("permission.replied", (event) => noteSignal({ type: "permission-replied", sessionID: event.data.sessionID })),
+      context.data.on("session.execution.started", (event) => noteSignal({ type: "execution-started", sessionID: event.data.sessionID })),
+      context.data.on("session.execution.succeeded", (event) => noteSignal({ type: "execution-succeeded", sessionID: event.data.sessionID })),
+      context.data.on("session.execution.failed", (event) => noteSignal({ type: "execution-failed", sessionID: event.data.sessionID })),
+      context.data.on("session.execution.interrupted", (event) => noteSignal({ type: "execution-interrupted", sessionID: event.data.sessionID })),
+    )
     const sessionLabel = (sessionID: string): string => {
       try {
         return context.data.session.get(sessionID)?.title ?? sessionID
@@ -133,8 +399,9 @@ export default Plugin.define({
       try {
         showStatusDialogInner(sessionID, fallback)
       } catch (error) {
+        logUiError("status dialog failed", error)
         try {
-          context.ui.toast.show({ title: "goal plugin error (dialog)", message: String(error instanceof Error ? (error.stack ?? error) : error).slice(0, 900), variant: "error", duration: 30000 })
+          context.ui.toast.show({ title: "goal plugin error (dialog)", message: userFacingError(error), variant: "error", duration: 30000 })
         } catch {
           // Even the error toast must not take the plugin down.
         }
@@ -172,17 +439,20 @@ export default Plugin.define({
           // A render-frame exception in the dialog must land as an in-dialog fallback, never as the
           // host's "plugin crashed in dialog" banner — the session stays alive either way.
           <ErrorBoundary
-            fallback={(error) => (
-              <ClampedColumn>
-                <text attributes={TextAttributes.BOLD} fg={context.theme.text.feedback.warning.base}>
-                  goal detail failed to render
-                </text>
-                <text fg={context.theme.text.muted} wrapMode="word">
-                  {String(error instanceof Error ? (error.stack ?? error.message ?? error) : error).slice(0, 600)}
-                </text>
-                <text fg={context.theme.text.faint}>esc to close · your session is unaffected</text>
-              </ClampedColumn>
-            )}
+            fallback={(error) => {
+              logUiError("dialog render failed", error)
+              return (
+                <ClampedColumn>
+                  <text attributes={TextAttributes.BOLD} fg={context.theme.text.feedback.warning.base}>
+                    goal detail failed to render
+                  </text>
+                  <text fg={context.theme.text.muted} wrapMode="word">
+                    {userFacingError(error)}
+                  </text>
+                  <text fg={context.theme.text.faint}>esc to close · your session is unaffected</text>
+                </ClampedColumn>
+              )
+            }}
           >
           <ClampedColumn>
             <box flexDirection="row" justifyContent="space-between" gap={2}>
@@ -351,40 +621,64 @@ export default Plugin.define({
      */
     const refresh = makeGoalRefresh({
       get: (sessionID) => rpc.get({ sessionID }, at(sessionID)),
-      put: (sessionID, goal) => put(sessionID, goal),
+      put: (sessionID, goal) => put(sessionID, goal, true),
     })
 
-    const goalMirror = createGoalMirror()
+    // `OPENCODE_GOAL_MIRROR=0` disables the mirror on BOTH sides. The server plugin already stops writing when the
+    // flag is set (index.ts); without this guard the TUI would still read a mirror left behind by an earlier run
+    // and paint that stale snapshot over a wedged RPC — so the "off" state only half-worked. Honor the same flag
+    // here, where the read lives, so no mirror bytes (the user's condition text) are consumed when disabled.
+    const goalMirror = process.env.OPENCODE_GOAL_MIRROR === "0" ? undefined : createGoalMirror()
 
     /**
      * Convergence fallback for a dead RPC + dropped `changed`: read the mirror file the server plugin writes on
      * every `changed` emission (same snapshot, same atomic write discipline), instead of the wedged RPC bridge.
      * Used only where a re-pull is already due (the 15s stale-chrome tick, a pump reconnect, a first view whose
      * pull failed); any failure keeps the cached entry, the same posture as a rejected re-pull. Directory-scoped
-     * exactly like the `changed` intake, so a foreign project's record never paints here.
+     * exactly like the `changed` intake, so a foreign project's record never paints here. Disabled with the flag
+     * above: `refreshFromStorage` then behaves exactly like a missing mirror (false), never reading a stale file.
      */
     const refreshFromStorage = async (sessionID: string): Promise<boolean> => {
       try {
-        const goal = goalMirror.read(sessionID, context.location?.directory)
+        const goal = goalMirror?.read(sessionID, context.location?.directory)
         if (goal === undefined) return false
-        put(sessionID, goal)
+        put(sessionID, goal, true)
         return true
       } catch {
         return false
       }
     }
 
-    const put = (sessionID: string, goal: GoalSnapshot | null) => {
+    // When a planning placeholder was last seen per session. A re-pull's answer can be composed while
+    // the planner still had no record and delivered after the arm event; this grace window keeps that
+    // stale answer from being read as the freshly armed goal's completion. TUI-local, like the pin.
+    const planningSeenAt = new Map<string, number>()
+
+    const put = (sessionID: string, goal: GoalSnapshot | null, fromPull = false) => {
       // Completion-moment detection runs before the entries update: a live→terminal transition
       // arms the acknowledgment pill, a fresh live goal disarms any stale one. Best-effort.
+      let planningInFlight = false
       try {
         const previous = entries()[sessionID]?.goal
+        if (isPlanningSnapshot(goal, sessionID)) {
+          planningSeenAt.set(sessionID, Date.now())
+          if (planningSeenAt.size > 64) planningSeenAt.clear()
+        }
+        // The arm-time planner's bar is a live placeholder with no server record. A re-pull while the
+        // planner runs (or a late one after the arm event) resolves null or a stale terminal record;
+        // reading that as the placeholder's completion is what flashed "loop complete", closed the
+        // HUD and dropped the indicator. Keep the placeholder until the real arm snapshot lands.
+        planningInFlight = shouldKeepPlanningPlaceholder(previous, goal, sessionID, fromPull)
+        // Same stale answer, delivered after arm: the cache now holds the real record, so identify it
+        // by the planning window instead. Only pull-sourced answers are suppressed — a `changed`
+        // event (including a user's `cleared`) is always authoritative.
+        if (!planningInFlight && fromPull && isStalePlanningPull(planningSeenAt.get(sessionID), goal, Date.now())) planningInFlight = true
         // An identical snapshot changes nothing — skip re-arming so the ack window stays 45s from the transition.
         const unchanged = previous && goal ? goalsEqual(previous, goal) : false
         const wasLive = previous != null && isLive(previous.status)
         const nowTerminal = goal !== null && goal !== undefined && !isLive(goal.status)
         const gone = goal === null || goal === undefined || nowTerminal
-        if (!unchanged && wasLive && gone) {
+        if (!planningInFlight && !unchanged && wasLive && gone) {
           // Every live→terminal (or cleared) intake releases the HUD arm, the context menu and the pin —
           // whether or not an acknowledgment pill arms. Nothing from the finished goal sticks around to
           // swallow Esc, re-open the card or re-pin its condition onto the next arm in this session.
@@ -403,6 +697,9 @@ export default Plugin.define({
       } catch {
         // The acknowledgment is chrome; a failed probe must not break snapshot intake.
       }
+      // Keep the live bar painted: a null/stale re-pull must not replace the placeholder in the cache
+      // or the pill unmounts. The real arm snapshot has a different id and flows through normally.
+      if (planningInFlight) return
       // The `get` RPC pull carries the context estimate and spend; `changed` events usually do not — carry both forward.
       const mergedGoal = preserveCarriedFields(entries()[sessionID]?.goal, goal)
       const mergedNow = Date.now()
@@ -453,6 +750,21 @@ export default Plugin.define({
       } catch {
         // Never let a toast failure take the plugin down with it.
       }
+    }
+    /**
+     * One home for a failed-action toast: the full error goes to the host log (stack included), the
+     * toast body carries only plain-language text with the operation in its title. `detail` adds the
+     * target (a directory or file name) without dumping the thrown raw system message.
+     */
+    const toastError = (title: string, error: unknown, sessionID?: string, detail?: string) => {
+      logUiError(title, error)
+      safeToast({
+        title,
+        message: detail ? `${detail}: ${userFacingError(error)}` : userFacingError(error),
+        variant: "error",
+        duration: 5_000,
+        sessionID,
+      })
     }
     const onNotice = (notice: Notice) => {
       try {
@@ -742,194 +1054,20 @@ export default Plugin.define({
           sessionID,
         })
       } catch (error) {
-        safeToast({ title: "copy failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
+        toastError("copy failed", error, sessionID)
       }
     }
-    // The dossier-as-file path (`goal.dossier.export` palette command; the dialog's save row). One O_EXCL write into the host's cwd — never overwrites, suffixes on collision, the path comes back as a toast receipt; a failed write says so instead of failing silently.
-    const exportDossier = (sessionID: string | undefined, goal: GoalSnapshot | null | undefined) => {
-      if (!goal || !sessionID) return
-      try {
-        const result = exportLoopDossier(goal, Date.now(), process.cwd())
-        safeToast({ title: "dossier exported", message: result.path, variant: "success", duration: 5_000, sessionID })
-      } catch (error) {
-        safeToast({ title: "export failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
-      }
-    }
-    // The record, on trial: sweep every sha the ledger quotes against the repository at the host's cwd, copy the Markdown verification report, toast the outcome. The dialog row paints the same counts through its in-place ack. Unknown is never folded into missing; a sweep that cannot probe (no git, not a repository) comes back all-unknown and says so.
-    const verifyRecordAction = (sessionID: string | undefined, goal: GoalSnapshot | null | undefined): VerifyOutcome | undefined => {
-      if (!goal || !sessionID) return undefined
-      try {
-        const directory = process.cwd()
-        const verification = verifyRecord(goal, gitCatFileProbe(directory))
-        const report = verifyReportMarkdown(goal, verification, Date.now(), directory)
-        let copied = false
+    const { exportDossier, verifyRecordAction, reachRecordAction, signRecordAction, attestSealedDossierAction, reviewRecordAction, spendLedgerAction, sealRecordAction, dossierIndexAction } = createDossierActions({
+      copyToClipboard: (report) => {
         try {
-          copied = context.renderer.copyToClipboardOSC52(report)
+          return context.renderer.copyToClipboardOSC52(report)
         } catch {
-          copied = false
+          return false
         }
-        const summary = verifySummaryLine(verification)
-        const title = verification.missing > 0 ? "record does not verify" : verification.unknown > 0 ? "record unverifiable" : verification.unique === 0 ? "nothing to verify" : "record verified"
-        const variant = verification.missing > 0 ? "error" : verification.unknown > 0 ? "warning" : "success"
-        safeToast({ title, message: copied ? summary : `${summary} · clipboard unavailable`, variant, duration: 6_000, sessionID })
-        return verification
-      } catch (error) {
-        safeToast({ title: "verify failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
-        return undefined
-      }
-    }
-    // The record, in reach: ask whether every sha the ledger quotes is an ancestor of HEAD at the host's cwd, copy the Markdown ancestry report, toast the outcome. The dialog row paints the same counts through its in-place ack. Not on this line is not misconduct (another branch, a rewrite, a record that predates the merge); unknown is never folded into no; a sweep that cannot probe comes back all-unknown and says so.
-    const reachRecordAction = (sessionID: string | undefined, goal: GoalSnapshot | null | undefined): ReachOutcome | undefined => {
-      if (!goal || !sessionID) return undefined
-      try {
-        const directory = process.cwd()
-        const reach = reachRecord(goal, gitAncestorProbe(directory))
-        const report = reachReportMarkdown(goal, reach, Date.now(), directory)
-        let copied = false
-        try {
-          copied = context.renderer.copyToClipboardOSC52(report)
-        } catch {
-          copied = false
-        }
-        const summary = reachSummaryLine(reach)
-        const title = reach.unreached > 0 ? "record does not reach HEAD" : reach.unknown > 0 ? "record unverifiable" : reach.unique === 0 ? "nothing to place" : "record reaches HEAD"
-        const variant = reach.unreached > 0 || reach.unknown > 0 ? "warning" : "success"
-        safeToast({ title, message: copied ? summary : `${summary} · clipboard unavailable`, variant, duration: 6_000, sessionID })
-        return reach
-      } catch (error) {
-        safeToast({ title: "reach check failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
-        return undefined
-      }
-    }
-    // The record, under seal: ask whether git verifies a signature on every sha the ledger quotes at the host's cwd, copy the Markdown signature report, toast the outcome. The dialog row paints the same counts through its in-place ack. Not signed is not misconduct (git decides by its own rules against the keys it trusts here; most commits are unsigned); unknown is never folded into not signed; a sweep that cannot probe comes back all-unknown and says so.
-    const signRecordAction = (sessionID: string | undefined, goal: GoalSnapshot | null | undefined): SignOutcome | undefined => {
-      if (!goal || !sessionID) return undefined
-      try {
-        const directory = process.cwd()
-        const sign = signRecord(goal, gitSignProbe(directory))
-        const report = signReportMarkdown(goal, sign, Date.now(), directory)
-        let copied = false
-        try {
-          copied = context.renderer.copyToClipboardOSC52(report)
-        } catch {
-          copied = false
-        }
-        const summary = signSummaryLine(sign)
-        const title = sign.unverified > 0 ? "record not under seal" : sign.unknown > 0 ? "record unverifiable" : sign.unique === 0 ? "nothing to attest" : "record under seal"
-        const variant = sign.unverified > 0 || sign.unknown > 0 ? "warning" : "success"
-        safeToast({ title, message: copied ? summary : `${summary} · clipboard unavailable`, variant, duration: 6_000, sessionID })
-        return sign
-      } catch (error) {
-        safeToast({ title: "sign check failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
-        return undefined
-      }
-    }
-    // The sealed dossier, on trial again: re-probe every sha named in the newest `goal-dossier-sealed-*.md` in the host's cwd against the repository here, copy the Markdown drift report, toast the outcome. This answers what the counterparty holding the file asks later: is what the file attested still true. Drift means git flipped a yes to a no since sealing — an error is never the right variant for that (the repository moved, or the seal was made elsewhere; that is information, not misconduct). No file, an unsealed file, and an unparsable appendix are named as such; `unknown` is never folded into `regressed`.
-    const attestSealedDossierAction = (sessionID: string | undefined) => {
-      try {
-        const directory = process.cwd()
-        let candidates: { name: string; mtimeMs: number }[]
-        try {
-          candidates = readdirSync(directory).map((name) => {
-            try {
-              return { name, mtimeMs: statSync(join(directory, name)).mtimeMs }
-            } catch {
-              return { name, mtimeMs: 0 }
-            }
-          })
-        } catch (error) {
-          safeToast({ title: "attest failed", message: `cannot read ${directory}: ${String(error instanceof Error ? error : error).slice(0, 160)}`, variant: "error", duration: 5_000, sessionID })
-          return
-        }
-        const newest = selectNewestSealedDossier(candidates)
-        if (!newest) {
-          safeToast({ title: "no sealed dossier", message: `no goal-dossier-sealed-*.md in ${directory} — seal one first with goal.dossier.seal`, variant: "warning", duration: 6_000, sessionID })
-          return
-        }
-        let markdown: string
-        try {
-          markdown = readFileSync(join(directory, newest), "utf8")
-        } catch (error) {
-          safeToast({ title: "attest failed", message: `cannot read ${newest}: ${String(error instanceof Error ? error : error).slice(0, 160)}`, variant: "error", duration: 5_000, sessionID })
-          return
-        }
-        const result = attestSealedDossier(markdown, directory)
-        if (result.kind === "unsealed") {
-          safeToast({ title: "not a sealed dossier", message: `${newest} carries no attestation appendix`, variant: "warning", duration: 6_000, sessionID })
-          return
-        }
-        if (result.kind === "unparsable") {
-          safeToast({ title: "attestation unreadable", message: `${newest}: the appendix heading is present but no row parses`, variant: "warning", duration: 6_000, sessionID })
-          return
-        }
-        const report = attestationReportMarkdown(result, Date.now(), directory, newest)
-        let copied = false
-        try {
-          copied = context.renderer.copyToClipboardOSC52(report)
-        } catch {
-          copied = false
-        }
-        const summary = attestSummaryLine(result)
-        const title = result.regressed > 0 ? "attestation drifted" : result.unknown > 0 ? "attestation unverifiable" : result.unique === 0 ? "nothing to attest" : "attestation holds"
-        const variant = result.regressed > 0 || result.unknown > 0 ? "warning" : "success"
-        safeToast({ title, message: copied ? summary : `${summary} · clipboard unavailable`, variant, duration: 6_000, sessionID })
-      } catch (error) {
-        safeToast({ title: "attest failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
-      }
-    }
-    // The review, in one file: run all three sweeps (existence, ancestry, the seal) against the repository at the host's cwd and write one O_EXCL file — the record's own bytes, then a combined appendix whose rows carry every answer git gave, per sha, with one verdict column. This is the artifact a reviewer opens cold; the standalone verify/reach/sign reports remain available one question at a time. Gaps and unknowns toast a warning, never an error: the appendix says what git answered, and git's thresholds differ across machines and time — information is not accusation.
-    const reviewRecordAction = (sessionID: string | undefined, goal: GoalSnapshot | null | undefined) => {
-      if (!goal || !sessionID) return
-      try {
-        const result = exportReview(goal, Date.now(), process.cwd())
-        const summary = reviewSummaryLine(result)
-        const title = result.unique === 0 ? "nothing to review" : result.gaps > 0 ? "review written with gaps" : result.unknown > 0 ? "review unverifiable" : "review written"
-        const variant = result.gaps > 0 || result.unknown > 0 ? "warning" : "success"
-        safeToast({ title, message: `${result.path} · ${summary}`, variant, duration: 6_000, sessionID })
-      } catch (error) {
-        safeToast({ title: "review failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
-      }
-    }
-    // The spend story, one file: write one O_EXCL markdown spend report — one row per landed loop iteration (the harness's usage delta: cost, tokens in/out/reasoning, cache read/write, tool calls, sha), then totals over exactly the measured iterations, then an honesty footer. Partial measurement says so and never reads as $0.00; an unmeasured iteration renders —. This is the artifact for capacity retros and evaluator cost audits; the dossier remains the whole-record story.
-    const spendLedgerAction = (sessionID: string | undefined, goal: GoalSnapshot | null | undefined) => {
-      if (!goal || !sessionID) return
-      try {
-        const result = exportSpendLedger(goal, Date.now(), process.cwd())
-        const summary = spendSummaryLine(result)
-        const title = result.iterations === 0 ? "nothing to report" : result.measured < result.iterations ? "spend ledger written (partial)" : "spend ledger written"
-        const variant = result.iterations === 0 || result.measured < result.iterations ? "warning" : "success"
-        safeToast({ title, message: `${result.path} · ${summary}`, variant, duration: 6_000, sessionID })
-      } catch (error) {
-        safeToast({ title: "spend report failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
-      }
-    }
-    // The record, sealed: run all three sweeps (existence, ancestry, the seal) against the repository at the host's cwd and write the sealed dossier — the record's own bytes plus a freshly probed attestation appendix — as one O_EXCL file. Never overwrites; a failed write says so instead of failing silently. Gaps and unknowns toast a warning, never an error: the appendix says what git answered, and git's thresholds differ across machines and time — information is not accusation.
-    const sealRecordAction = (sessionID: string | undefined, goal: GoalSnapshot | null | undefined): SealOutcome | undefined => {
-      if (!goal || !sessionID) return undefined
-      try {
-        const result = exportSealedDossier(goal, Date.now(), process.cwd())
-        const summary = sealSummaryLine(result)
-        const title = result.unique === 0 ? "nothing to seal" : result.clean === result.unique ? "record sealed" : "record sealed with gaps"
-        const variant = result.clean === result.unique ? "success" : "warning"
-        safeToast({ title, message: `${result.path} · ${summary}`, variant, duration: 6_000, sessionID })
-        return result
-      } catch (error) {
-        safeToast({ title: "seal failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
-        return undefined
-      }
-    }
-    // The inventory, one file: scan the host's cwd for the dossier family's exported artifacts (goal-dossier-*.md, goal-dossier-review-*.md, goal-dossier-sealed-*.md, goal-spend-ledger-*.md, and previous goal-dossier-index-*.md files) and write ONE O_EXCL markdown index — file name, kind, bytes (UTF-8), sha256 — then totals, then an honesty footer. The index inventories; it does not verify. A previous index is listed as kind index; the index being written never lists itself. Enabled always: it reads files, not the record.
-    const dossierIndexAction = (sessionID: string | undefined) => {
-      try {
-        const result = exportDossierIndex(Date.now(), process.cwd())
-        const summary = dossierIndexSummaryLine(result)
-        const title = result.artifacts === 0 ? "no artifacts found" : result.skipped > 0 ? "index written with gaps" : "dossier index written"
-        const variant = result.artifacts === 0 || result.skipped > 0 ? "warning" : "success"
-        safeToast({ title, message: `${result.path} · ${summary}`, variant, duration: 6_000, sessionID })
-      } catch (error) {
-        safeToast({ title: "index failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
-      }
-    }
+      },
+      safeToast,
+      toastError,
+    })
     // The HUD's clear affordances are one stray hover-click away from erasing an armed loop and its
     // history (the dialog's [clear goal], the card footer button, the danger row in the context menu,
     // and both palette commands). Every clear path funnels through the host's native confirm dialog;
@@ -949,7 +1087,7 @@ export default Plugin.define({
             // A confirmed wipe must never fail silently: report the rejection with the same
             // grammar as a failed copy, so the user learns the goal is still armed.
             const clearFailed = (error: unknown) =>
-              safeToast({ title: "clear failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
+              toastError("clear failed", error, sessionID)
             try {
               void rpc.clear({ sessionID }, at(sessionID)).catch(clearFailed)
             } catch (error) {
@@ -1004,7 +1142,7 @@ export default Plugin.define({
           }
         }
         // Declared above pill(): the pill's budget subtracts the landing acknowledgment suffix measured
-        // in CELLS (stringWidth), never in code units, and pillText() rides the same suffix. Single source.
+        // in CELLS (cellWidth), never in code units, and pillText() rides the same suffix. Single source.
         const landingNow = () => props.sessionID !== undefined && landing().has(props.sessionID)
         const pill = () => {
           try {
@@ -1016,7 +1154,13 @@ export default Plugin.define({
           // Walks the degradation ladder (retry → compact → turns → pips) before truncating the core,
           // so an 80-column floor never clips the state the pill exists to show.
           const landingSfx = () => landingSuffix(motionDisabled(process.env))
-          const budget = Math.max(8, mountWidthOr() - 1 - (landingNow() ? stringWidth(landingSfx()) : 0) - 2) // -1: the 1-cell right margin; -2: the caret cell rides the same row
+          // A live activity word shares the same row as the state text, so it must come out of the
+          // same budget: the state degrades through its existing ladder instead of clipping the word.
+          const badgeCells = () => {
+            const intent = activeIntent()
+            return intent ? activityBadgeCells(intent) : 0
+          }
+          const budget = Math.max(8, mountWidthOr() - 1 - (landingNow() ? cellWidth(landingSfx()) : 0) - 2 - badgeCells()) // -1: the 1-cell right margin; -2: the caret cell rides the same row
           if (g) return pillModel(g, elapsed(), motionDisabled(process.env), budget, motionOk ? breathPhase() : undefined)
             const t = terminal()
             // The acknowledgment renders the frozen final elapsed; the goal is over, no extrapolation.
@@ -1041,6 +1185,46 @@ export default Plugin.define({
           // truncated to whatever cells remain after the state prefix.
           return g ? base + pinSuffix(g.condition, pinBudget(mountWidthOr(), base), motionDisabled(process.env)) : base
         }
+        // A live tool intent replaces ONLY the pill's leading cell. The breath wave underneath is still what
+        // pillModel paints, so the ring, the waiting ring, the stuck dot and the terminal acknowledgments keep
+        // their documented grammar — state outranks activity. The override is suppressed on anything but a
+        // working, live goal: a paused/waiting/queued/stuck/terminal pill must never borrow a tool's icon.
+        const activeIntent = (): AgentIntent | undefined => {
+          const intent = props.sessionID ? intentForActivity(activity()[props.sessionID]) : undefined
+          if (!intent) return undefined
+          const g = goal()
+          if (!g || g.status !== "active" || isRetryStuck(g) || g.waiting === true || g.queued === true) return undefined
+          return intent
+        }
+        // Split the single leading cell from the rest of the line so the icon can carry its own accent color.
+        // withIntentGlyph owns the swap contract; without a live intent the HUD's own glyph stays untouched.
+        // A parent waiting on a delegated subagent borrows the delegation icon: the hollow ring only says
+        // "nothing is happening", while the pill's state word now names the child it is waiting for.
+        const pillCells = (): { readonly glyph: string; readonly rest: string } => {
+          const text = pillText()
+          const g = goal()
+          const override: AgentIntent | undefined = activeIntent() ?? (g !== undefined && waitingOnSubagents(g) ? "delegating" : undefined)
+          if (!override) return { glyph: text.slice(0, 1), rest: text.slice(1) }
+          return withIntentGlyph(text, override, motionDisabled(process.env))
+        }
+        // The glyph alone is cryptic (a PUA codepoint without a patched font, or a bare ASCII mark under
+        // NO_COLOR), so the same colored cell spells the activity out in words. The word is budgeted above;
+        // the state text keeps its own neutral color and documented degradation ladder.
+        const activityWordText = (): string => {
+          const intent = activeIntent()
+          return intent ? ` ${activityWord(intent)} ` : ""
+        }
+        const glyphColor = (): ColorInput => {
+          const intent = activeIntent()
+          if (!intent || motionDisabled(process.env)) return color()
+          switch (intentAccent(intent)) {
+            case "info": return context.theme.text.feedback.info.base
+            case "warning": return context.theme.text.feedback.warning.base
+            case "success": return context.theme.text.feedback.success?.base ?? context.theme.text.feedback.info.base
+            case "error": return context.theme.text.feedback.error?.base ?? context.theme.text.feedback.warning.base
+            default: return context.theme.text.muted
+          }
+        }
         // The breath: the ring swells through `◦ ○ ◎ ○` on a 2.4s cycle (crest = ◎) — presence, not animation.
         // It runs while the loop is genuinely alive (working, or a transient window: evaluating, hot
         // compaction, the just-achieved flash, the landing acknowledgment) and never otherwise —
@@ -1052,10 +1236,18 @@ export default Plugin.define({
           const g = goal()
           return g !== undefined && g.status === "active" && g.waiting !== true && !isRetryStuck(g)
         }
-        const animated = () => {
+        // The four transient flags are shared by the breath predicate and the crest predicate; only the
+        // breath adds plain working. One helper keeps their reactive reads and their OR inputs identical.
+        const motionFlags = () => {
           const g = goal()
-          return pillMotionNeeded({ working: workingNow(), evaluating: g?.evaluating === true, hot: g !== undefined && isCompactHot(g), flashing: props.sessionID !== undefined && flashing().has(props.sessionID), landing: landingNow() })
+          return {
+            evaluating: g?.evaluating === true,
+            hot: g !== undefined && isCompactHot(g),
+            flashing: props.sessionID !== undefined && flashing().has(props.sessionID),
+            landing: landingNow(),
+          }
         }
+        const animated = () => pillMotionNeeded({ ...motionFlags(), working: workingNow() })
         createEffect(() => {
           // The pill is always painted while showing() (it is the accordion's persistent stripe, see
           // the mount below), so the breath advances whenever the loop is alive — open or closed.
@@ -1068,10 +1260,7 @@ export default Plugin.define({
         })
         // The crest beat belongs to the transients, never to plain working: an evaluating / hot /
         // flash / landing goal flexes at the top of the breath; an armed-and-working loop does not.
-        const transientNow = () => {
-          const g = goal()
-          return pillMotionNeeded({ evaluating: g?.evaluating === true, hot: g !== undefined && isCompactHot(g), flashing: props.sessionID !== undefined && flashing().has(props.sessionID), landing: landingNow() })
-        }
+        const transientNow = () => pillMotionNeeded(motionFlags())
         const pillAttrs = () => {
           const hoverBold = hovered() ? TextAttributes.BOLD : 0
           const g = goal()
@@ -1160,8 +1349,11 @@ export default Plugin.define({
                 } catch {}
               }}
             >
+              <text fg={glyphColor()} wrapMode="none" flexShrink={0} attributes={pillAttrs()}>
+                {pillCells().glyph}{activityWordText()}
+              </text>
               <text fg={color()} wrapMode="none" attributes={pillAttrs()}>
-                {pillText()}
+                {pillCells().rest}
               </text>
               <text fg={context.theme.text.faint} wrapMode="none" flexShrink={0}>{cardFor() ? " ▾" : " ▴"}</text>
             </box>
@@ -1330,258 +1522,51 @@ export default Plugin.define({
       }),
     }))
 
-    context.keymap.layer(() => ({
-      mode: "global",
-      commands: [
-        {
-          id: "goal.status",
-          title: "Goal: show status",
-          group: "Goal",
-          palette: true,
-          enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-          run: () => {
-            const sessionID = currentSession()
-            if (sessionID) void rpc.status({ sessionID }, at(sessionID)).catch(() => {})
-          },
-        },
-        {
-          id: "goal.clear",
-          title: "Goal: clear",
-          group: "Goal",
-          palette: true,
-          enabled: () => Boolean(live(currentSession())),
-          run: () => requestClearGoal(currentSession()),
-        },
-        {
-          id: "goal.loop.status",
-          title: "Goal loop: show status",
-          group: "Goal",
-          palette: true,
-          enabled: () => Boolean(live(currentSession())?.loopEnabled),
-          run: () => {
-            const sessionID = currentSession()
-            if (sessionID) void rpc.status({ sessionID }, at(sessionID)).catch(() => {})
-          },
-        },
-        {
-          id: "goal.hud.toggle",
-          title: "Goal HUD: toggle card",
-          group: "Goal",
-          palette: true,
-          enabled: () => hudArmEnabled(Boolean(live(currentSession())), statusDialogOpen()),
-          run: () => {
-            // Same effect as clicking the pill: toggle the compact card for the current session.
-            // No-op while the status dialog owns the screen — arming the card behind the modal
-            // would paint it beneath the dialog and re-arm its Esc layer.
-            try {
-              if (statusDialogOpen()) return
-              const sessionID = currentSession()
-              setContextOpen(false)
-              setHudSession((current) => (sessionID && current === sessionID ? undefined : sessionID))
-            } catch {}
-          },
-        },
-        {
-          id: "goal.pin.toggle",
-          title: "Goal: toggle pinned condition",
-          group: "Goal",
-          palette: true,
-          enabled: () => Boolean(live(currentSession())),
-          run: () => { try { togglePin(currentSession()) } catch {} },
-        },
-        {
-          id: "goal.condition.copy",
-          title: "Goal: copy condition",
-          group: "Goal",
-          palette: true,
-          enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal?.condition),
-          run: () => {
-            try {
-              const sessionID = currentSession()
-              const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
-              if (goal?.condition && sessionID) copyToClipboard(goal.condition, sessionID)
-            } catch {}
-          },
-        },
-        {
-          id: "goal.reason.copy",
-          title: "Goal: copy evaluator reason",
-          group: "Goal",
-          palette: true,
-          enabled: () => Boolean((live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal)?.reason),
-          run: () => {
-            try {
-              const sessionID = currentSession()
-              const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
-              if (goal?.reason && sessionID) copyToClipboard(goal.reason, sessionID, "reason")
-            } catch {}
-          },
-        },
-        {
-          id: "goal.summary.copy",
-          title: "Goal: copy latest loop summary",
-          group: "Goal",
-          palette: true,
-          enabled: () => Boolean((live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal)?.loopHistory?.at(-1)?.summary),
-          run: () => {
-            try {
-              const sessionID = currentSession()
-              const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
-              const summary = goal?.loopHistory?.at(-1)?.summary
-              if (summary && sessionID) copyToClipboard(summary, sessionID, "summary")
-            } catch {}
-          },
-        },
-        {
-          id: "goal.dossier.copy",
-          title: "Goal: copy loop dossier (markdown)",
-          group: "Goal",
-          palette: true,
-          enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-          run: () => {
-            try {
-              const sessionID = currentSession()
-              const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
-              if (goal && sessionID) copyToClipboard(buildLoopDossier(goal, Date.now()), sessionID, "dossier")
-            } catch {}
-          },
-        },
-        {
-          id: "goal.dossier.export",
-          title: "Goal: export loop dossier (markdown file)",
-          group: "Goal",
-          palette: true,
-          enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-          run: () => {
-            try {
-              const sessionID = currentSession()
-              const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
-              exportDossier(sessionID, goal)
-            } catch {}
-          },
-        },
-        {
-          id: "goal.dossier.verify",
-          title: "Goal: verify the record (shas + markdown report)",
-          group: "Goal",
-          palette: true,
-          enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-          run: () => {
-            try {
-              const sessionID = currentSession()
-              const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
-              verifyRecordAction(sessionID, goal)
-            } catch {}
-          },
-        },
-        {
-          id: "goal.dossier.reach",
-          title: "Goal: verify the record reaches HEAD (shas + markdown report)",
-          group: "Goal",
-          palette: true,
-          enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-          run: () => {
-            try {
-              const sessionID = currentSession()
-              const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
-              reachRecordAction(sessionID, goal)
-            } catch {}
-          },
-        },
-        {
-          id: "goal.dossier.sign",
-          title: "Goal: verify the record's signatures (shas + markdown report)",
-          group: "Goal",
-          palette: true,
-          enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-          run: () => {
-            try {
-              const sessionID = currentSession()
-              const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
-              signRecordAction(sessionID, goal)
-            } catch {}
-          },
-        },
-        {
-          id: "goal.dossier.seal",
-          title: "Goal: seal the dossier with a fresh attestation (file)",
-          group: "Goal",
-          palette: true,
-          enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-          run: () => {
-            try {
-              const sessionID = currentSession()
-              const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
-              sealRecordAction(sessionID, goal)
-            } catch {}
-          },
-        },
-        {
-          id: "goal.dossier.attest",
-          title: "Goal: attest a sealed dossier against HEAD (drift report)",
-          group: "Goal",
-          palette: true,
-          enabled: () => true,
-          run: () => {
-            try {
-              attestSealedDossierAction(currentSession())
-            } catch {}
-          },
-        },
-        {
-          id: "goal.dossier.review",
-          title: "Goal: review the dossier in one file (every question git can answer)",
-          group: "Goal",
-          palette: true,
-          enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-          run: () => {
-            try {
-              const sessionID = currentSession()
-              const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
-              reviewRecordAction(sessionID, goal)
-            } catch {}
-          },
-        },
-        {
-          id: "goal.dossier.spend",
-          title: "Goal: export the spend ledger (markdown report)",
-          group: "Goal",
-          palette: true,
-          enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-          run: () => {
-            try {
-              const sessionID = currentSession()
-              const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
-              spendLedgerAction(sessionID, goal)
-            } catch {}
-          },
-        },
-        {
-          id: "goal.dossier.index",
-          title: "Goal: index the exported dossier artifacts (markdown)",
-          group: "Goal",
-          palette: true,
-          enabled: () => true,
-          run: () => {
-            try {
-              dossierIndexAction(currentSession())
-            } catch {}
-          },
-        },
-        {
-          id: "goal.loop.clear",
-          title: "Goal loop: clear",
-          group: "Goal",
-          palette: true,
-          enabled: () => Boolean(live(currentSession())?.loopEnabled),
-          run: () => requestClearGoal(currentSession()),
-        },
-      ],
-    }))
+    const requestStatus = (): void => {
+      const sessionID = currentSession()
+      if (sessionID) void rpc.status({ sessionID }, at(sessionID)).catch(() => {})
+    }
+
+    // The dossier palette commands all resolve the same live/queued goal and swallow every failure;
+    // only the terminal action differs. Keep that lookup-and-ignore posture in one place.
+    const runDossierAction = (action: (sessionID: string | undefined, goal: GoalSnapshot | null | undefined) => unknown): void => {
+      try {
+        const sessionID = currentSession()
+        const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
+        action(sessionID, goal)
+      } catch {}
+    }
+
+    registerGlobalKeymap({
+      addLayer: (factory) => context.keymap.layer(factory),
+      live,
+      currentSession,
+      entries,
+      statusDialogOpen,
+      setContextOpen: (value) => setContextOpen(value),
+      setHudSession: (value) => setHudSession(value),
+      togglePin,
+      copyToClipboard,
+      requestStatus,
+      requestClearGoal,
+      runDossierAction,
+      exportDossier,
+      verifyRecordAction,
+      reachRecordAction,
+      signRecordAction,
+      sealRecordAction,
+      attestSealedDossierAction,
+      reviewRecordAction,
+      spendLedgerAction,
+      dossierIndexAction,
+    })
 
     return () => {
       clearInterval(timer)
       pumpController.abort()
+      for (const dispose of toolEventDisposers) dispose()
+      for (const pending of intentTimers.values()) clearTimeout(pending)
+      intentTimers.clear()
       if (statusCopiedTimer) clearTimeout(statusCopiedTimer)
       for (const pending of terminalTimers) clearTimeout(pending)
       terminalTimers.clear()

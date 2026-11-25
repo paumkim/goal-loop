@@ -2,7 +2,7 @@
  * Headless render of the full `/goal` detail dialog (clamped column + host-chrome layout + scrollbox +
  * StatusDialogBody). Not shipped (scripts/ is not in package.json `files`).
  *
- *   bun --preload @opentui/solid/preload scripts/render-dialog.tsx [--buggy] [--width=N] [--pinned] [--copied] [--achieved] [--pileup]
+ *   bun --preload @opentui/solid/preload scripts/render-dialog.tsx [--buggy] [--width=N] [--height=N] [--pinned] [--copied] [--achieved] [--pileup] [--mono] [--bench=N]
  *
  * --buggy reproduces the pre-fix configuration (shared scrollbarOptions visible: true, forced horizontal track);
  * the default prints the fixed configuration (auto scrollbar visibility, scrollX off, 3-cell body gutter).
@@ -12,14 +12,19 @@
  * button acknowledged, --mono prints under reduced color (NO_COLOR set) with ASCII glyphs.
  * --pileup renders a stress frame: a massive goal (long condition/reason/objective) with many live goals in
  * elsewhere (expanded) so alignment and consistency under pile-up can be eyeballed headlessly.
+ * --height pins the frame height (default 46, 80 under --pileup), so tall-frame scrollbox layout can be
+ * inspected headlessly. --bench=N renders N frames and prints avg/min/max ms per frame; 0 (default) skips it.
  * The footer is the real DialogFooter, never a hand-painted line. Both arms paint the verify section
  * (the last evaluator.verifyCommand gate's own output — the dialog's proof panel).
  */
-import { RGBA, TextAttributes } from "@opentui/core"
+import { TextAttributes } from "@opentui/core"
 import { testRender } from "@opentui/solid"
 import { StatusDialogBody } from "../src/status-dialog.tsx"
 import { DialogFooter, type HudCardTheme } from "../src/hud-card.tsx"
 import { goalGlyph } from "../src/core/format.ts"
+import { positiveFinite } from "./positive-finite.ts"
+import { PALETTE } from "./render-theme.ts"
+import { monoFlag } from "./render-fixtures.ts"
 import { motionDisabled } from "../src/core/hud.ts"
 import type { HistoryTheme } from "../src/tui-history.tsx"
 import type { GoalSnapshot } from "../src/core/types.ts"
@@ -27,40 +32,31 @@ import type { GoalSnapshot } from "../src/core/types.ts"
 const buggy = process.argv.includes("--buggy")
 const pileup = process.argv.includes("--pileup")
 /** --width=/--height=: must parse to a positive finite number; a bare "--width=abc" used to paint a NaN-wide frame silently. */
-const positiveFiniteFlag = (name: string, dflt: number): number => {
-  const raw = process.argv.slice(2).find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3)
-  if (raw === undefined) return dflt
-  const n = Number(raw)
-  if (!Number.isFinite(n) || n <= 0) {
-    console.error(`render-dialog.tsx: --${name} must be a positive finite number (got "${raw}")`)
-    process.exit(2)
-  }
-  return n
-}
+const positiveFiniteFlag = (name: string, dflt: number): number =>
+  positiveFinite(process.argv.slice(2).find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3), dflt, `render-dialog.tsx: --${name}`)
 const height = positiveFiniteFlag("height", pileup ? 80 : 46)
 const width = positiveFiniteFlag("width", pileup ? 100 : 150)
 const pinned = process.argv.includes("--pinned")
 const copied = process.argv.includes("--copied")
 const achieved = process.argv.includes("--achieved")
-const mono = process.argv.includes("--mono")
-if (mono) process.env.NO_COLOR = "1"
+const mono = monoFlag()
 /** --bench=N: render N frames and print avg/min/max ms per frame (renderOnce + captureCharFrame, the same work a keystroke triggers). 0 = skip benching. */
 const bench = positiveFiniteFlag("bench", 0)
 const now = Date.now()
 
 const theme: HistoryTheme & HudCardTheme = {
   text: {
-    base: RGBA.fromHex("#e8e8e8"),
-    muted: RGBA.fromHex("#a0a0a0"),
-    faint: RGBA.fromHex("#6f6f6f"),
+    base: PALETTE.base,
+    muted: PALETTE.muted,
+    faint: PALETTE.faint,
     feedback: {
-      info: { base: RGBA.fromHex("#6cb6ff") },
-      warning: { base: RGBA.fromHex("#e0af3c") },
-      error: { base: RGBA.fromHex("#ff6c6c") },
+      info: { base: PALETTE.info },
+      warning: { base: PALETTE.warning },
+      error: { base: PALETTE.error },
     },
   },
-  border: { base: RGBA.fromHex("#3f3f3f") },
-  background: { raised: { high: RGBA.fromHex("#161616") } },
+  border: { base: PALETTE.border },
+  background: { raised: { high: PALETTE.raised } },
 }
 
 const verdicts = [

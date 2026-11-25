@@ -12,7 +12,6 @@ import {
   formatLearningsForPrompt,
   formatOutcomeTelemetry,
   normalizeReason,
-  summarizeLearningText,
   summarizeOutcomeTelemetry,
 } from "../src/core/outcome-telemetry.ts"
 import { GoalController } from "../src/runtime/controller.ts"
@@ -123,6 +122,37 @@ describe("summarizeOutcomeTelemetry", () => {
     expect(formatOutcomeTelemetry(empty)).toBe("")
   })
 
+  test("normalizeReason memo returns cold and warm results identical to an uncached oracle", () => {
+    // Independent reimplementation of the six-pass normalization — the oracle for the bounded memo.
+    const oracle = (reason: string | undefined): string => {
+      if (!(typeof reason === "string" && reason.trim())) return ""
+      return (reason ?? "")
+        .toLowerCase()
+        .replace(/https?:\/\/\S+/g, " ")
+        .replace(/\b[0-9a-f]{7,40}\b/g, " ")
+        .replace(/\b\d+(?:\.\d+)?\s*(?:ms|s|sec|secs|second|seconds|min|mins|minute|minutes|h|hr|hrs|hour|hours|day|days)\b/g, " ")
+        .replace(/[^\p{L}\p{N}]+/gu, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 120)
+    }
+    const inputs = [
+      undefined, "", "   ", "MISSING verifier output (30s)",
+      "see https://example.com/run/42 for sha abc1234567890def",
+      "flaky render snapshot mismatch", "the loop did not advance",
+      "REPEAT reason with 12 hrs delay", "x".repeat(200),
+    ]
+    for (const input of inputs) {
+      for (let pass = 0; pass < 2; pass++) expect(normalizeReason(input)).toBe(oracle(input))
+    }
+    // A summary over repeated reasons must be identical to the uncached path's grouped result.
+    const repeated = Array.from({ length: 20 }, () => verdict("MISSING verifier output (30s)"))
+    const s = summarizeOutcomeTelemetry(repeated)
+    expect(s.verdictCounts.not_met).toBe(20)
+    expect(s.failureThemes.length).toBe(1)
+    expect(s.failureThemes[0]?.count).toBe(20)
+  })
+
   test("groups not_met reasons into a taxonomy and flags recurring themes at the threshold", () => {
     const entries = [
       verdict("missing verifier output"),
@@ -138,6 +168,26 @@ describe("summarizeOutcomeTelemetry", () => {
     expect(s.failureThemes[0]?.theme).toContain("missing verifier output")
     expect(s.failureThemes[1]?.count).toBe(1)
     expect(s.failureThemes[1]?.recurring).toBe(false)
+  })
+
+  test("a plain-object not_met verdict still lands in failureThemes after the guard removal", () => {
+    // summarizeOutcomeTelemetry narrows `entry` with one isRecord guard at the top of the loop.
+    // This plain object exercises that path: its reason must still be normalized and counted.
+    const plain = {
+      version: 1,
+      ts: "2026-01-01T00:01:00.000Z",
+      kind: "turn_verdict",
+      sessionID: "ses_test",
+      goalID: "goal_x",
+      turn: 1,
+      verdict: "not_met",
+      reason: "flaky render snapshot mismatch",
+      lesson: "not met: flaky render snapshot mismatch",
+    }
+    const s = summarizeOutcomeTelemetry([plain as LearningEntry])
+    expect(s.verdictCounts.not_met).toBe(1)
+    expect(s.failureThemes.length).toBe(1)
+    expect(s.failureThemes[0]?.theme).toContain("flaky render snapshot mismatch")
   })
 
   test("ignores non-not_met verdicts when building the failure taxonomy", () => {
@@ -179,12 +229,12 @@ describe("summarizeOutcomeTelemetry", () => {
     const s = summarizeOutcomeTelemetry([t, so, base({ condition: "make tests pass" }), base({ condition: "Make tests pass!" })])
     expect(s.terminalCounts.achieved).toBe(1)
     expect(s.recurringConditions.length).toBe(1)
-    expect(s.recurringConditions[0]?.count).toBeGreaterThan(1)
+    expect(s.recurringConditions[0]?.count).toBe(4) // all four entries carry the same normalized condition
     expect(s.recurringConditions[0]?.condition).toContain("make tests pass")
   })
 
-  test("summarizeLearningText parses JSONL end to end", () => {
-    const s = summarizeLearningText([serializeLearningEntry(verdict("flaky test")), "{bad", ""].join("\n"))
+  test("parseLearningEntries and summarizeOutcomeTelemetry parse JSONL end to end", () => {
+    const s = summarizeOutcomeTelemetry(parseLearningEntries([serializeLearningEntry(verdict("flaky test")), "{bad", ""].join("\n")))
     expect(s.entries).toBe(1)
     expect(s.failureThemes[0]?.theme).toBe("flaky test")
   })

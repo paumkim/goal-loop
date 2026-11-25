@@ -160,7 +160,7 @@ const restampPages = (root: string): string[] => {
 };
 
 /** One changelog row: calendar date, commit subject, source tag. */
-export interface ChangelogRow {
+interface ChangelogRow {
   readonly when: string;
   readonly what: string;
   readonly source: string;

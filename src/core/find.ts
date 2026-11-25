@@ -13,14 +13,21 @@
  * or negative input clamps rather than throwing.
  */
 
+import { memoizeBounded } from "./format.ts"
+
 /** One piece of a line, flagged for the paint. Segments always tile the original text in order. */
 interface FindSegment {
   readonly text: string
   readonly match: boolean
 }
 
-/** Case fold that also reports whether it preserved length. The length check is what certifies offsets. */
-const fold = (text: string): string => text.toLowerCase()
+/**
+ * Case fold. The live find spotlight recomputes `findMatches`, `countMatches` and `segmentLine`
+ * over the same dossier lines on every keystroke/frame, so each line used to be lowercased three
+ * times. `toLowerCase` is pure, so a bounded memo is output-identical; a miss recomputes, a hit is
+ * a lookup. Bounded so a long session cannot grow the map without limit.
+ */
+const fold = memoizeBounded((text: string): string => text.toLowerCase(), 8192)
 
 const contains = (foldText: string, foldQuery: string): boolean => foldText.includes(foldQuery)
 

@@ -9,7 +9,7 @@ import { testRender } from "@opentui/solid"
 import { RGBA, TextAttributes } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import { HudCard, hudCardRows, cardRowPlan, CARD_VERTICAL_PADDING, cardWidth, pinBudget, footerCopyLabel, footerPinLabel, footerButtonCells, dialogFooterTier, DIALOG_FOOTER_FULL_HINT, DIALOG_FOOTER_SHORT_HINT, type HudCardTheme } from "../src/hud-card.tsx"
-import { isCompactHot, compactMarker, pillModel, breathGlyph, breathCrest, BREATH_PERIOD_MS, BREATH_PHASE_MS, BREATH_REST, landingSuffix, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, stateAccentColor, borderAccentColor, verdictAccentColor, verdictEntryAccentColor, achievedAckAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL, contextMenuRows, nextMenuIndex, CONTEXT_MENU_CLEAR, staleUnprovenSessionIDs, staleRecentlyTerminalSessionIDs, expiredTerminalSessionIDs, STALE_LIVE_ENTRY_MS, RECENT_TERMINAL_WINDOW_MS } from "../src/core/hud.ts"
+import { isCompactHot, compactMarker, pillModel, currentTurnCount, breathGlyph, breathCrest, BREATH_PERIOD_MS, BREATH_PHASE_MS, BREATH_REST, landingSuffix, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, stateAccentColor, borderAccentColor, verdictAccentColor, verdictEntryAccentColor, achievedAckAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL, contextMenuRows, nextMenuIndex, CONTEXT_MENU_CLEAR, staleUnprovenSessionIDs, staleRecentlyTerminalSessionIDs, expiredTerminalSessionIDs, STALE_LIVE_ENTRY_MS, RECENT_TERMINAL_WINDOW_MS } from "../src/core/hud.ts"
 import stringWidth from "string-width"
 import { GOAL_GLYPH, goalGlyph } from "../src/core/format.ts"
 import { LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
@@ -90,8 +90,61 @@ describe("pillModel", () => {
     const pill = pillModel(loopedGoal(), 1000 * 60 * 12)
     expect(pill.text).toContain("loop · v3/5")
     expect(pill.text).toContain("●●")
-    expect(pill.text).toContain("4 turns")
+    // The label counts completed evaluations on the verdict trail, not the turn currently being run.
+    expect(pill.text).toContain("4 turns evaluated")
     expect(pill.tone).toBe("armed")
+  })
+
+  test("the pill counts completed evaluations from the verdict trail, not the re-dispatch counter", () => {
+    // A fresh arm has nothing evaluated yet; there is no count to paint.
+    const fresh = loopedGoal({ turns: 0, history: [] })
+    expect(currentTurnCount(fresh)).toBe(0)
+    expect(pillModel(fresh, 0).text).not.toContain("turn")
+
+    // Each landed verdict is one evaluated turn. `turns` may be one ahead while the next turn runs,
+    // but the trail is authoritative and moves exactly when a verdict lands.
+    const afterFirst = loopedGoal({ turns: 1, history: verdicts(["not_met"]) })
+    expect(currentTurnCount(afterFirst)).toBe(1)
+    expect(pillModel(afterFirst, 0).text).toContain("1 turn evaluated")
+
+    const afterSecond = loopedGoal({ turns: 2, history: verdicts(["not_met", "not_met"]) })
+    expect(currentTurnCount(afterSecond)).toBe(2)
+    expect(pillModel(afterSecond, 0).text).toContain("2 turns evaluated")
+  })
+
+  test("a re-armed goal shows the long verdict trail, not the stale one-turn counter", () => {
+    // Regression for the live pill reading "1 turn" while the detail card read "14x not_met in a row".
+    // A loop advance resets `turns` to 0 but keeps the verdict trail; a snapshot from that moment still
+    // holds all 14 evaluations, and that is the number the user needs at a glance.
+    const fourteen = verdicts(Array.from({ length: 14 }, (): Verdict => "not_met"))
+    const stuck = loopedGoal({ turns: 0, history: fourteen, loopIteration: 1, loopMaxLoops: 100 })
+    expect(currentTurnCount(stuck)).toBe(14)
+    const text = pillModel(stuck, 1000 * 60 * 4 * 43).text
+    expect(text).toContain("14 turns evaluated")
+    expect(text).not.toMatch(/ · 1 turn\b/)
+  })
+
+  test("a non-finite legacy turns counter falls back to the verdict trail, never NaN", () => {
+    for (const turns of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(currentTurnCount(loopedGoal({ turns, history: verdicts(["not_met", "not_met"]) }))).toBe(2)
+      expect(currentTurnCount(loopedGoal({ turns, history: [] }))).toBe(0)
+    }
+  })
+
+  test("the evaluated count stays stable across an in-flight turn, pause, and terminal settle", () => {
+    // A turn in flight is not evaluated yet: one landed verdict stays one.
+    const inFlight = loopedGoal({ turns: 1, history: verdicts(["not_met"]), evaluating: true })
+    expect(currentTurnCount(inFlight)).toBe(1)
+    expect(pillModel(inFlight, 0).text).toContain("1 turn evaluated")
+
+    // Paused and terminal goals read the same trail — no backwards jump when the goal settles.
+    const paused = loopedGoal({ turns: 2, history: verdicts(["not_met", "not_met"]), status: "paused" })
+    expect(currentTurnCount(paused)).toBe(2)
+    expect(pillModel(paused, 0).text).toContain("2 turns evaluated")
+
+    const done = loopedGoal({ turns: 2, history: verdicts(["not_met", "met"]), status: "achieved" })
+    expect(currentTurnCount(done)).toBe(2)
+    expect(terminalPill(done, 0)!.text).toContain("2 turns")
   })
 
   test("an armed goal whose kickoff is in flight paints 'queued', not 'active'", () => {
@@ -105,17 +158,18 @@ describe("pillModel", () => {
     const distress = loopedGoal({ loopIteration: 5, loopMaxLoops: 5, turns: 123, retries: 12, loopCompact: { requestedAt: now - 60_000, iteration: 3, misses: 4 } })
     const full = pillModel(distress, 1000 * 60 * 45)
     expect(stringWidth(full.text)).toBeLessThanOrEqual(Number.POSITIVE_INFINITY)
-    // 70 cells: retry is dropped; turns and compact survive.
-    const dropRetry = pillModel(distress, 1000 * 60 * 45, false, 70)
+    // 80 cells: retry is dropped; the evaluated count and compact survive.
+    const dropRetry = pillModel(distress, 1000 * 60 * 45, false, 80)
     expect(dropRetry.text).not.toContain("retry")
     expect(dropRetry.text).toContain("compact pending")
-    expect(stringWidth(dropRetry.text)).toBeLessThanOrEqual(70)
-    // 45 cells: retry and compact both go; turns survive.
-    const dropCompact = pillModel(distress, 1000 * 60 * 45, false, 45)
+    expect(dropRetry.text).toContain("turns evaluated")
+    expect(stringWidth(dropRetry.text)).toBeLessThanOrEqual(80)
+    // 55 cells: retry and compact both go; the evaluated count survives.
+    const dropCompact = pillModel(distress, 1000 * 60 * 45, false, 55)
     expect(dropCompact.text).not.toContain("compact")
     expect(dropCompact.text).not.toContain("retry")
-    expect(dropCompact.text).toContain("turns")
-    expect(stringWidth(dropCompact.text)).toBeLessThanOrEqual(45)
+    expect(dropCompact.text).toContain("turns evaluated")
+    expect(stringWidth(dropCompact.text)).toBeLessThanOrEqual(55)
     // 33 cells: turns go too; the state core + pips remain.
     const dropTurns = pillModel(distress, 1000 * 60 * 45, false, 33)
     expect(dropTurns.text).not.toContain("turns")
@@ -128,9 +182,9 @@ describe("pillModel", () => {
 
   test("a budget on a non-loop goal drops retry, then turns, before truncating the core", () => {
     const plain = loopedGoal({ loopEnabled: false, loopHistory: [], turns: 321, retries: 7 }) as unknown as GoalSnapshot
-    const dropRetry = pillModel(plain, 1000 * 60 * 41, false, 33)
+    const dropRetry = pillModel(plain, 1000 * 60 * 41, false, 40)
     expect(dropRetry.text).not.toContain("retry")
-    expect(dropRetry.text).toContain("turns")
+    expect(dropRetry.text).toContain("turns evaluated")
     const dropTurns = pillModel(plain, 1000 * 60 * 41, false, 25)
     expect(dropTurns.text).not.toContain("retry")
     expect(dropTurns.text).not.toContain("turns")
@@ -249,7 +303,7 @@ describe("the breath — the ambient dot (workstream XII)", () => {
 
   test("the resting (reduced-motion) frame is itself legible — a working pill at rest reads goal active", () => {
     const text = pillModel(working(), 1000 * 60 * 41).text
-    expect(text).toBe("\u25CB goal active · 41m · 3 turns")
+    expect(text).toBe("\u25CB goal active · 41m · 3 turns evaluated")
   })
 
   test("waiting, paused and stuck paint static, distinct glyphs — never the wave, in any phase", () => {
@@ -275,7 +329,7 @@ describe("the breath — the ambient dot (workstream XII)", () => {
 
   test("an evaluating goal paints the full wave at rest — the crest face is ◎, and weight is the caller's lever", () => {
     const text = pillModel(working({ evaluating: true }), 1000 * 60 * 41, false, Number.POSITIVE_INFINITY, 2).text
-    expect(text.startsWith("\u25CE goal checking · 41m · 3 turns")).toBe(true)
+    expect(text.startsWith("\u25CE goal checking · 41m · 3 turns evaluated")).toBe(true)
   })
 })
 
@@ -402,6 +456,14 @@ describe("remediationFor paused", () => {
     expect(fix?.tone).toBe("warning")
     expect(fix?.text).toContain("no tool use for 4 turns")
     expect(fix?.text).toContain("send a message to resume")
+  })
+
+  test("a non-finite stall counter renders 0 turns, never NaN/Infinity", () => {
+    for (const stall of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      const fix = remediationFor(loopedGoal({ status: "paused", pauseCause: "stall", stall }))
+      expect(fix?.text).toContain("no tool use for 0 turns")
+      expect(fix?.text).not.toMatch(/NaN|Infinity/)
+    }
   })
 
   test("a user-interrupted pause gets the resume remedy", () => {

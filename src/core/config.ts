@@ -1,8 +1,10 @@
-import type { CommitRequest, ModelRef } from "./types.ts"
+import { parseBool } from "./parse.ts"
+import type { CommitRequest, ModelRef, VerifyCheckType, VerifyEvidenceMode } from "./types.ts"
+import { VERIFY_CHECK_TYPES } from "./types.ts"
+// Canonical unions live in types.ts; re-exported here so existing `from "./config.ts"` imports keep working.
+export type { VerifyCheckType, VerifyEvidenceMode } from "./types.ts"
 
 type EvaluatorMode = "auto" | "session" | "independent"
-
-export type VerifyCheckType = "typecheck" | "tests" | "lint" | "build" | "smoke" | "custom" | "goal-declared"
 
 export interface VerifyCheckConfig {
   readonly id: string
@@ -13,7 +15,7 @@ export interface VerifyCheckConfig {
   readonly when?: "always" | "broad"
   readonly label?: string
   /** How this required check may be satisfied. Default: command (executed). */
-  readonly evidence?: "command" | "artifact" | "either"
+  readonly evidence?: VerifyEvidenceMode
   /** Required literal patterns for fresh scoped transcript/artifact evidence (evidence artifact|either). */
   readonly artifactPatterns?: readonly string[]
 }
@@ -109,7 +111,7 @@ export const MAX_BUSY_RETRIES = 5
  * `inherit` is canonical; the others are accepted aliases so the intent reads naturally in any config style.
  * Matching is trimmed and case-insensitive (see `isInheritModelValue`).
  */
-export const INHERIT_MODEL_TOKENS = ["inherit", "session", "parent", "current", "active"] as const
+const INHERIT_MODEL_TOKENS = ["inherit", "session", "parent", "current", "active"] as const
 
 /** True for a string that asks the evaluator to inherit the parent session's active model. */
 export function isInheritModelValue(value: unknown): boolean {
@@ -160,7 +162,6 @@ const branch = (value: unknown, fallback: string) => {
 }
 
 
-const VERIFY_TYPES = new Set(["typecheck", "tests", "lint", "build", "smoke", "custom", "goal-declared"])
 
 function parseVerifyChecks(value: unknown, fallbackTimeoutMs: number): VerifyCheckConfig[] {
   if (!Array.isArray(value)) return []
@@ -171,7 +172,7 @@ function parseVerifyChecks(value: unknown, fallbackTimeoutMs: number): VerifyChe
     const command = typeof v.command === "string" ? v.command.trim() : ""
     if (!command) continue
     const typeRaw = typeof v.type === "string" ? v.type.trim().toLowerCase() : "custom"
-    const type = (VERIFY_TYPES.has(typeRaw) ? typeRaw : "custom") as VerifyCheckType
+    const type = (VERIFY_CHECK_TYPES.has(typeRaw) ? typeRaw : "custom") as VerifyCheckType
     const idRaw = typeof v.id === "string" ? v.id.trim() : ""
     const id = idRaw || `${type}-${out.length + 1}`
     const when = v.when === "broad" ? "broad" : "always"
@@ -285,25 +286,13 @@ export function resolveConfig(
   }
 }
 
-/** Truthy spellings are `1/true/yes/on`, falsy are `0/false/no/off` (case-insensitive); anything else is unrecognized. */
-const TRUTHY = ["1", "true", "yes", "on"]
-const FALSY = ["0", "false", "no", "off"]
-const flag = (value: unknown): boolean | undefined => {
-  if (typeof value === "boolean") return value
-  if (typeof value !== "string") return undefined
-  const normalized = value.trim().toLowerCase()
-  if (TRUTHY.includes(normalized)) return true
-  if (FALSY.includes(normalized)) return false
-  return undefined
-}
-
 /** Coordinator option: `"auto"` (default, detect from repo), `true` (force), `false` (off). */
 function parseCoordinator(value: unknown): "auto" | boolean {
   if (value === undefined || value === "auto" || value === "") return "auto"
-  return flag(value) ?? "auto"
+  return parseBool(value) ?? "auto"
 }
 
 /** An environment flag: "1", "true", "yes" and "on" are true, "0", "false", "no" and "off" are false. */
 function envBool(value: string | undefined, fallback: boolean) {
-  return (value === undefined ? undefined : flag(value)) ?? fallback
+  return (value === undefined ? undefined : parseBool(value)) ?? fallback
 }

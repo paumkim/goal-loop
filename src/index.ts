@@ -9,16 +9,17 @@
  * background-work check-ins, restore on restart).
  */
 import { estimateContextTokens } from "./core/context-size.ts"
-import { Plugin } from "@opencode/plugin"
+import { Plugin, type Agent } from "@opencode/plugin"
+import { createHarness, evaluatorChildBySession, plannerChildBySession } from "./harness.ts"
+import { registerHooks } from "./hooks.ts"
 import { ensureStartupScaffold, hasJq, pluginRootFromMeta, resolveCoordinatorBin } from "./core/bootstrap.ts"
 import { resolveConfig } from "./core/config.ts"
-import { EVALUATOR_AGENT_ID, EVALUATOR_AGENT_TITLE, EVALUATOR_SYSTEM_PROMPT, verdictFromNativeReport } from "./core/evaluator-agent.ts"
+import { EVALUATOR_AGENT_ID, EVALUATOR_SYSTEM_PROMPT } from "./core/evaluator-agent.ts"
 import { findRepository, resolveCommitPolicy, resolveProjectRoot } from "./core/git.ts"
-import { parseGoalCommand, parseGoalLoopDirective } from "./core/parse.ts"
-import { PLANNER_AGENT_ID, PLANNER_AGENT_TITLE, PLANNER_SYSTEM_PROMPT, parsePlan, planGoalRequest, type PlannedGoal } from "./core/planner.ts"
-import { currentTurnStart, renderParentSummary, renderTranscript } from "./core/transcript.ts"
-import { carriesGoalGrammar, compactGoalInstructions, directive as directivePrompt, nativeEvaluationRequest, systemReminder, stripGoalNotes, stripGoalContext, stripGoalEvaluations, isGoalEvaluationMessage, TERMINAL_REMINDER } from "./core/prompts.ts"
-import type { ModelRef, UsageSnapshot } from "./core/types.ts"
+import { parseBool, parseGoalCommand } from "./core/parse.ts"
+import { PLANNER_AGENT_ID, PLANNER_AGENT_TITLE, PLANNER_SYSTEM_PROMPT } from "./core/planner.ts"
+import { renderTranscript } from "./core/transcript.ts"
+import type { UsageSnapshot } from "./core/types.ts"
 import { createRpcHandlers } from "./rpc-handlers.ts"
 import { GoalRpc } from "./rpc.ts"
 import { BackgroundTracker } from "./runtime/background.ts"
@@ -29,10 +30,30 @@ import { createGoalMirror } from "./core/mirror.ts"
 import { createRouter, type ServerEvent } from "./runtime/events.ts"
 import { systemClock, type EmitterPort, type Logger, type SessionPort } from "./runtime/ports.ts"
 import { GoalStore } from "./runtime/store.ts"
+import { AgentMessaging } from "./runtime/messaging.ts"
 import { withFileSink } from "./core/file-log.ts"
+// Shared plain-language error formatter (the filename is historical: it was born in the TUI).
+import { userFacingError } from "./tui-error.ts"
 import { update as cliUpdate } from "../bin/goal-loop.mjs"
 
 const PLUGIN_ID = "goal-loop"
+
+/** The host brands display names; both names below are fixed plugin literals, not user input. */
+const asAgentName = (name: string) => name as Agent.Info["name"]
+
+/**
+ * The cold window installed by `/reset-context`. OpenCode's transcript builder replays a completed compaction's
+ * `native.messages` *instead of* its summary (`to-llm-message.ts`, `case "compaction"`). An upstream host labels a
+ * completed compaction that carries `native.messages` "Provider compaction"; that is the unwanted divider, and it
+ * is hardcoded in the host TUI with no slot, theme token or config key to override. Patching the host source or the
+ * installed binary would fix the text but would write outside this repo and would not survive a reinstall, so the
+ * plugin avoids the trigger instead: no native window, an empty summary, and an empty kept range replay as an empty
+ * `<conversation-checkpoint>` — still a cold start, but the host renders its generic "Compaction" divider.
+ *
+ * `metadata.recent` is set explicitly because `SessionRecentText.kept()` reads it: an unset value could inherit a
+ * kept range from the compaction being replaced and pull old text back into the checkpoint.
+ */
+export const COLD_REPLAY = { summary: "", metadata: { recent: "" } }
 
 /**
  * Budget for the *native* evaluator child's evidence digest. Deliberately far below the generation judge's
@@ -63,7 +84,18 @@ function asEvaluatorError(value: unknown): Error {
   if (typeof value === "object" && value !== null) {
     const record = value as Record<string, unknown>
     const status = typeof record.status === "number" ? `status ${record.status} ` : ""
-    return new Error(`evaluator child failed (${status}${String(record.message ?? record.type ?? record.error ?? JSON.stringify(record))})`)
+    const error = new Error(`evaluator child failed (${status}${String(record.message ?? record.type ?? record.error ?? JSON.stringify(record))})`)
+    // A provider quota error is an object whose 429/code lives in structured fields, not in the message text
+    // ("slow down" carries no quota phrase). Flattening to a string alone drops that signal, so the tightened
+    // isUsageLimitError would miss a genuine quota and retry instead of pausing. Carry the structured fields
+    // onto the Error so the detector reads the same 429/code it would have read before flattening.
+    for (const key of ["status", "code", "type", "name", "error"] as const) {
+      const field = record[key]
+      if (typeof field === "string" || typeof field === "number") {
+        Object.defineProperty(error, key, { value: field, enumerable: true, configurable: true })
+      }
+    }
+    return error
   }
   return new Error(`evaluator child failed (${String(value)})`)
 }
@@ -111,11 +143,7 @@ const sleep = (ms: number, signal: AbortSignal) =>
   })
 
 /** Env flag: `1/true/yes/on` (case-insensitive) enables; anything else is off. Probe mode makes plugin storage read-only. */
-const probeFlag = (value: string | undefined) => {
-  if (!value) return false
-  const normalized = value.trim().toLowerCase()
-  return ["1", "true", "yes", "on"].includes(normalized)
-}
+const probeFlag = (value: string | undefined) => parseBool(value) === true
 
 /** Runs a verification command via the user's shell, capturing combined output (tail kept). Never touches plugin storage. */
 export function createVerifier() {
@@ -198,12 +226,27 @@ export function createVerifier() {
   }
 }
 
+/**
+ * Return a planner scope only when it was distilled for the condition being judged.
+ *
+ * A goal can be armed without a fresh plan (planner quota/timeout, /goal clear followed by /goal, a raw
+ * /goal-loop directive). The previous goal's scope must not leak into the new goal's evaluation request,
+ * so the stored plan is paired with the condition it belongs to.
+ */
+export function planScopeFor(
+  stored: { condition: string; scope: "trivial" | "code" } | undefined,
+  condition: string,
+): "trivial" | "code" | undefined {
+  return stored?.condition === condition ? stored.scope : undefined
+}
+
 export default Plugin.define({
   id: PLUGIN_ID,
   async setup(ctx) {
     const config = resolveConfig(ctx.options, process.env)
     const log = withFileSink(createLogger(), process.env.OPENCODE_GOAL_LOG_FILE)
     const lifetime = new AbortController()
+    const probe = probeFlag(process.env.OPENCODE_GOAL_PROBE)
 
     // Ship the evaluator as a first-class agent type, not just a rubric sent to `general`. `AgentEditor.update`
     // creates the agent when absent (host agent.ts contract), so registering here is idempotent across reloads.
@@ -212,7 +255,7 @@ export default Plugin.define({
     // delegated task in the terminal.
     await ctx.agent.transform((editor) => {
       editor.update(EVALUATOR_AGENT_ID, (agent) => {
-        agent.name = "Evaluator" as unknown as typeof agent.name
+        agent.name = asAgentName("Evaluator")
         agent.description = "Judges whether the armed /goal condition holds from visible evidence; replies with one verdict object."
         agent.mode = "subagent"
         agent.hidden = false
@@ -223,7 +266,7 @@ export default Plugin.define({
       // Arm-time planner: one short child that turns a raw pasted /goal body into a concise, self-contained
       // condition. Deny-all and hidden — it never shows in the primary picker and needs no tools.
       editor.update(PLANNER_AGENT_ID, (agent) => {
-        agent.name = PLANNER_AGENT_TITLE as unknown as typeof agent.name
+        agent.name = asAgentName(PLANNER_AGENT_TITLE)
         agent.description = "Distills a raw /goal request into one concise condition before the goal is armed."
         agent.mode = "subagent"
         agent.hidden = true
@@ -270,217 +313,60 @@ export default Plugin.define({
         await ctx.session.synthetic(input as Parameters<typeof ctx.session.synthetic>[0])
       },
       usage: async (sessionID) => toUsage(await ctx.session.get({ sessionID })),
-      compact: async (sessionID) => {
-        await ctx.session.compact({ sessionID } as Parameters<typeof ctx.session.compact>[0])
+      compact: async (sessionID, opts) => {
+        // A cold compact is a loop-boundary version bump: mark the session so the compaction hook installs
+        // COLD_REPLAY instead of a generated summary. On failure drop the mark so a later ordinary compaction
+        // keeps its normal summary. Ordinary auto-compaction never passes `cold`.
+        if (opts?.cold) resetPending.add(sessionID)
+        try {
+          await ctx.session.compact({ sessionID } as Parameters<typeof ctx.session.compact>[0])
+        } catch (error) {
+          if (opts?.cold) resetPending.delete(sessionID)
+          throw error
+        }
       },
     }
 
-    // Judge child created by the harness for every verdict. It has NO `parentID`, so the host's
-    // `subagent-report.ts` early-returns (`!initial?.parentID && jobState.mode === "none"`): no `<subagent>`
-    // report is admitted to the working parent and `deps.wake(parentID)` is never called by the child. The harness
-    // reads the verdict text directly and `Evaluator.evaluate` decides: `met` ends the goal, `not_met` is the ONLY
-    // path that dispatches a continuation steer (and therefore the only wake). Tracked so the generate/context
-    // hooks can shape the judge child's generation without touching worker sessions.
-    const evaluatorChildren = new Set<string>()
-
-    const spawnEvaluator = async (model: ModelRef, prompt: string, signal: AbortSignal): Promise<string> => {
-      const { id } = await ctx.session.create({
-        location: ctx.location,
-        title: EVALUATOR_AGENT_TITLE,
-        agent: EVALUATOR_AGENT_ID,
-        model: model as any,
-      } as any)
-      evaluatorChildren.add(id)
-      const abort = new AbortController()
-      let answer = ""
-      let failure: unknown
-      let finish!: (value: string) => void
-      const done = new Promise<string>((resolve) => { finish = resolve })
-      const onAbort = () => { abort.abort(); finish(answer) }
-      // An external abort is the evaluator's own timeout/interrupt, not a provider failure.
-      const fail = (error: unknown) => {
-        if (signal.aborted) return
-        if (failure === undefined) failure = error
-        abort.abort()
-        finish("")
-      }
-      try {
-        if (signal.aborted) onAbort()
-        else signal.addEventListener("abort", onAbort, { once: true })
-        void (async () => {
-          try {
-            for await (const evt of ctx.event.subscribe({ signal: abort.signal })) {
-              const data = (evt as any).data ?? {}
-              if (data.sessionID !== id) continue
-              if (evt.type === "session.text.delta") answer += String(data.delta ?? "")
-              if (evt.type === "session.execution.succeeded") { abort.abort(); finish(answer); return }
-              if (evt.type === "session.execution.failed") {
-                fail(data.error ?? data.reason ?? data.message ?? "judge execution failed")
-                return
-              }
-            }
-          } catch {
-            // The subscription was aborted (verdict already delivered) or the event stream closed.
-          }
-          // A stream that ends without a terminal event must still release the evaluator child, not hang until timeout.
-          finish(answer)
-        })()
-        // The signal must reach the host prompt: a child turn that ignores an external abort used to keep
-        // `spawnEvaluator` parked after `done` had resolved, defeating the evaluator's timeout. No resume opt-out
-        // here: the host only wakes a session's execution when `resume !== false`, so that flag left this fresh
-        // child admitted to the inbox but never running (no text deltas, no terminal event, 120s timeout). The
-        // parent wake is suppressed structurally instead — the child has no `parentID` and is not a host subagent
-        // Job, so `subagent-report.ts` early-returns and never calls `deps.wake(parentID)`. The child MUST run as a
-        // `kind:"primary"` turn to pass the free-tier gate. Race so any abort converges immediately; the text
-        // still comes from `done` (the child's text deltas), never from a reported synthetic message.
-        await Promise.race([
-          ctx.session.prompt({
-            sessionID: id,
-            text: prompt,
-          } as any, { signal }).catch((error: unknown) => fail(error)),
-          done.then(() => undefined),
-        ])
-        const verdict = await done
-        // Throw after the text is collected so callers can classify a quota error and pause instead of retrying.
-        if (failure !== undefined) throw asEvaluatorError(failure)
-        return verdict
-      } finally {
-        signal.removeEventListener("abort", onAbort)
-        evaluatorChildren.delete(id)
-        // Judge children persist and stay navigable: no `session.remove` here.
-      }
-    }
-
-    // Evaluator self-talk is not evidence: strip every <goal-evaluation> prompt from the transcript digest.
-    const evaluatorContext = async (sessionID: string, signal: AbortSignal) =>
-      stripGoalEvaluations(await ctx.session.context({ sessionID }, { signal }))
-
-    // The harness judges every turn itself: build the authoritative rubric from this turn's work, run it in a
-    // standalone judge child on the session's current model, then pass the child's text through the same contract
-    // guard a native `<subagent>` report used to pass. Foreign / echo-mismatch / unreadable text throws, so
-    // `Evaluator.evaluate` classifies it as an `EvaluatorVerdictError` instead of trusting a stale verdict.
-    const nativeVerdict = async (sessionID: string, signal: AbortSignal, _turn: number) => {
-      const condition = controller.activeCondition(sessionID)
-      if (!condition) return undefined
-      const model = await sessionModel(sessionID, signal)
-      if (!model) throw new Error("judge child model unavailable: session has no active model")
-      const digest = (ctx: readonly unknown[]) =>
-        renderParentSummary(ctx, { maxChars: EVALUATION_SUMMARY_CHARS, since: currentTurnStart(ctx) })
-      let summary = digest(await evaluatorContext(sessionID, signal))
-      if (!summary.trim()) {
-        // The worker's reply can still be landing at turn end. Give it a bounded window and re-read so the judge
-        // scores the turn's real output instead of an empty summary.
-        await settle(EVALUATION_SETTLE_MS, signal)
-        summary = digest(await evaluatorContext(sessionID, signal))
-      }
-      const parent = controller.live(sessionID)
-      const prompt = nativeEvaluationRequest({
-        condition,
-        summary,
-        ...(armedPlanScopes.has(sessionID) ? { armPlanScope: armedPlanScopes.get(sessionID)! } : {}),
-        nonce: Math.random().toString(36).slice(2, 10),
-        ...(parent?.loopEnabled
-          ? {
-              loop: {
-                objective: parent.loopObjective ?? condition,
-                iteration: parent.loopIteration ?? 1,
-                maxLoops: parent.loopMaxLoops ?? config.maxLoops,
-                history: parent.loopHistory ?? [],
-              },
-            }
-          : {}),
-      })
-      const text = await spawnEvaluator(model, prompt, signal)
-      return verdictFromNativeReport({ key: sessionID, body: text, state: "completed" }, controller.activeCondition(sessionID))
-    }
-
-    // Resolve per generation so a /model switch mid-goal is followed on the next verdict.
-    const sessionModel = async (sessionID: string, signal: AbortSignal): Promise<ModelRef | undefined> => {
-      const current = (await ctx.session.get({ sessionID }, { signal })).model
-      return current ? { providerID: current.providerID, id: current.id, ...(current.variant ? { variant: current.variant } : {}) } : undefined
-    }
-
-    // Arm-time planner: one short, toolless child reads only the raw (often pasted) /goal body and returns a
-    // concise condition. The worker and the evaluator both read the stored result, so they cannot drift. Failure,
-    // quota or timeout falls back to the raw text with a minimal directive — never the old heuristic essays.
-    const plannerChildren = new Set<string>()
-    // The arm-time planner's scope rides into the first evaluation prompt (no new persisted field): a fresh arm
-    // overwrites it, so the evaluator always sees the scope of the condition it is actually scoring.
-    const armedPlanScopes = new Map<string, "trivial" | "code">()
-    const PLAN_TIMEOUT_MS = 30_000
-    const planGoal = async (sessionID: string, raw: string): Promise<PlannedGoal | undefined> => {
-      // Unit tests mock the host but cannot deliver a planner child's completion; planning is a host-only step.
-      if (probe || process.env.NODE_ENV === "test" || lifetime.signal.aborted || !raw.trim()) return undefined
-      // Show the goal bar during the planning window: the record is armed only after planning completes, so
-      // without this transient snapshot the first arm offered nothing but the background toast (screenshot 165841).
-      controller.showPlanning(sessionID, raw.trim())
-      const budget = AbortSignal.any([lifetime.signal, AbortSignal.timeout(PLAN_TIMEOUT_MS)])
-      const model = await sessionModel(sessionID, budget).catch(() => undefined)
-      if (!model) return undefined
-      emit.notice({ sessionID, kind: "set", level: "info", title: "goal-loop", message: "Distilling goal into a concise condition…" })
-      let id: string
-      try {
-        id = (await ctx.session.create({
-          location: ctx.location,
-          parentID: sessionID,
-          title: PLANNER_AGENT_TITLE,
-          agent: PLANNER_AGENT_ID,
-          model: model as any,
-        } as any)).id
-      } catch (error) {
-        log.warn("goal planner child could not be created", { error: String(error) })
-        return undefined
-      }
-      plannerChildren.add(id)
-      const abort = new AbortController()
-      let answer = ""
-      let finish!: () => void
-      const done = new Promise<void>((resolve) => { finish = resolve })
-      const onAbort = () => { abort.abort(); finish() }
-      if (budget.aborted) onAbort()
-      else budget.addEventListener("abort", onAbort, { once: true })
-      try {
-        void (async () => {
-          try {
-            for await (const evt of ctx.event.subscribe({ signal: abort.signal })) {
-              const data = (evt as any).data ?? {}
-              if (data.sessionID !== id) continue
-              if (evt.type === "session.text.delta") answer += String(data.delta ?? "")
-              if (evt.type === "session.execution.succeeded") { finish(); return }
-              if (evt.type === "session.execution.failed") { abort.abort(); finish(); return }
-            }
-          } catch {
-            // Subscription closed (completion or abort); the text collected so far is the answer.
-          }
-          finish()
-        })()
-        await Promise.race([
-          ctx.session.prompt({ sessionID: id, text: planGoalRequest(raw) } as any, { signal: budget }).catch(() => undefined),
-          done.then(() => undefined),
-        ])
-        await done
-        return parsePlan(answer)
-      } catch (error) {
-        log.warn("goal planner failed", { error: String(error) })
-        return undefined
-      } finally {
-        budget.removeEventListener("abort", onAbort)
-        plannerChildren.delete(id)
-      }
-    }
+    const harness = createHarness({
+      ctx,
+      config,
+      log,
+      lifetime,
+      probe,
+      controller: () => controller,
+      background: () => background,
+      emit: () => emit,
+      noteInternal: (id, agent) => background.noteInternal(id, agent),
+      asEvaluatorError,
+      settle,
+      planScopeFor,
+      EVALUATION_SUMMARY_CHARS,
+      EVALUATION_SETTLE_MS,
+      sleep,
+    })
+    const { evaluatorChildren, plannerChildren, seenBackgroundResults, isPluginReport, isInternalChildReport, isInjectedPrompt, spawnEvaluator, evaluatorContext, nativeVerdict, sessionModel, planGoal, armedPlanScopes } = harness
 
     const evaluator = new Evaluator(
       {
         nativeVerdict,
-        // Session mode is still a real child turn: the child has no parent conversation, so embed the parent
-        // digest in the prompt (the rubric says "conversation above"). Every judge path now clears the gate.
+        // Loop steps reuse the same evaluator subagent child. Its own context has no parent conversation, so embed
+        // the parent digest in the prompt (the rubric says "conversation above"). Every judge path clears the gate.
         sessionGenerate: async (sessionID, prompt, signal) => {
           const model = await sessionModel(sessionID, signal)
           if (!model) throw new Error("inherited evaluator model unavailable: session has no active model")
           const transcript = renderTranscript(await evaluatorContext(sessionID, signal), { maxChars: config.evaluator.maxTranscriptChars })
-          return spawnEvaluator(model, `<conversation>\n${transcript}\n</conversation>\n\n${prompt}`, signal)
+          const { text } = await spawnEvaluator(
+            sessionID,
+            model,
+            `<conversation>\n${transcript}\n</conversation>\n\n${prompt}`,
+            signal,
+          )
+          return text
         },
-        modelGenerate: (_sessionID, model, prompt, signal) => spawnEvaluator(model, prompt, signal),
+        modelGenerate: async (sessionID, model, prompt, signal) => {
+          const { text } = await spawnEvaluator(sessionID, model, prompt, signal)
+          return text
+        },
         context: evaluatorContext,
         sessionModel,
       },
@@ -500,9 +386,56 @@ export default Plugin.define({
       notice: (notice) => emit.notice(notice),
     }
 
-    const probe = probeFlag(process.env.OPENCODE_GOAL_PROBE)
     if (probe) log.warn("probe mode: goal storage is read-only (OPENCODE_GOAL_PROBE); restore() will not persist anything")
     const store = new GoalStore(ctx.storage, (error) => log.error("goal storage write failed", { error: String(error) }), { readOnly: probe })
+
+    // Agent-to-agent messaging lives here, inside the plugin's setup(): the tools and the unread hint below exist
+    // only while the goal-plugin is enabled, and disappear with it. A worker's messages are tagged with the id of
+    // its parent session (the "parent agent"), so each parent is both sender and receiver across parallel tasks.
+    const messaging = new AgentMessaging(ctx.storage, systemClock, { readOnly: probe })
+    const agentIdFor = async (sessionID: string): Promise<string> => {
+      const info = await ctx.session.get({ sessionID }).catch(() => undefined) as { parentID?: unknown } | undefined
+      const parent = info?.parentID
+      return typeof parent === "string" && parent !== "" && parent !== sessionID ? parent : sessionID
+    }
+    await ctx.tool.transform((editor) => {
+      editor.add({
+        name: "goal_msg_send",
+        description: "Send a message to another session's parent agent (two-way parallel-work messaging). `to` is the recipient's parent session id (a `ses_...` id); `text` is the body. Your message is tagged with your own parent session id so the recipient can reply with goal_msg_send.",
+        input: {
+          type: "object",
+          properties: {
+            to: { type: "string", description: "Recipient parent session id" },
+            text: { type: "string", description: "Message body" },
+          },
+          required: ["to", "text"],
+        } as const,
+        async execute(input, toolContext) {
+          const to = typeof (input as { to?: unknown }).to === "string" ? (input as { to: string }).to.trim() : ""
+          const text = typeof (input as { text?: unknown }).text === "string" ? (input as { text: string }).text : ""
+          if (!to || !text.trim()) return { content: "goal_msg_send needs a non-empty `to` session id and `text`." }
+          const from = await agentIdFor(toolContext.sessionID)
+          const message = await messaging.send(from, to, text)
+          return { content: `Sent to ${to} from ${from} (id ${message.id}).` }
+        },
+      })
+      editor.add({
+        name: "goal_msg_read",
+        description: "Read and clear messages addressed to your parent agent's session id. Reply to a sender by passing its `from` id as `to` in goal_msg_send.",
+        input: {
+          type: "object",
+          properties: {},
+          required: [],
+        } as const,
+        async execute(_input, toolContext) {
+          const agent = await agentIdFor(toolContext.sessionID)
+          const messages = await messaging.drain(agent)
+          if (messages.length === 0) return { content: `No messages for ${agent}.` }
+          const body = messages.map((m) => `[${m.from}] ${m.text}`).join("\n")
+          return { content: `${messages.length} message(s) for ${agent}:\n${body}` }
+        },
+      })
+    })
     // The compactor and the controller need each other: the controller asks the compactor to compact at a loop boundary,
     // and the compactor asks the controller (and the background tracker) whether the session has work in flight.
     // The compactor is assigned before anything can call it, so the deferred closure is safe.
@@ -528,7 +461,7 @@ export default Plugin.define({
     })
     compactor = new AutoCompactor({
       config,
-      compact: (sessionID) => session.compact(sessionID),
+      compact: (sessionID, opts) => session.compact(sessionID, opts),
       context: async (sessionID) => (await ctx.session.context({ sessionID })) as readonly unknown[],
       emitter,
       clock: systemClock,
@@ -597,7 +530,7 @@ export default Plugin.define({
               kind: "set",
               level: "warning",
               title: "goal-loop update",
-              message: `Update check failed: ${error instanceof Error ? error.message : String(error)}`,
+              message: `Could not check for updates. ${userFacingError(error)}`,
             })
           }
         })()
@@ -613,7 +546,13 @@ export default Plugin.define({
       return "update"
     }
 
-    // ---- the /goal and /goal-loop commands
+    // Sessions whose next compaction must replay a cold context: the explicit /reset-context command, or the
+    // compaction a goal-loop version bump requests at its boundary. The hook consumes the entry exactly once, so
+    // an ordinary auto-compaction in the same session keeps its normal summary. A Set keeps concurrent sessions
+    // independent; each caller drops its own mark when compact() fails.
+    const resetPending = new Set<string>()
+
+    // ---- the /goal, /goal-loop and /reset-context commands
     await ctx.command.transform((editor) => {
       const addCommand = (name: string, description: string, loop: boolean) =>
         editor.add({
@@ -628,7 +567,8 @@ export default Plugin.define({
             // Status / clear / invalid are commands, not goals — never send them to the planner.
             const shouldPlan = parseGoalCommand(raw, config.maxConditionChars).type === "set"
             const planned = shouldPlan ? await planGoal(sessionID, raw) : undefined
-            if (planned) armedPlanScopes.set(sessionID, planned.scope)
+            if (planned) armedPlanScopes.set(sessionID, { condition: planned.condition, scope: planned.scope })
+            else armedPlanScopes.delete(sessionID)
             await controller.command({
               sessionID,
               text: planned?.condition ?? raw,
@@ -643,146 +583,51 @@ export default Plugin.define({
         })
       addCommand("goal", DESCRIPTION, false)
       addCommand("goal-loop", LOOP_DESCRIPTION, true)
+
+      // Same-session context reset. The host still performs a real compaction (so prior messages leave the model
+      // request), but the compaction hook below stores an empty checkpoint instead of a native replay window.
+      // No new session is created, so the session ID, its files and its history on disk all survive; only the
+      // model-visible context is cleared.
+      editor.add({
+        name: "reset-context",
+        description: "Drop this session's context in place, keeping the same session ID",
+        execute: async ({ sessionID }) => {
+          resetPending.add(sessionID)
+          try {
+            await session.compact(sessionID)
+          } catch (error) {
+            resetPending.delete(sessionID)
+            throw error
+          }
+          emit.notice({
+            sessionID,
+            kind: "compact",
+            level: "info",
+            title: "goal-loop",
+            message: "Context reset. Same session ID; the next turn starts with no conversation history.",
+          })
+        },
+      })
     })
 
-    // ---- hooks
-    // Only real user prompts pass through this hook (synthetic continuations do not), so it is the resume signal.
-    // The hook also carries the /goal-loop directive: harnesses that do not know the `/goal-loop-<N>` spelling fall
-    // through to a plain prompt, and the plugin arms the loop right here — the host awaits this hook before the
-    // prompt is admitted, and the mutated text (directive stripped, count applied to this run only) is what the
-    // model sees. Unknown-count tokens (not 1..1000) are not guessed: a warning is shown and the default is used.
-    await ctx.session.hook("prompt", async (event) => {
-      // The planner child's own prompt is already complete (raw body + output contract). Never re-arm it.
-      if (plannerChildren.has(event.sessionID)) return
-      // The judge is now a harness-owned standalone child: its full rubric is built in `nativeVerdict`, not here.
-      // No worker delegation prompt to enrich, so every other prompt is left untouched.
-      const text = typeof event.prompt?.text === "string" ? event.prompt.text : ""
-      const goalLoop = parseGoalLoopDirective(text)
-      if (goalLoop) {
-        const objective = goalLoop.objective
-        // The raw-prompt path bypasses parseGoalCommand, so enforce the configured condition limit here too.
-        // Count code points, not UTF-16 units, matching parseGoalCommand: astral characters must not count double.
-        if (
-          objective !== "" &&
-          Number.isFinite(config.maxConditionChars) &&
-          config.maxConditionChars < Number.MAX_SAFE_INTEGER &&
-          [...objective].length > config.maxConditionChars
-        ) {
-          controller.noteConditionTooLong(event.sessionID, [...objective].length, config.maxConditionChars)
-          controller.onUserPrompt(event.sessionID)
-          return
-        }
-        if (objective === "") {
-          // Bare directive (/goal-loop, /goal-loop-<N> with no objective): update check (or status when off).
-          if (goalLoop.invalidCount !== undefined) controller.noteInvalidLoopCount(event.sessionID, goalLoop.invalidCount)
-          const action = await handleBareLoop(event.sessionID)
-          controller.onUserPrompt(event.sessionID)
-          event.prompt.text = action === "update"
-            ? "A goal-loop update check was requested; acknowledge briefly and do not set a goal."
-            : "Show the current goal loop status."
-          return
-        }
-        const maxLoops = goalLoop.maxLoops ?? config.maxLoops
-        // The admitted user message is the kickoff (no synthetic prompt is sent): the model sees exactly what the
-        // command path would have delivered, with the directive token and the count removed from the objective.
-        const originalPrompt = event.prompt.text
-        const planned = await planGoal(event.sessionID, objective)
-        if (planned) armedPlanScopes.set(event.sessionID, planned.scope)
-        const condition = planned?.condition ?? objective
-        event.prompt.text = directivePrompt(condition, controller.commitForSession(event.sessionID), { iteration: 1, maxLoops, objective: condition, history: [] }, true)
-        const armed = await controller.armFromPrompt({
-          sessionID: event.sessionID,
-          condition,
-          maxLoops,
-          ...(goalLoop.invalidCount !== undefined ? { invalidCount: goalLoop.invalidCount } : {}),
-        })
-        // Workstream XLV: the arming-side no-new-gap gate refused (a terminal record was persisted and the notice
-        // fired). Restore the user's own line — the directive would tell the model a loop is armed when it is not.
-        if (armed.status !== "active") event.prompt.text = originalPrompt
-        return
-      }
-      controller.onUserPrompt(event.sessionID)
-    })
-    // Evaluator-only shaping of judge-child generations. The child already runs on the plugin's deny-all
-    // `evaluator` agent, but belt-and-braces: a small judge that answers the rubric with a tool call yields no
-    // text, so all three repair attempts come back empty and the goal stalls on `unreadable verdict after 3
-    // attempts: ""`. STRICT_REPAIR's "do not call tools" is only prose; the tools must actually be removed for
-    // the request. Deleting in place (the documented SDK mutation pattern) is safe: the surrounding context hook
-    // already edits system/messages for these requests. Non-evaluator generations keep their tools untouched.
-    await ctx.session.hook("generate", (event) => {
-      // Only judge children are toolless. A user prompt admitted while an evaluation is in flight must keep its
-      // own tools — the parent is no longer the generation surface, so its inflight flag is irrelevant here.
-      if (!evaluatorChildren.has(event.sessionID) && !plannerChildren.has(event.sessionID)) return
-      if (plannerChildren.has(event.sessionID)) {
-        for (const name of Object.keys(event.tools)) delete event.tools[name]
-        return
-      }
-      event.options.maxTokens = config.evaluator.maxOutputTokens
-      for (const name of Object.keys(event.tools)) delete event.tools[name]
-    })
-    // One context hook, up to three injections: the standing system reminder (config-gated), the
-    // one-shot post-compaction re-anchor (never gated — the ground truth must reach the model even
-    // when the reminder is off; it is invisible on every request except the one after a landing),
-    // and one ground-truth line for sessions whose goal already ended here (achieved / impossible /
-    // cleared / failed) — the counter-instruction to a compaction summary that quotes the expired
-    // `<goal>` kickoff. The first two are no-ops while no goal work is armed; the third is gated on the
-    // request still carrying goal text, so it never becomes a session-long stale system line.
-    await ctx.session.hook("context", (event) => {
-      // A native judge child inherits the project's AGENTS.md/SPEC.md rules through the host system prefix. On a
-      // small free-tier model those thousands of cached tokens drown the ~100-token condition block, so the judge
-      // replays a verdict about a condition it saw in the project docs. Keep only the evaluator's own identity
-      // part — the per-turn <goal-evaluation> prompt already carries the complete role and output contract.
-      const agentID = typeof event.agent === "string" ? event.agent : ""
-      if (agentID === EVALUATOR_AGENT_ID && Array.isArray(event.system)) {
-        const sys = event.system
-        for (let i = sys.length - 1; i >= 0; i--) {
-          const text = (sys[i] as { text?: unknown } | undefined)?.text
-          if (typeof text !== "string" || !text.includes("You are the Evaluator, a subagent shipped by the goal-loop plugin")) {
-            sys.splice(i, 1)
-          }
-        }
-      }
-      const live = controller.live(event.sessionID) !== undefined
-      if (config.systemReminder) {
-        const condition = controller.activeCondition(event.sessionID)
-        if (condition) event.system.push({ type: "text", text: systemReminder(condition, controller.commitForSession(event.sessionID)) })
-      }
-      const anchor = controller.consumeAnchor(event.sessionID)
-      if (anchor) event.system.push({ type: "text", text: anchor })
-      // Goal messages are history, not instructions. While a goal is live the kickoff and the armed
-      // continuations carry the state and must ride context; only notes are stripped. Once no live
-      // goal exists for the session, every goal-grammar message is stripped — a finished goal's
-      // "keep working" text must not ride any later request, including the one after a compaction.
-      // Splice in place — the host holds the caller's array reference, so a rebound property could go unseen.
-      if (Array.isArray(event.messages)) {
-        const original = event.messages
-        let kept = live ? compactGoalInstructions(stripGoalNotes(original)) : stripGoalContext(original)
-        // The evaluator's own voice is not evidence and must not accumulate in model-bound context.
-        // On a working turn drop every <goal-evaluation> prompt; while an evaluation is in flight keep
-        // only the most recent one — the live rubric the model must answer — and drop older echoes.
-        kept = stripGoalEvaluations(kept, { keepLast: evaluator.isEvaluating(event.sessionID) || evaluatorChildren.has(event.sessionID) })
-        if (kept.length !== original.length) {
-          // Never dispatch a request that does not end on a user turn: strict providers reject it ("The
-          // last message must have role=user."), and after a landing compaction the trailing turn can be
-          // the only user message in the request (opencode folds the whole summary into it). If stripping
-          // removed that trailing turn, keep it: a stale goal line is harmless history, while an invalid
-          // request aborts the turn. Splice in place — the host holds the caller's array reference.
-          const trailing = original[original.length - 1]
-          // Never undo the use-and-forget strip by re-adding a trailing evaluation prompt merely to
-          // satisfy the trailing-user repair — a working turn's trailing turn is its steer, not self-talk.
-          const repairable = trailing !== undefined && !isGoalEvaluationMessage(trailing) ? trailing : undefined
-          const last = kept[kept.length - 1]
-          const repaired = last?.role === "user" || repairable === undefined || last === repairable ? kept : [...kept, repairable]
-          original.splice(0, original.length, ...repaired)
-        }
-      }
-      // The terminal ground-truth line is a counter-instruction, so it rides only a request that still
-      // carries goal text: a compaction checkpoint quoting the expired `<goal>` kickoff, or a trailing
-      // user turn the strict-provider repair kept. With no goal text left in the request there is nothing
-      // to counter, and a line injected on every later request would be stale boilerplate for the rest of
-      // the session — it is not injected.
-      const stillCarriesGoal = Array.isArray(event.messages) ? carriesGoalGrammar(event.messages) : false
-      if (!live && stillCarriesGoal && controller.hasTerminalRecord(event.sessionID)) event.system.push({ type: "text", text: TERMINAL_REMINDER })
+    await registerHooks({
+      ctx,
+      config,
+      controller,
+      evaluator,
+      messaging,
+      agentIdFor,
+      handleBareLoop,
+      planGoal,
+      armedPlanScopes,
+      resetPending,
+      isInjectedPrompt,
+      plannerChildren,
+      evaluatorChildren,
+      seenBackgroundResults,
+      isPluginReport,
+      isInternalChildReport,
+      coldReplay: COLD_REPLAY,
     })
 
     // ---- event pump with reconnect
@@ -804,7 +649,9 @@ export default Plugin.define({
       }
     })()
 
-    void controller.restore({ resume: !probe }).catch((error) => log.error("goal restore failed", { error: String(error) }))
+    // Restore is started without blocking setup, but teardown must wait for it: otherwise it can adopt
+    // goals and commit through a controller that dispose() has already invalidated and flushed.
+    const restoring = controller.restore({ resume: !probe }).catch((error) => log.error("goal restore failed", { error: String(error) }))
     log.info("ready", {
       evaluator: config.evaluator.mode,
       model: config.evaluator.model ?? (config.evaluator.inheritModel ? "session (inherited)" : "session"),
@@ -812,8 +659,11 @@ export default Plugin.define({
 
     return async () => {
       lifetime.abort()
+      evaluatorChildBySession.clear()
+      plannerChildBySession.clear()
       for (const timer of updateTimers) clearTimeout(timer)
       updateTimers.clear()
+      await restoring
       await controller.dispose()
     }
   },

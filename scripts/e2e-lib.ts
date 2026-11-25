@@ -5,11 +5,13 @@
  * Not shipped (scripts/ is not in package.json `files`); this file lives in scripts/ only.
  */
 
+import { formatValue } from "../src/core/errors.ts"
+
 /** The default model, used when neither the positional argument nor E2E_MODEL is set. */
 export const DEFAULT_MODEL = "opencode/deepseek-v4.1-flash-free"
 
 /** What the harness should do with the target project's `.opencode/opencode.json`. */
-export type ConfigAction = "write" | "skip" | "refuse"
+type ConfigAction = "write" | "skip" | "refuse"
 
 /**
  * Precedence for the model selection: positional argument wins over the E2E_MODEL environment
@@ -34,7 +36,7 @@ export const parseModelArg = (modelArg: string): { providerID: string; modelID: 
   const idOk =
     modelID.trim().length > 0 && !/\s/.test(modelID) && modelID.trim() === modelID && !modelID.startsWith("/") && !modelID.includes("//")
   if (slash <= 0 || !providerOk || !idOk) {
-    throw new Error(`model must be "provider/model" (got "${modelArg}")`)
+    throw new Error(`model must be "provider/model" (got ${formatValue(modelArg)})`)
   }
   return { providerID, modelID }
 }

@@ -9,12 +9,12 @@ The rules below are enforced by the binary, not by trust.
 ## The loop
 
 1. `coordinator claim <task> --agent <you> --paths <scope>` claims a lease and creates
-   `wt/<slug>` plus `worktrees/wt-<slug>`. `--paths` is a comma-separated scope:
+   `wt/<slug>` plus `worktree/wt-<slug>`. `--paths` is a comma-separated scope:
    `packages/coordinator/**`, `src/core/types.ts`, `test`, `.`. A `**` suffix matches the
    whole subtree; a bare path matches the file or the directory it names.
    Claiming an existing lease, or paths overlapping a live lease's scope, needs `--force`.
    Overlaps against already-merged (`done`) leases never block.
-2. Work in `worktrees/wt-<slug>` on branch `wt/<slug>`. Never work in the main checkout.
+2. Work in `worktree/wt-<slug>` on branch `wt/<slug>`. Never work in the main checkout.
    Never commit `dev` or `main` directly.
 3. Commit as you go. Commits are checked against your claimed paths at submit time.
    Files outside your claim fail `submit`. Override with `submit --force`; the override is
@@ -34,12 +34,17 @@ The rules below are enforced by the binary, not by trust.
 5. **The submitting agent runs `coordinator merge-next`** from the main repo when their lease is ready/next (unless a designated integrator/process is explicitly assigned). Do not wait on an unspecified other actor. Before running it: `queue/status --json` shows your lease submitted and next/unblocked; the worktree has no uncommitted changes and the branch tip contains all intended commits; the main checkout is acceptable for merge-next (exempt `.term/coordinator/state.json` dirt is fine — never hand-edit `dev`). Run the sanctioned path (`merge-next` trial-merge + gate), never `git merge`/commit to `dev` or `main`. "Done"/merged evidence comes from `merge-next` succeeding for that lease.
    `coordinator merge-next` merges the oldest submitted lease into `dev`:
    - builds `merge-check-<slug>-<ts>` from `dev` inside a dedicated
-     `worktrees/wt-merge-check-<slug>-<ts>` worktree (never the main checkout),
-   - re-counts the SPEC.md `<!-- spec-check files=N tests=N -->` marker on the merged tree
-     itself (`bun scripts/spec-check.ts --write`), so nobody hand-bumps counters,
-   - regenerates the changelog and page stamps on the merged tree
-     (`bun scripts/docs-watch.ts once`) and commits any change on the scratch branch,
-     so parallel agents never race docs/changelog.html,
+     `worktree/wt-merge-check-<slug>-<ts>` worktree (never the main checkout),
+   - runs `bun scripts/spec-check.ts` on the merged tree: counts are COMPUTED at gate time,
+     nothing is stored in SPEC.md, so there is no marker to hand-bump or re-count,
+   - folds per-slug notes from `.term/changelog-pending/<slug>.md` into `docs/changelog.html`
+     and deletes them, then regenerates page stamps (`bun scripts/docs-watch.ts once`),
+     committing the result on the scratch branch — parallel agents never edit the shared page,
+   - with `--wait`, drains the merge lock, then auto-rebases a stale target onto the current
+     dev in a throwaway worktree, re-runs `bun run check` on the rebased tree, advances the
+     branch ref and lands it; a conflict or red gate aborts with `dev` untouched,
+   - lands leases FIFO: a non-head lease is refused unless `--force`, or `--wait-for-turn`
+     waits (bounded by `COORDINATOR_WAIT_FOR_TURN_TIMEOUT`, default 300s) until it is head,
    - refuses a worktree whose HEAD drifted past the submitted branch tip (post-submit commits must be
      discarded or re-submitted); uncommitted bytes are preserved as a saved ref, never merged,
    - prints a preflight: what the merge touches, which in-flight lease overlaps it, and a
@@ -48,7 +53,7 @@ The rules below are enforced by the binary, not by trust.
 
    - runs the gate (`bun run check`) on the merged result. Red gate: `dev` untouched,
      exact recovery printed. Green gate: `dev` fast-forwards onto the merged result,
-     a post-merge health line reports landed-tree cleanliness and the SPEC marker,
+     a post-merge health line reports landed-tree cleanliness (counts were computed at the gate),
      your lease flips to done, your worktree is removed.
    - With `--review`, it stops after the green gate and prints the exact command to finish
      (`git merge --ff-only <scratch>`) or discard (`coordinator merge-abort <slug>`);
@@ -63,13 +68,64 @@ The only exempt dirt is `.term/coordinator/state.json`. Claim and submit leave i
 by design, and the merge flow restores it. Your uncommitted work never vanishes with a
 worktree.
 
+## Worktree directory: `worktree/` (legacy `worktrees/`)
+
+The default directory is `worktree/` — the coordinator's `WORKTREE_DIR` default, the
+`worktreeDir` value in `.term/coordinator/config.json`, and the scaffold/gitignore rule.
+Repos upgraded from `worktrees/` keep working: an old config value or an old lease `worktree`
+path is honoured and produces one warning per repo. `coordinator migrate-worktree-dir
+[--dry-run]` moves the physical directory to the configured dir, runs `git worktree repair`
+so git's linked-worktree records follow, rewrites `config.json` and every lease path, and
+clears the warning marker. It refuses while any active (`claimed`/`submitted`) lease still
+points into `worktrees/`, so it never disturbs another session's live worktree — re-run after
+those leases land. Both directory names stay gitignored until the move completes.
+
+When a live lease cannot be waited for, `coordinator migrate-worktree-dir --with-live-leases`
+performs the same move but leaves a `worktrees -> worktree` compatibility symlink and does not
+rewrite the blocked leases' records: their old paths keep resolving exactly as before, while
+new worktree checkouts and git's repaired records use `worktree/`. The symlink is temporary — remove it
+once those leases land.
+
+## Check merge status before claim / submit / merge-next
+
+`coordinator merge-status` is a read-only view of the **existing** merge lock — it never takes
+the write lock and never changes state. It prints JSON:
+
+```json
+{"mergeInProgress":false,"holder":null,"ageSeconds":0,"recommendation":"clear — no merge in progress; you may claim, submit, or merge-next"}
+```
+
+Before each of `claim`, `submit`, and `merge-next`, check it. When `mergeInProgress` is `true`,
+follow `recommendation`: wait with `coordinator await-merge [--timeout SECONDS]` (polls the same
+flock, prints the final status as JSON, exit 1 on timeout), or run `coordinator merge-next --wait`,
+a thin alias that calls `await-merge` before the normal merge path. A holder whose pid is dead or
+whose lock is older than the 60-minute reclaim window is reported as stale; the next `merge-next`
+reclaims it under that same flock. Do not build a parallel lock system: `merge-status` and
+`await-merge` only observe and wait on the lock `merge-next` already uses.
+
+## Reading state during a peer's merge
+
+A merge stashes the exempt live dirt and resets `.term/coordinator/state.json` to the committed
+copy for the trial merge, then restores the live snapshot when the merge finishes (green or red).
+During that window `coordinator status --json` and `coordinator queue` can transiently omit a
+lease that was just claimed or submitted, or report a lease back as `claimed` after its submit.
+That is the reset copy, not lost work. **Do not re-claim:** the live record is restored when the
+peer's merge completes, and a second claim creates a duplicate lease that forces other agents to
+rebase. Wait for the merge lock to clear (`coordinator merge-status` reports
+`mergeInProgress: false`, or `coordinator await-merge` blocks until it does; `coordinator status
+--json` shows `mergeLock: null`), then re-check. The same applies to workstream headings in
+`SPEC.md`: several sessions append at
+once, so derive the label from your lease slug instead of guessing the next Roman numeral.
+
 ## Shared artifacts
 
-Some files must be touched by everyone: `.term/coordinator/state.json` and
-`docs/changelog.html` (defaults), plus whatever the repo adds to `sharedPaths` in
-`.term/coordinator/config.json` (comma-separated scopes). Shared files never fail the
-submit scope check. The SPEC.md marker does not need to be shared: merge-next re-counts
-it on the merged tree.
+Some files are shared by everyone: `.term/coordinator/state.json`, `docs/changelog.html`
+and `.term/changelog-pending` (defaults), plus whatever the repo adds to `sharedPaths` in
+`.term/coordinator/config.json` (comma-separated scopes). Shared files never fail the submit
+scope check. You do not need to touch `docs/changelog.html` at all: write your note to
+`.term/changelog-pending/<slug>.md` and merge-next folds it in. SPEC.md prose is append-only
+at per-slug anchors (`bun scripts/spec-anchors.ts ensure <slug>` / `append <slug> <file>`);
+counts are not stored there, so there is no marker to share or re-count.
 
 If your claim genuinely spans shared files, keep the edits minimal and expect conflicts.
 The preflight in merge-next names every in-flight lease whose scope your merge overlaps, and separately
@@ -79,17 +135,18 @@ warns about shared-module semantic risk when two leases touch different files of
 
 The merge pipeline never force-lands a red tree. If your lease is the loser of a conflict:
 
-1. `git -C worktrees/wt-<slug> rebase dev`
+1. `git -C worktree/wt-<slug> rebase dev`
 2. resolve the conflict
 3. re-run the gate in your worktree (`bun run check`)
 4. `coordinator merge-next` again. Your lease is still submitted; no need to re-submit
 
 If the gate fails on the merged result, `dev` is untouched and the error prints the fix
-and the exact recovery. Fix the branch, then re-run `merge-next`. If you only need the SPEC
-marker re-counted, run `bun scripts/spec-check.ts --write` and commit the result.
+and the exact recovery. Fix the branch, then re-run `merge-next`. If dev moved under your
+lease, `coordinator merge-next --wait` rebases it and re-runs the gate for you; if a merge
+ahead of you owns the FIFO head, `--wait-for-turn` queues your turn.
 
 If a merge died mid-flight, `coordinator doctor` tells you: main-checkout state, dangling
-worktrees, dangling `node_modules` symlinks, SPEC marker vs reality, merge-lock health.
+worktree, dangling `node_modules` symlinks, spec counts at gate time, merge-lock health.
 Exit code 1 means at least one check failed; the output says what and how to fix it.
 
 ## Field gotchas (audited against the binary, 2026-11-21)
@@ -104,9 +161,10 @@ what did not hold; every verdict was checked against `packages/coordinator/bin/c
 | Scope is checked at `submit`, not `claim`; `--force` overrides | Accurate | Submit from the worktree; expect listed violations and a logged override. Shared paths (`state.json`, `docs/changelog.html`, config `sharedPaths`) never fail the check. |
 | `submit` takes no slug argument | Accurate | It derives the slug from the current `wt/<slug>` branch; any positional arg is `unexpected argument`. |
 | `merge-next` needs an explicit target from the main repo | Accurate, now discoverable | From the main repo, pass `--target <slug>` (or the bare slug); from a `wt/<slug>` worktree it defaults to your own lease. Top-level `--help` now lists `[<slug>|--target <slug>]`. |
-| `dev` can move while you work | Accurate | The stale-base guard fails with `merge-base(...) is not dev tip` and leaves `dev` untouched. Check `status --json`/`queue --json` first and expect to `git rebase dev` in the worktree, resolve, re-run `bun run check`. |
-| Rebase conflicts cluster in `SPEC.md` / `docs/changelog.html` | Accurate; advice was outdated | Both are shared/contested. Keep both sections and drop stale markers, but you do **not** have to ship a docs commit to land: `merge-next` re-counts the SPEC marker and regenerates changelog/stamps on the merged tree. Local regeneration is only for making your own `bun run check` green. |
-| The SPEC gate reads the first `spec-check` marker, not the last | Accurate | Only the first occurrence is parsed/rewritten (`scripts/spec-check.ts`); trailing per-workstream markers are historical. |
+| `dev` can move while you work | Accurate; now automated | Plain `merge-next` still fails with `merge-base(...) is not dev tip`, `dev` untouched. `merge-next --wait` instead drains the lock, auto-rebases your branch onto current dev in a throwaway worktree, re-runs `bun run check` on the rebased tree and lands it. A conflict prints the exact recovery. |
+| Rebase conflicts cluster in `SPEC.md` / `docs/changelog.html` | Fixed at the source | SPEC.md prose is append-only at per-slug anchors (`bun scripts/spec-anchors.ts ensure <slug>`); changelog notes go to `.term/changelog-pending/<slug>.md`, which merge-next folds in. Parallel commits touch disjoint files, and `--wait` rebase lands them. No marker to re-count. Caveat: for `src/core`/`src/runtime` changes `check:invariant` still requires `SPEC.md` and `docs/changelog.html` in the same change set. |
+| `merge-next` lands the oldest submitted lease | Now enforced | Non-head leases are refused with a FIFO error; use `--wait-for-turn` to wait for your turn or `--force` to override. `queue --json` shows positions. |
+| The SPEC gate reads a stored marker | Obsolete | `scripts/spec-check.ts` computes file/test counts at gate time; nothing is stored in SPEC.md and `--write` is a no-op. |
 | A submitted lease cannot be re-submitted | Accurate; conclusion was too hedged | **Do not re-submit.** After `git rebase dev` the `wt/<slug>` branch itself is rewritten, so its tip is the rebased commit and `merge-next` tracks it — no re-submit, no release/re-claim. `submit` refuses a `submitted` lease (`expected claimed`); release + re-claim only if you are abandoning that work. |
 
 Two omissions worth remembering:

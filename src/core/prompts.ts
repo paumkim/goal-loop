@@ -7,15 +7,20 @@ import type { CommitPolicy, LoopEntry, UsageSnapshot } from "./types.ts"
 export const MARKER = "goal"
 
 /**
- * The worker never judges or delegates the verdict: the harness runs a standalone evaluator child after the turn
- * and only a `not_met` verdict wakes the worker with more work. Kept as one exported constant and appended to every
- * worker-facing prompt builder so the kickoff, loop/retry/checkin steers and the system reminder all carry the
- * same absolute contract — not just the kickoff directive.
+ * The worker never judges the verdict or delegates that judgment (delegating work to subagents is fine): the
+ * harness runs one parent-linked evaluator subagent child (like the arm-time planner) and only a `not_met` verdict
+ * wakes the worker with more work.
+ * Background subagents in flight defer that verdict instead of nudging the worker — ending the turn is safe
+ * because the harness injects their reports back to wake it. Kept as one exported constant
+ * and appended to every worker-facing prompt builder so the kickoff, loop/retry/checkin steers and the system
+ * reminder all carry the same absolute contract — not just the kickoff directive.
  */
 export const DELEGATE_VERDICT =
-  `Do the work and report the evidence in your reply, then end your turn. A separate evaluator judges the ` +
-  `condition after your turn. Never state, declare, or assess whether the condition is met — do not delegate, ` +
-  `judge, or narrate the verdict.`
+  `Do the work, report evidence, end your turn. ` +
+  `Evaluator judges; goal-loop detects active sessions and defers its verdict (no nudge); the harness ` +
+  `injects results back to wake you. ` +
+  `Never state, declare, or assess whether the condition is met — don't judge the verdict, delegate that ` +
+  `judgment, or narrate it.`
 
 const escape = (text: string) => text.replace(/<\/(goal[\w-]*)>/gi, "<\\/$1>")
 
@@ -50,7 +55,7 @@ const DONE = "before the goal counts as done"
 const MET = "before the goal counts as met"
 const SLUG_BRANCH = "your wt/<slug> branch"
 /** The coordinator one-line rule for agent-facing prompts: byte-identical for suffix/prompt/checkin. */
-const coordinatorAgentRule = `Commit on ${SLUG_BRANCH} and submit ${DONE}.`
+const coordinatorAgentRule = `Commit on ${SLUG_BRANCH}, submit, land with \`coordinator merge-next --wait --target <slug>\`, and confirm the lease is done ${DONE}.`
 /** The direct-git rule body, without its trailing punctuation (callers append their own). */
 const directRuleBody = (branch: string) => `Commit the finished work to the \`${branch}\` branch ${DONE}`
 
@@ -74,17 +79,21 @@ const commitRuleSentence = (policy: CommitPolicy, kind: "suffix" | "prompt" | "c
       return coordinator ? coordinatorAgentRule : `${directRuleBody(branch)}, and show the commit output.`
     case "system":
       return coordinator
-        ? `Finished work has to be committed on ${SLUG_BRANCH} and submitted ${MET}.`
+        ? `Finished work has to be committed on ${SLUG_BRANCH}, submitted, and landed into \`${branch}\` by merge-next with the lease done ${MET}.`
         : `Finished work has to be committed to the \`${branch}\` branch ${MET}.`
     case "facts":
       return coordinator
-        ? `- This session runs inside a git repository managed by the coordinator. Finished work has to be committed on the agent's own \`wt/<slug>\` branch and submitted (merge into \`${branch}\` by the coordinator) ${MET}.`
+        ? `- This session runs inside a git repository managed by the coordinator. Finished work has to be committed on the agent's own \`wt/<slug>\` branch, submitted, and merged into \`${branch}\` by \`coordinator merge-next\` with the lease done (submitted alone is not completion) ${MET}.`
         : `- This session runs inside a git repository. Finished work has to be committed to the \`${branch}\` branch ${MET}.`
   }
 }
 
-/** The coordinator flow injected into every /goal prompt in a coordinator repo. */
-function coordinatorFlow(policy: CommitPolicy): string {
+/**
+ * The coordinator flow injected into every /goal prompt in a coordinator repo, and — from the context hook —
+ * into every worker model request whether or not a goal is armed. Exported as one home so the standing
+ * activation rule and the kickoff directive cannot drift apart.
+ */
+export function coordinatorFlow(policy: CommitPolicy): string {
   const target = policy.branch
   if (!policy.coordinatorBin) {
     // Detection held on the json markers but no absolute binary could be located: never invent or
@@ -97,7 +106,10 @@ function coordinatorFlow(policy: CommitPolicy): string {
   const bin = /\s/.test(policy.coordinatorBin) ? `"${policy.coordinatorBin}"` : policy.coordinatorBin
   return [
     `Coordinator repo. Before editing: claim first — run \`${bin} claim <goal-slug> --agent <you> --paths <scope>\`.`,
-    `Derive the slug from the goal, then \`cd <worktree>\` and work only there, commit on your wt/<slug> branch. When done, run \`submit\`.`,
+    `Derive the slug from the goal, then \`cd <worktree>\` and work only there, commit on your wt/<slug> branch.`,
+    `Landing is part of the task, not optional after submit: run \`${bin} submit\`, then drain the merge queue yourself — check \`${bin} merge-status\`, then run \`${bin} merge-next --wait --target <slug>\` from the main repo.`,
+    `If \`${target}\` moved while you worked, rebase \`wt/<slug>\` onto \`${target}\`, re-run the checks, and retry the merge. A submitted lease is only merge-ready, not done.`,
+    `Report completion only when \`${bin} status --json\` shows the lease done and \`worktree/wt-<slug>\` is gone.`,
     `Never commit to ${target}/main directly.`,
   ].join("\n")
 }
@@ -184,13 +196,14 @@ const AUDIT_AND_STOP: ReadonlyArray<string> = [
   `If something is missing, proceed and show evidence.`,
 ]
 
-/** Loop preamble for `directive()`; callers pass it only for `/goal-loop` goals. */
+/**
+ * Loop-specific context for `directive()`. The objective and this iteration's condition are emitted once, together,
+ * by `directive()` itself — repeating either here is what made the old kickoff read the same paragraph twice.
+ */
 function loopPreamble(loop: LoopPreamble): string[] {
   return [
-    `Loop context: this is iteration ${loop.iteration} of at most ${loop.maxLoops} in a continuous improvement loop.`,
-    `Objective (constant): ${escape(loop.objective)}`,
+    `Context: this is iteration ${loop.iteration} of at most ${loop.maxLoops} in a continuous improvement loop.`,
     `Prior iterations:\n${historyBlock(loop.history)}`,
-    `Keep the objective in mind, not just this condition; an independent evaluator checks this iteration and decides what comes next.`,
   ]
 }
 
@@ -200,15 +213,28 @@ function loopPreamble(loop: LoopPreamble): string[] {
  * heuristic fuzzy / opencode-cli / coordinator essays are skipped entirely — that bloat is what the planner removes.
  */
 export function directive(condition: string, policy: CommitPolicy, loop?: LoopPreamble, planned = false): string {
-  const lines = [
+  const safeCondition = escape(condition)
+  const safeObjective = loop ? escape(loop.objective) : undefined
+  // Iteration 1 arms the objective itself, so condition === objective. Say it once instead of twice;
+  // later iterations keep both because the condition is a narrower step toward the constant objective.
+  const objectiveIsCondition = safeObjective !== undefined && safeObjective.trim() === safeCondition.trim()
+  const lines: string[] = [
     `<goal>`,
-    ...(loop ? [`<loop iteration="${loop.iteration}" max="${loop.maxLoops}">`, ...loopPreamble(loop), `</loop>`] : []),
-    escape(condition),
+    ...(loop
+      ? [
+          `<loop iteration="${loop.iteration}" max="${loop.maxLoops}">`,
+          ...loopPreamble(loop),
+          `</loop>`,
+          `Objective (constant): ${safeObjective}`,
+          objectiveIsCondition
+            ? `Condition for this iteration: the objective above (no narrower step this iteration).`
+            : `Condition for this iteration: ${safeCondition}`,
+        ]
+      : [safeCondition]),
     `</goal>`,
     ``,
+    `WORKING RULES`,
     // One line per paragraph: clients wrap prose themselves, hard breaks render as ragged lines.
-    `Do the work below, then end your turn. A separate evaluator decides whether the condition is met using what is visible in this conversation.`,
-    ``,
     `Show command output when it is part of the work. Do not stop to ask for confirmation unless you are truly blocked.`,
   ]
   if (!planned) {
@@ -223,8 +249,9 @@ export function directive(condition: string, policy: CommitPolicy, loop?: LoopPr
     }
     if (policy.required) lines.push(``, commitRule(policy))
   }
-  // Last line on purpose: the no-judge injunction is the final thing the worker reads, after every other rule.
-  lines.push(``, DELEGATE_VERDICT)
+  // Last block on purpose: the completion/no-judge contract is the final thing the worker reads.
+  // DELEGATE_VERDICT is the one home for "do the work, end your turn, let the evaluator judge" — no earlier copy.
+  lines.push(``, `VERDICT HANDOFF`, DELEGATE_VERDICT)
   return lines.join("\n")
 }
 
@@ -247,7 +274,7 @@ export function loopContinuation(
     ``,
     ...AUDIT_AND_STOP,
     ``,
-    `Work autonomously toward this condition under the same rules: after each of your turns an independent evaluator checks it, and the loop acts on that result.`,
+    `Work autonomously toward this condition under the same rules: a met result arms the next iteration; a not_met result keeps this one active.`,
     policy.required ? `Before you call it done, ${commitStatusSuffix(policy)}.` : ``,
     `</goal-loop>`,
     DELEGATE_VERDICT,
@@ -298,6 +325,45 @@ export function continuation(input: { condition: string; turn: number; reason: s
   ].join("\n")
 }
 
+/**
+ * Proactive escalation steer for a recurring failure signature. Replaces the old "pause and wait for the
+ * user" path: the goal stays active and the worker is handed a concrete, rotated strategy plus the persisted
+ * diagnostic artifact. `rotate strategy` wording is kept so the evaluator rubric and the diagnostic reason
+ * stay consistent with the escalation they are judging.
+ */
+export function strategyEscalation(input: {
+  condition: string
+  turn: number
+  reason: string
+  count: number
+  kind: string
+  summary: string
+  strategy: string
+  signals?: readonly string[]
+  diagnostic?: string
+  learnings?: string
+}, policy: CommitPolicy): string {
+  const learnings = input.learnings?.trim()
+  return [
+    `<goal-strategy-escalation turn="${input.turn}" count="${input.count}" kind="${escape(input.kind)}">`,
+    `The same failure has recurred ${input.count} times in a row. Do not repeat the approach that produced it.`,
+    ``,
+    `Goal: ${escape(input.condition)}`,
+    `Evaluator: ${steerReason(input.reason, "No reason given.")}`,
+    `Failure signature: ${escape(input.summary)}`,
+    ...(input.signals?.length ? [`Recognized no-progress signals: ${escape(input.signals.join(", "))}`] : []),
+    ``,
+    `Rotate strategy now: ${escape(input.strategy)}`,
+    ...(input.diagnostic ? [`Diagnostic artifact: ${escape(input.diagnostic)}`, `Read it before the next step so the evidence is concrete.`] : []),
+    ...(learnings ? [``, escape(learnings)] : []),
+    ``,
+    `Take a concrete step with the new strategy, then show fresh evidence (command output, test results) from this turn. Keep working toward the goal; do not stop or wait for a user message.`,
+    policy.required ? `Before you call the goal done, ${commitStatusSuffix(policy)}.` : ``,
+    `</goal-strategy-escalation>`,
+    DELEGATE_VERDICT,
+  ].join("\n")
+}
+
 export function retry(input: { condition: string; label: string; learnings?: string }, policy: CommitPolicy): string {
   const learnings = input.learnings?.trim()
   return [
@@ -336,26 +402,6 @@ export function checkin(
   ].join("\n")
 }
 
-/**
- * The end-of-record companion to `<goal-note>`: a terminal note (the goal achieved, was judged
- * impossible, or the loop completed) is history, not instructions. The session keeps it — it stays on
- * the terminal as the outcome line — but it must not ride the model's context on later turns, where it
- * only invites a ceremonial acknowledgement. `<goal-note final>` is the stable grammar the context
- * hook matches on (see `stripGoalNotes`). Since Workstream LI (2026-11-18) the loop-arm note is emitted
- * terminal too, and since Workstream LII (2026-11-18) the hook strips plain `<goal-note>` messages as
- * well — legacy plain notes (emitted before LI) were folded into the model's context on every later
- * request forever (the reported "false reminder after already achieved"), and a plain `<goal-note>` is a
- * goal outcome line, never an instruction. No goal note of either kind rides model-bound context any more;
- * both remain on the terminal and in the log.
- */
-export const TERMINAL_NOTE_TAG = "<goal-note final>"
-
-export function note(input: { title: string; body: string; final?: boolean }): string {
-  return input.final
-    ? `${TERMINAL_NOTE_TAG}\n${input.title}\n${escape(input.body)}\n</goal-note>`
-    : `<goal-note>\n${input.title}\n${escape(input.body)}\n</goal-note>`
-}
-
 /** Structural view of a model-bound message: the `context` hook sees host-shaped messages, so match on the text content parts rather than any metadata the host may or may not propagate. */
 interface NoteMessageLike {
   readonly content?: unknown
@@ -378,7 +424,21 @@ const isCheckpointPart = (part: unknown): boolean => {
 /** True when any content part carries the compaction-checkpoint marker. */
 const isCompactionCheckpoint = (content: ReadonlyArray<unknown>): boolean => content.some(isCheckpointPart)
 
-/** True when any text content part carries a goal note of either kind (`<goal-note` prefix). Unknown shapes never match, and a compaction checkpoint is history, never a note. */
+/**
+ * The end-of-record companion to `<goal-note>`: a terminal note (the goal achieved, was judged
+ * impossible, or the loop completed) is history, not instructions. The session keeps it — it stays on
+ * the terminal as the outcome line — but it must not ride the model's context on later turns, where it
+ * only invites a ceremonial acknowledgement. `<goal-note final>` is the stable grammar the context
+ * hook matches on (see `stripGoalNotes`). Since Workstream LI (2026-11-18) the loop-arm note is emitted
+ * terminal too, and since Workstream LII (2026-11-18) the hook strips plain `<goal-note>` messages as
+ * well — legacy plain notes (emitted before LI) were folded into the model's context on every later
+ * request forever (the reported "false reminder after already achieved"), and a plain `<goal-note>` is a
+ * goal outcome line, never an instruction. No goal note of either kind rides model-bound context any more;
+ * both remain on the terminal and in the log.
+ *
+ * True when any text content part carries a goal note of either kind (`<goal-note` prefix). Unknown
+ * shapes never match, and a compaction checkpoint is history, never a note.
+ */
 export const isGoalNoteMessage = (message: unknown): boolean => {
   if (typeof message !== "object" || message === null) return false
   const content = (message as NoteMessageLike).content
@@ -397,6 +457,44 @@ export const isGoalNoteMessage = (message: unknown): boolean => {
  * the result back; this returns a fresh array and never touches its input.
  */
 export const stripGoalNotes = <T>(messages: ReadonlyArray<T>): T[] => messages.filter((m) => !isGoalNoteMessage(m))
+
+/**
+ * Identity of a host-injected subagent completion report, or `undefined` when the message is not one. The harness
+ * wakes the working session by folding a completed child's `<background-result kind="subagent">` into the next
+ * request; the same report then rides every later request until it is compacted away. It is history, not an
+ * instruction — after a goal ends, re-reading it on every request drives a no-op wake loop (stale report -> "no new
+ * condition" -> end turn -> same report injected again). Match the flat `text` and `content` text-part shapes the
+ * host uses for injected messages, like the other host-shape matchers; `kind` scopes this to delegated subagents,
+ * since shell results are not wake signals.
+ *
+ * The stable id is the delegated child's `sessionID` on the opening tag when present, else the whole text. Reports
+ * from the reused judge/planner children share an id; only the first is admitted, which is safe because their
+ * verdicts and plans come from the child's event stream, never from a report.
+ */
+const backgroundResultIDFromText = (text: string): string | undefined => {
+  const tag = /<background-result\b[^>]*\bkind\s*=\s*["']subagent["'][^>]*>/i.exec(text)
+  if (!tag) return undefined
+  return /\bsessionid\s*=\s*["']([^"']+)["']/i.exec(tag[0])?.[1] ?? text
+}
+
+export const backgroundResultID = (message: unknown): string | undefined => {
+  if (typeof message !== "object" || message === null) return undefined
+  const m = message as NoteMessageLike & { text?: unknown }
+  if (typeof m.text === "string") {
+    const id = backgroundResultIDFromText(m.text)
+    if (id !== undefined) return id
+  }
+  const content = m.content
+  if (!Array.isArray(content)) return undefined
+  for (const part of content) {
+    if (typeof part !== "object" || part === null) continue
+    const { type, text } = part as { type?: unknown; text?: unknown }
+    if (type !== "text" || typeof text !== "string") continue
+    const id = backgroundResultIDFromText(text)
+    if (id !== undefined) return id
+  }
+  return undefined
+}
 
 /**
  * The evaluator's own voice echoed back into the transcript. Every judge child carries the `<goal-evaluation>`
@@ -447,10 +545,11 @@ export const stripGoalEvaluations = <T>(messages: ReadonlyArray<T>, options: { r
 export function systemReminder(condition: string, policy: CommitPolicy): string {
   const lines = [
     `An active /goal is set for this session: ${escape(condition)}`,
-    `An independent evaluator checks it after every turn from visible evidence only. Do the work and surface proof (command output, test results) in the conversation.`,
+    `Only command output and test results visible in this conversation count as evidence.`,
   ]
   if (policy.required) {
-    if (policy.mode === "coordinator") lines.push(coordinatorFlow(policy))
+    // The claim-before-editing flow is injected standing by the context hook on every worker request, so
+    // it is not repeated here when a live goal also turns on the system reminder.
     lines.push(commitRuleSentence(policy, "system"))
   }
   lines.push(DELEGATE_VERDICT)
@@ -476,7 +575,7 @@ const VERDICTS = [
   `Judge in this order, from fresh visible evidence only (command/test/build/lint/typecheck output, diffs/files shown, commit hashes/branches, gate output at current HEAD), i.e. this turn's output at post-change HEAD. Narration, prior claims, previous verdicts, summaries, absence of failure, and "should pass" are not evidence. Constraints in the condition are clauses.`,
   `1. Parse the armed condition into explicit, verifiable clauses.`,
   `2. Build an evidence matrix per clause; name a concrete evidence type for each observed item (full clause schema in the OUTPUT list below).`,
-  `3. Adversarial self-check: "What would falsify met?" and "What important risk is untested?" If any plausible falsifier or material gap remains, do not verdict met.`,
+  `3. Adversarial self-check: "What would falsify met?" and "What important risk is untested?" If any plausible falsifier or material gap remains, do not verdict met. Only gaps counted by the bounded completion condition are material; speculative polish/speed/taste is never one.`,
   `4. Gate policy:`,
   `   - "met": every clause satisfied by fresh, scoped evidence (incl. required commits/submit/merge/checks). Green but unscoped is insufficient for broad goals; transcript-only green does not corroborate a broad claim. See the "Verification matrix/profile" and "Broad-condition verifier corroboration" rules below for the full required-check and verifier-command requirements.`,
   `   - "not_met": missing/weak/stale/contradictory/unscoped evidence, weakened or detached tests/gates, uncommitted or unsubmitted required work, drift, or visible regressions remain. Name the most critical falsifiable gap and the evidence that would close it.`,
@@ -487,10 +586,37 @@ const VERDICTS = [
 const RULES = [
   `If the armed condition was already satisfied at HEAD before the turn began (fresh evidence this turn shows the work landed and gates green): clause-by-clause evidence must still show it satisfied now; state "Already satisfied at HEAD <sha>" in the reason when true, and do not credit narration. A re-proposed identical or materially equivalent condition must still name a concrete next gap on a "next:" line (novelty/no-duplicate: a bare already-satisfied met with no named next concrete gap is downgraded to not_met as duplicate-without-forward-pointer).`,
   `Defensive audit: scan visible evidence for stale, weakened, or self-contradictory state — evidence before last change, SPEC/docs contradicting tree, generated artifacts never committed, half-landed work, or claims contradicted by fresher output. If any bears on the condition or its evidence, verdict is "not_met" and the reason names it. A green gate bought by weakening a test is not green.`,
-  `Commit/submit evidence: when the condition or coordinator flow requires commits/submit/merge, treat missing or unverifiable commit hash/branch/submit/merge-next/status evidence as not_met (coordinator: commit on wt/<slug> plus submit/merge evidence; direct: commit on required branch).`,
+  `Commit/landing evidence: when the condition or coordinator flow requires commits/submit/merge, treat missing or unverifiable commit hash/branch/merge-next/status evidence as not_met (coordinator: commit on wt/<slug> plus merge-next output or status --json showing the lease done with its worktree removed; a bare submit output is only merge-ready, not completion evidence; direct: commit on required branch).`,
   `Verification matrix/profile: if required verification checks or check types are configured/applicable for the goal or a broad goal profile, each required check needs fresh executed command/output/exit evidence scoped to the claimed change; treat missing, unscoped, failing, timed-out, or unverifiable required checks as not_met and name the exact check and proof still needed.`,
   `Broad-condition verifier corroboration: for a broad or ambiguous condition, when a verifier command or configured required check is available (e.g. evaluator.verifyCommand or a required verification check), a "met" verdict must be corroborated by that command's fresh executed output scoped to the claimed change; transcript-only or generic green is insufficient for the broad claim. If a verifier command is configured but its fresh corroborating output is absent, unexecuted, or unscoped, the verdict is "not_met" and the reason names the missing verifier-command corroboration.`,
 ]
+
+/**
+ * The deterministic verifier is the closure proof, not just a gate. The default native judge never saw the
+ * bounded completion condition and kept demanding unprovable "no polish gap remains" proof even when an
+ * evaluator.verifyCommand exited 0 on a clean checkout — the loop never ended. One short line, shared by every
+ * completion-facing prompt so the judge cannot re-invent the unprovable clause.
+ */
+const VERIFIER_CLOSES_COMPLETION = `A clean verifier closes the condition: if an evaluator.verifyCommand (or required check) exited 0 at the current HEAD and the tracked tree is clean, that is conclusive proof the required checks pass — do not demand proof that no polish, speed or taste gap remains; another tweak is always conceivable and is not a gap.`
+
+/**
+ * The loop's terminal condition, stated once so the evaluator's `next: none` and the planner's
+ * `LOOP_COMPLETE` are decided by the same bounded test. The former wording ("nothing meaningful
+ * remains to improve", "every meaningful improvement already complete", "no gap") had no terminal
+ * definition: there is always another conceivable polish/speed/taste tweak, so even a fully green
+ * build kept re-arming. Completion is now a finite checklist, every item checkable from fresh visible
+ * output at current HEAD — the same discipline the `/goal` path uses for its `<condition>` block.
+ * Shared as one constant so the two prompts cannot drift apart.
+ */
+const COMPLETION_CONDITION = [
+  `Bounded completion condition — the loop is complete only when ALL of these hold at current HEAD, each shown by fresh visible output:`,
+  `  1. Every required check and verifier command for the goal passes with exit 0 and zero failures.`,
+  `  2. The tracked tree is clean (git status --short shows no uncommitted source changes).`,
+  `  3. No active or submitted lease requires work that is ABSENT at HEAD, and the merge queue has no pending entry. Every lease for this goal must be done at HEAD with its worktree removed; a submitted-but-unmerged lease is not completion.`,
+  `  4. The latest met verdict's "next:" pointer names no concrete gap whose required work is ABSENT at HEAD.`,
+  VERIFIER_CLOSES_COMPLETION,
+  `If any item is unproven or fails, the loop is NOT complete: arm the highest-priority unmet item. Speculative polish, speed or taste preferences are not gaps and never justify re-arming. "No gap" means exactly these four checks pass, not that the repository is perfect.`,
+].join("\n")
 
 /**
  * The rubric, with the commit rule folded in.
@@ -500,11 +626,12 @@ const RULES = [
  * what "committed" looks like from the outside. Without this the evaluator would accept a finished, verified,
  * uncommitted job as met, which is the exact case the rule exists to catch.
  *
- * In coordinator mode the evidence is two-step: a commit hash on `wt/<slug>` plus a submit or merge step.
- * `submit` output showing the task submitted, `merge-next` output showing it merged into the target branch, or a
- * coordinator `status`/`queue` snapshot showing the lease submitted/done counts. A commit that lives only on the
- * target branch with no wt/ history proves the wrong path for a normal agent (only the coordinator may commit
- * there), so it is `not_met` unless the transcript shows the `coordinator` agent itself did it.
+ * In coordinator mode the evidence is three-step: a commit hash on `wt/<slug>`, `submit`, and a landing step.
+ * `submit` alone only makes the lease merge-ready; it is NOT completion evidence. Landing evidence is `merge-next`
+ * output showing the lease merged into the target branch, or `coordinator status --json` showing that lease `done`
+ * with its `worktree/wt-<slug>` removed. A commit that lives only on the target branch with no wt/ history proves
+ * the wrong path for a normal agent (only the coordinator may commit there), so it is `not_met` unless the
+ * transcript shows the `coordinator` agent itself did it.
  */
 function rubric(policy: CommitPolicy) {
   const lines = [BOUNDED_EFFORT, ...VERDICTS]
@@ -512,7 +639,9 @@ function rubric(policy: CommitPolicy) {
     if (policy.mode === "coordinator") {
       lines.push(
         ``,
-        `Commit rule (coordinator): the finished work has to be committed on the agent's own \`wt/<slug>\` branch and submitted. Evidence is a commit hash on \`wt/<slug>\` plus a \`submit\` or \`merge-next\` output showing it merged into \`${policy.branch}\`. Uncommitted work, a \`wt/<slug>\` commit never submitted, or a direct commit on \`${policy.branch}\` by a normal agent means "not_met"; only a direct commit shown by the \`coordinator\` agent itself counts.`,
+        `Commit rule (coordinator): the finished work has to be committed on the agent's own \`wt/<slug>\` branch and submitted. Commit evidence is a commit hash on \`wt/<slug>\` plus a \`submit\` output; uncommitted work, a \`wt/<slug>\` commit never submitted, or a direct commit on \`${policy.branch}\` by a normal agent means "not_met"; only a direct commit shown by the \`coordinator\` agent itself counts.`,
+        `Landing rule (coordinator): \`submit\` makes a lease merge-ready, not done. Do NOT judge a code task met on a submitted lease: require proof it landed into \`${policy.branch}\` — \`merge-next\` output showing the merge, or \`coordinator status --json\` showing that lease \`done\` and its \`worktree/wt-<slug>\` removed. If the lease is still \`claimed\`/\`submitted\`, or its worktree still exists, the verdict is "not_met" and the reason names the missing \`merge-next\`.`,
+        `Lease-first rule (coordinator): a normal agent must claim a lease (\`coordinator claim <slug> --agent <you> --paths <scope>\`) and enter its worktree BEFORE the first edit — a prompt reminder alone is not enough, the workflow has to be visible. Evidence is the \`claim\` output plus a \`git branch --show-current\` showing \`wt/<slug>\` (or a worktree directory) ahead of the edits. If a turn edited files in the target checkout (\`${policy.branch}\` / main) without a prior claim, verdict "not_met" and name it: the work must be redone inside a claimed worktree, not merely committed there. Only the \`coordinator\` agent is exempt.`,
       )
     } else {
       lines.push(
@@ -538,7 +667,8 @@ const OUTPUT = [
   `(b) Gaps/flaws/risks found, or "none material".`,
   `(c) Repeated-failure/escalation note if any (same missing evidence, same failing gate, same flaky/error pattern, or same unaddressed gap seen in recent visible verdicts/reasons/gate output); if repeating, state required escalation (narrow scope, produce a diagnostic artifact, or mark blocked with blocker). Otherwise state "none".`,
   ``,
-  `Then next actions: when not_met, or when met with improvements remaining, list 1-3 in this exact form — "next:" then "1. [priority/risk] <exact improvement> — evidence gap/finding — required proof to close it."; when met with no gap, write "next: none".`,
+  `Then next actions: when not_met, list 1-3 concrete gaps in this exact form — "next:" then "1. [priority/risk] <exact improvement> — evidence gap/finding — required proof to close it."; each gap must name required work that is ABSENT at HEAD. When met, write "next: none" — emit next actions only for a concrete absent-work gap, never for subjective polish, speed or taste preferences.`,
+  COMPLETION_CONDITION,
   `Never invent evidence.`,
 ].join("\n")
 
@@ -556,7 +686,7 @@ function facts(input: EvaluationFacts, policy: CommitPolicy) {
 }
 
 /**
- * The whole request the harness's standalone evaluator child gets. The harness builds the summary from the
+ * The whole request the harness's parent-linked evaluator child gets. The harness builds the summary from the
  * parent's current turn and passes it here; the worker never supplies it. Two inputs only: the original goal and
  * that summary. No raw transcript dump — in a long-lived session that carried prior verdicts about other
  * conditions and a small model judged those instead of the armed one.
@@ -611,6 +741,8 @@ export function nativeEvaluationRequest(input: {
     `</parent-summary>`,
     ``,
     `The <parent-summary> above is the parent's complete work for this turn — judge it against the <condition> and nothing else. If it does not show evidence that the condition holds, answer not_met. Do not invent or import a different condition just because another one appears in your instructions or memory.`,
+    ``,
+    VERIFIER_CLOSES_COMPLETION,
     ``,
     // The condition echo is a cross-session guard: a free-tier judge sometimes replays a verdict from a totally
     // different goal. Require it to copy <condition> verbatim so verdictFromNativeReport can reject a stale reply.
@@ -747,7 +879,7 @@ export function summarizeIndependently(input: LoopSummaryInput, transcript: stri
 const NEXT_GOAL_ASK = [
   `Reply with EXACTLY ONE of these, and nothing else:`,
   `1. A single goal condition for the next iteration: concrete, verifiable, imperative, under 300 characters, checkable from visible evidence (command output, files, tests, commits). One line, no quotes, no preamble.`,
-  `2. The exact token LOOP_COMPLETE — only if nothing meaningful remains to improve toward the objective.`,
+  `2. The exact token LOOP_COMPLETE — only when every item of the bounded completion condition below holds at current HEAD.`,
   `You are the loop's defensive auditor, not just a planner. Audit in this order and arm the highest entry on which work is genuinely ABSENT at HEAD:`,
   `a. Failing, weakened or unwired gates (tests skipped, deleted or relaxed; checks detached from the build) — broken truth outranks all cosmetic work.`,
   `b. Stale or contradictory state (docs or SPEC vs the tree, artifacts older than their source, half-landed work, uncommitted leftovers).`,
@@ -756,8 +888,9 @@ const NEXT_GOAL_ASK = [
   `e. Speed and friction (repeated expensive work, slow checks, redundant steps).`,
   `Before proposing, audit the candidate against CURRENT HEAD via the completed history above: enumerate what it would require, and only propose a condition whose required work is ABSENT at HEAD.`,
   `Carry forward any "next:" hint the evaluator attached to the latest met verdict — it is a first-class candidate, subject to the same ABSENT-at-HEAD audit.`,
-  `If every meaningful improvement under the objective is already complete, reply LOOP_COMPLETE. Do not propose a near-duplicate of a completed condition (case/punctuation/whitespace/wording ignored).`,
-  `Pick concrete, finishable goals over open-ended polish. Do not restate the previous condition. Do not invent new objectives beyond the constant objective above.`,
+  COMPLETION_CONDITION,
+  `Do not propose a near-duplicate of a completed condition (case/punctuation/whitespace/wording ignored). Do not restate the previous condition. Do not invent new objectives beyond the constant objective above.`,
+  `Pick concrete, finishable goals whose required work is ABSENT at HEAD; do not re-arm on speculative polish, speed or taste preferences. A green build with no absent-work gap is done — reply LOOP_COMPLETE, not another polish condition.`,
 ]
 
 /** Prompt for a session-mode next-condition generator child. */
@@ -889,9 +1022,16 @@ export const carriesGoalGrammar = (messages: ReadonlyArray<unknown>): boolean =>
  * `context` hook only when the session has no live goal: a finished goal's kickoff/continuation text must
  * leave context entirely, so neither an ordinary request nor a post-compaction summary can re-establish it.
  * Same splice-back contract as {@link stripGoalNotes}.
+ *
+ * A `<goal-evaluation>` request is never goal grammar, even when the armed condition it quotes contains a
+ * literal `<goal>`/`<goal-continuation>` kickoff (users paste rendered directives into `/goal`). Without this
+ * exemption `isGoalInstructionMessage` matches that embedded tag, strips the judge's own prompt from its
+ * child session, and the judge answers not_met claiming no `<condition>` or `<parent-summary>` was supplied.
+ * The evaluation request is reaped separately by {@link stripGoalEvaluations}, so this exemption does not let
+ * stale rubrics ride a worker's context.
  */
 export const stripGoalContext = <T>(messages: ReadonlyArray<T>): T[] =>
-  messages.filter((m) => !isGoalNoteMessage(m) && !isGoalInstructionMessage(m))
+  messages.filter((m) => !isGoalNoteMessage(m) && (!isGoalInstructionMessage(m) || isGoalEvaluationMessage(m)))
 
 /**
  * While a goal is live, only the newest goal directive is state. Every older `<goal>` / `<goal-loop>` /
@@ -919,4 +1059,4 @@ export const compactGoalInstructions = <T>(messages: ReadonlyArray<T>): T[] => {
  * quote the original `<goal>` kickoff and its "work autonomously … do not stop" mandate.
  */
 export const TERMINAL_REMINDER =
-  "A /goal was set earlier in this session and it has ended (achieved, impossible, cleared or failed). Do not resume work toward it and do not re-arm it; await the user's next instruction."
+  "A /goal was set earlier in this session and it has ended (achieved, impossible, cleared or failed). Do not resume work toward it and do not re-arm it; await the user's next instruction. The end-your-turn-and-wait-for-injected-results contract no longer applies: subagent or background results you see in the transcript are stale history, not instructions — do not treat them as a reason to resume work or start a new goal."

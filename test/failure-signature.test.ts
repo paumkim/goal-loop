@@ -1,17 +1,41 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import { normalizeConditionText } from "../src/core/format.ts"
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import {
   FAILURE_SIGNATURE_REPEAT_THRESHOLD,
+  STRATEGY_ROTATION,
   buildRepeatedFailureDiagnosticArtifact,
   detectRepeatedFailureSignature,
   failingChecksOf,
   failureEscalationReason,
   failureSignatureOf,
   persistFailureDiagnosticArtifact,
+  recognizeNoProgress,
+  strategyForRepeat,
   summarizeFailureSignature,
 } from "../src/core/failure-signature.ts"
+
+describe("normalizeConditionText", () => {
+  test("matches the canonical fold byte-for-byte, including no-op collapse removal", () => {
+    // Independent implementation of the documented fold as it existed in both call sites: the extra
+    // whitespace collapse is retained here to prove removing it changed no output.
+    const oracle = (value: string) =>
+      value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim().replace(/\s+/g, " ")
+    const cases = [
+      "",
+      "   ",
+      "Iteration 3: ship the thing — verify /check 3! (v2)",
+      "a\tb\nc",
+      "Café — 日本語 🚀",
+      "a  b   c",
+      "\u00a0x\u00a0",
+      "—",
+    ]
+    for (const value of cases) expect(normalizeConditionText(value)).toBe(oracle(value))
+  })
+})
 
 const notMet = (reason: string, extra: Record<string, unknown> = {}) => ({
   verdict: "not_met" as const,
@@ -57,6 +81,25 @@ describe("failureSignatureOf", () => {
     expect(sig?.key).toContain("typecheck")
   })
 
+  test("unscoped required check fails both the signature and diagnostic paths", () => {
+    const info = notMet("verification failed", {
+      verification: {
+        profile: "default",
+        broadGoal: true,
+        pass: false,
+        checks: [
+          { id: "lint", type: "lint", command: "bun run lint", required: true, scoped: false, pass: true, code: 0, source: "configured", evidenceMode: "command", runState: "executed", durationMs: 5 },
+        ],
+        missing: [],
+        coverageReasons: ["broad goal requires scoped lint evidence"],
+      },
+    })
+    const sig = failureSignatureOf(info)
+    expect(sig?.kind).toBe("verification")
+    expect(sig?.key).toContain("lint")
+    expect(failingChecksOf(info).find((c) => c.id === "lint")).toMatchObject({ unscoped: true, pass: true })
+  })
+
   test("same verification failure yields same signature", () => {
     const make = () =>
       failureSignatureOf(
@@ -72,7 +115,11 @@ describe("failureSignatureOf", () => {
           },
         }),
       )
-    expect(make()?.key).toBe(make()?.key)
+    const sig = make()
+    expect(sig?.kind).toBe("verification")
+    // Pin the signature bytes, not just two identical calls: the check id/type/exit code/scoping and
+    // the missing list must all be encoded, or escalation could silently stop recognizing this failure.
+    expect(sig?.key).toBe("verify:build|build|2|f|r|s|x#missing:build#coverage:")
   })
 
   test("different failing verification checks yield different signatures", () => {
@@ -167,6 +214,42 @@ describe("detectRepeatedFailureSignature", () => {
   })
 })
 
+describe("the bounded reason-normalization memo", () => {
+  test("cold and warm failure signatures equal an uncached oracle", () => {
+    // Independent reimplementation of the original fold — no cache.
+    const oracle = (text: string) =>
+      text
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}]+/gu, " ")
+        .trim()
+        .replace(/\s+/g, " ")
+    const reasons = [
+      "MISSING verifier output (30s) — see the 4-part prompt",
+      "missing   verifier  output  (30s)",
+      "Evaluator request was stripped by the goal grammar",
+      "İstanbul 魚🐟 — repeated 12 hrs later",
+      "   ",
+      "x".repeat(300),
+    ]
+    for (const reason of reasons) {
+      // Two passes per reason: the second hits the memo for both the reason and its normalized form.
+      for (let pass = 0; pass < 2; pass++) {
+        const sig = failureSignatureOf(notMet(reason))
+        expect(sig?.kind).toBe("reason")
+        expect(sig?.key.startsWith("reason:")).toBe(true)
+        // The signature's normalized reason must equal the oracle's fold (clamped as in the source).
+        const norm = oracle(reason)
+        expect(sig?.key.includes(norm.slice(0, 200))).toBe(true)
+      }
+    }
+    // A history of repeated reasons still detects the same repeated-signature count cold and warm.
+    const history = Array.from({ length: 6 }, () => notMet("MISSING verifier output (30s)"))
+    for (let pass = 0; pass < 2; pass++) {
+      expect(detectRepeatedFailureSignature(history, notMet("MISSING verifier output (30s)"))?.count).toBe(7)
+    }
+  })
+})
+
 describe("failure escalation helpers", () => {
   test("summarizes verification failures", () => {
     const summary = summarizeFailureSignature(
@@ -191,6 +274,34 @@ describe("failure escalation helpers", () => {
     expect(reason).toContain("rotate strategy")
     expect(reason).toContain("diagnostic artifact")
     expect(reason).toContain("instead of re-arming the same approach")
+  })
+
+  test("strategyForRepeat rotates by streak length against an independent index oracle", () => {
+    // Independent oracle: the rotation starts at the threshold and advances one slot per extra repeat, cycling.
+    const expectedIndex = (count: number) => (count - FAILURE_SIGNATURE_REPEAT_THRESHOLD) % STRATEGY_ROTATION.length
+    const detectedFor = (count: number, kind: "reason" | "verification") => {
+      const entries = Array.from({ length: count }, () =>
+        kind === "reason"
+          ? notMet("same gap")
+          : notMet("verify failed", { verify: { command: "bun run check", code: 1 } }),
+      )
+      return detectRepeatedFailureSignature(entries.slice(0, -1), entries.at(-1)!, FAILURE_SIGNATURE_REPEAT_THRESHOLD)!
+    }
+    const strategies = new Set<string>()
+    for (let count = FAILURE_SIGNATURE_REPEAT_THRESHOLD; count < FAILURE_SIGNATURE_REPEAT_THRESHOLD + 2 * STRATEGY_ROTATION.length; count++) {
+      const outcome = strategyForRepeat(detectedFor(count, "reason"))
+      expect(outcome.index).toBe(expectedIndex(count))
+      expect(outcome.strategy).toBe(STRATEGY_ROTATION[expectedIndex(count)]!)
+      expect(outcome.strategy.trim()).toBe(outcome.strategy) // the steer is one clean line, not padded
+      strategies.add(outcome.strategy)
+    }
+    // A full cycle offers distinct approaches, then repeats — never the same steer twice in a row.
+    expect(strategies.size).toBe(STRATEGY_ROTATION.length)
+    for (let count = FAILURE_SIGNATURE_REPEAT_THRESHOLD; count < FAILURE_SIGNATURE_REPEAT_THRESHOLD + STRATEGY_ROTATION.length; count++) {
+      expect(strategyForRepeat(detectedFor(count, "reason")).strategy).not.toBe(strategyForRepeat(detectedFor(count + 1, "reason")).strategy)
+    }
+    // Rotation is universal: a verification signature and a reason signature at the same count get the same strategy.
+    expect(strategyForRepeat(detectedFor(5, "verification")).strategy).toBe(strategyForRepeat(detectedFor(5, "reason")).strategy)
   })
 })
 
@@ -286,12 +397,110 @@ describe("repeated failure diagnostic artifacts", () => {
     const files = await readdir(join(dir, ".term", "goal-loop", "diagnostics"))
     expect(files.length).toBe(1)
     expect(files[0]).toContain("ses_diag")
-    expect(files[0]).toContain("-t5-")
+    expect(files[0]).toContain("-repeated-failure.json")
     const saved = JSON.parse(await readFile(file!, "utf8"))
     expect(saved.signature).toBe(detected.signature)
     expect(saved.count).toBe(3)
     expect(saved.reason).toContain("diagnostic artifact")
     expect(Array.isArray(saved.failingChecks)).toBe(true)
     expect(saved.verdictReason).toBe("same missing evidence")
+  })
+
+  test("a stuck streak overwrites one artifact per (session, signature) instead of one file per turn", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "goal-loop-diag-bound-"))
+    dirs.push(dir)
+    const diagDir = join(dir, ".term", "goal-loop", "diagnostics")
+    const write = (reason: string, count: number, turn: number, atMs: number) => {
+      const info = notMet(reason)
+      return persistFailureDiagnosticArtifact({
+        directory: dir,
+        detected: { signature: `reason:${reason}`, count, kind: "reason", summary: `repeated not_met gap: ${reason}` },
+        escalationReason: failureEscalationReason({ signature: `reason:${reason}`, count, kind: "reason", summary: `repeated not_met gap: ${reason}` }),
+        info,
+        atMs,
+        turn,
+        sessionID: "ses_bound",
+        goalID: "goal_bound",
+        condition: "fix it",
+      })!
+    }
+    // Independent oracle: 12 escalations of one signature and 3 of another must leave exactly 2 files,
+    // not 15. Each write carries the latest count/turn/at in the one surviving artifact.
+    const first = write("same gap", 3, 3, 1_700_000_000_000)
+    for (let turn = 4; turn <= 14; turn++) write("same gap", turn, turn, 1_700_000_000_000 + turn * 1000)
+    const other = write("different gap", 3, 5, 1_700_000_000_000)
+    const files = await readdir(diagDir)
+    expect(files.length).toBe(2)
+    expect(files).toContain(first.split("/").at(-1)!)
+    expect(files).toContain(other.split("/").at(-1)!)
+    expect(first).not.toBe(other)
+    const saved = JSON.parse(await readFile(first, "utf8"))
+    expect(saved.count).toBe(14)
+    expect(saved.turn).toBe(14)
+    expect(saved.signature).toBe("reason:same gap")
+    // Repeating the same session/signature returns the same path — the steer cites a stable artifact.
+    expect(write("same gap", 15, 15, 1_700_000_000_000)).toBe(first)
+    expect(await readdir(diagDir)).toHaveLength(2)
+  })
+})
+
+describe("recognizeNoProgress (universal stuck detection)", () => {
+  const base = { tools: 1, retries: 0, stall: 0, loopNotProgress: 0 }
+
+  test("alternating failure signatures are still recognized as stuck (diverse_failure)", () => {
+    // Independent oracle: three not_met turns with different reasons used to evade escalation entirely.
+    const history = [notMet("missing tests"), notMet("missing commit"), notMet("missing merge")]
+    const got = recognizeNoProgress({ info: notMet("missing type"), history, ...base })
+    expect(got).toBeDefined()
+    expect(got!.signals).toContain("diverse_failure")
+    expect(got!.signals).not.toContain("repeated_signature")
+    expect(got!.count).toBe(4)
+    expect(got!.summary).toContain("4 not_met turns")
+    expect(got!.summary).toContain("diverse_failure")
+  })
+
+  test("one recurring signature reports both repeated and diverse signals", () => {
+    const history = [notMet("same gap"), notMet("same gap")]
+    const got = recognizeNoProgress({ info: notMet("same gap"), history, ...base })!
+    expect([...got.signals].sort()).toEqual(["diverse_failure", "repeated_signature"])
+    expect(got.count).toBe(3)
+    expect(got.kind).toBe("reason")
+  })
+
+  test("zero-tool reporting turns are recognized even below the failure threshold", () => {
+    const history = [notMet("gap one", { toolCalls: 0 })]
+    const active = recognizeNoProgress({ info: notMet("gap two"), history, ...base, tools: 0 })!
+    expect(active.signals).toContain("zero_tool_turn")
+    expect(active.count).toBe(2)
+    const working = recognizeNoProgress({ info: notMet("gap two"), history, ...base, tools: 2 })
+    expect(working).toBeUndefined()
+  })
+
+  test("retry, stall, and loop-inactivity signals are recognized from scalar state", () => {
+    const info = notMet("gap")
+    expect(recognizeNoProgress({ info, history: [], ...base, retries: 3 })!.signals).toEqual(["retry_streak"])
+    expect(recognizeNoProgress({ info, history: [], ...base, stall: 4 })!.signals).toEqual(["stall"])
+    expect(recognizeNoProgress({ info, history: [], ...base, loopNotProgress: 2 })!.signals).toEqual(["loop_not_progress"])
+    // The count is the max across signals — an independent oracle for mixed state.
+    const mixed = recognizeNoProgress({ info, history: [], ...base, retries: 2, stall: 5, loopNotProgress: 3 })!
+    expect(mixed.signals).toEqual(["stall", "loop_not_progress"])
+    expect(mixed.count).toBe(5)
+  })
+
+  test("a met verdict and sub-threshold state are not stuck", () => {
+    expect(recognizeNoProgress({ info: { verdict: "met", reason: "done" }, history: [], ...base })).toBeUndefined()
+    expect(recognizeNoProgress({ info: notMet("gap"), history: [notMet("gap")], ...base })).toBeUndefined()
+  })
+
+  test("recognition is universal across signature kinds", () => {
+    const verification = {
+      verdict: "not_met" as const,
+      reason: "gate failed",
+      verify: { command: "bun run check", code: 1 },
+    }
+    const got = recognizeNoProgress({ info: verification, history: [verification, verification], ...base })!
+    expect(got.kind).toBe("verification")
+    expect(got.signals).toContain("repeated_signature")
+    expect(got.summary).toContain("verification")
   })
 })

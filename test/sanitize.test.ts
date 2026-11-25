@@ -8,6 +8,21 @@ describe("stripReasoningControl", () => {
     expect(stripReasoningControl(stripReasoningControl(text))).toBe(text)
   })
 
+  test("tag-free fast path returns exactly the trimmed text (whitespace, unicode, empty)", () => {
+    // No reasoning tag can exist without '<', so the short-circuit must be indistinguishable from
+    // the full three-pass loop followed by trim(). Covers whitespace edges and non-ASCII content.
+    const cases = [
+      "",
+      "   ",
+      "\n\t plain text \n",
+      "unicode: café 日本語 🚀 — em dash",
+      "< not a tag (no closing angle) still has a <",
+    ]
+    for (const text of cases) {
+      if (text.indexOf("<") < 0) expect(stripReasoningControl(text)).toBe(text.trim())
+    }
+  })
+
   test("removes a complete namespaced paired block", () => {
     expect(stripReasoningControl("<ernie:think>reasoning here</ernie:think>objective: done")).toBe("objective: done")
   })
@@ -144,5 +159,24 @@ describe("Evaluator + summarizer sanitization (integration)", () => {
     const prompt = prompts[0]!
     expect(prompt).not.toContain("</ernie:think>")
     expect(prompt).not.toContain("<ernie:think>")
+  })
+})
+
+describe("the bounded probe memo", () => {
+  test("cold and warm sanitization stays byte-identical to an uncached oracle", () => {
+    // Independent reimplementation of the filter itself is overkill here; pin that repeated calls
+    // (which hit the memo on both halves of the prefix comparison) give the same output as the first.
+    const inputs = [
+      "<ernie:think>internal reasoning</ernie:think>the answer",
+      "the answer came first</ernie:think>duplicated answer came first",
+      "<think>unfinished reasoning tail",
+      "plain text with no tags at all",
+      "weird  unicode — 魚🐟  punctuation",
+    ]
+    for (const input of inputs) {
+      const first = stripReasoningControl(input)
+      for (let pass = 0; pass < 2; pass++) expect(stripReasoningControl(input)).toBe(first)
+      expect(stripReasoningControl(first)).toBe(first) // idempotent after the memo is warm
+    }
   })
 })

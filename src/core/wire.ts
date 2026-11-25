@@ -18,6 +18,7 @@ import type {
   Verdict,
   VerdictEntry,
 } from "./types.ts"
+import { VERIFY_CHECK_TYPES, VERIFY_EVIDENCE_MODES, VERIFY_CHECK_SOURCES, VERIFY_RUN_STATES } from "./types.ts"
 
 /** Normalizes paths for cross-platform equality (case-insensitive drive letters, separators). */
 export const sameDirectory = (a: string, b: string) => {
@@ -101,10 +102,6 @@ const isUsageSnapshot = (value: unknown): value is UsageSnapshot =>
   isFiniteNumber(value.cacheRead) &&
   isFiniteNumber(value.cacheWrite)
 
-const VERIFY_CHECK_TYPES: ReadonlySet<string> = new Set(["typecheck", "tests", "lint", "build", "smoke", "custom", "goal-declared"])
-const VERIFY_SOURCES: ReadonlySet<string> = new Set(["configured", "legacy", "goal-declared"])
-const VERIFY_EVIDENCE_MODES: ReadonlySet<string> = new Set(["command", "artifact", "either"])
-const VERIFY_RUN_STATES: ReadonlySet<string> = new Set(["executed", "artifact", "reused", "skipped"])
 const VERIFY_EXECUTION_MODES: ReadonlySet<string> = new Set(["command", "artifact", "reused-command", "reused-artifact", "skipped"])
 
 const isStringArray = (value: unknown): value is string[] => Array.isArray(value) && value.every(isString)
@@ -125,7 +122,7 @@ const isVerifyCheckEvidence = (value: unknown): value is NonNullable<VerdictEntr
   (value.timedOut === undefined || isBoolean(value.timedOut)) &&
   (value.tail === undefined || isString(value.tail)) &&
   (value.reason === undefined || isString(value.reason)) &&
-  (value.source === undefined || (isString(value.source) && VERIFY_SOURCES.has(value.source))) &&
+  (value.source === undefined || (isString(value.source) && VERIFY_CHECK_SOURCES.has(value.source))) &&
   (value.evidenceMode === undefined || (isString(value.evidenceMode) && VERIFY_EVIDENCE_MODES.has(value.evidenceMode))) &&
   (value.runState === undefined || (isString(value.runState) && VERIFY_RUN_STATES.has(value.runState))) &&
   (value.scopeDecision === undefined || isString(value.scopeDecision)) &&
@@ -264,10 +261,6 @@ export const isGoalSnapshot = (value: unknown): value is GoalSnapshot => {
 export const parseGoalSnapshot = (value: unknown): GoalSnapshot | undefined => (isGoalSnapshot(value) ? value : undefined)
 
 /**
- * Narrows the `goal` RPC's result. `undefined` means the payload was unusable — the caller keeps the
- * previously cached entry (the same posture as a failed fetch) instead of displaying or caching garbage.
- */
-/**
  * Narrows a `list` RPC output to the live goals it carries. Malformed entries are dropped one by one —
  * a single corrupt record must not hide every other live goal. Returns undefined only when the envelope
  * itself is unrecognizable.
@@ -282,6 +275,10 @@ export const parseListGoalOutput = (value: unknown): GoalSnapshot[] | undefined 
   return out
 }
 
+/**
+ * Narrows the `goal` RPC's result. `undefined` means the payload was unusable — the caller keeps the
+ * previously cached entry (the same posture as a failed fetch) instead of displaying or caching garbage.
+ */
 export const parseGetGoalOutput = (value: unknown): { readonly goal: GoalSnapshot | null } | undefined => {
   if (!isRecord(value)) return undefined
   const goal = value.goal

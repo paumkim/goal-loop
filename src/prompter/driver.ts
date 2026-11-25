@@ -2,7 +2,7 @@ import { OpenCode } from "@opencode/client"
 import { spawn } from "node:child_process"
 import { appendFileSync, createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
-import { logPath, money } from "./util.ts"
+import { logPath, money, parseModel, short, sleep } from "./util.ts"
 import { SUCCESS_STATUS, TERMINAL_STATUSES } from "./defaults.ts"
 import { GoalRpc } from "./goal-rpc.ts"
 import type { Config, TaskResult } from "./types.ts"
@@ -55,7 +55,7 @@ export const budgetStoppedResult = (result: TaskResult, reason: string): TaskRes
   reason: result.reason ? `${result.reason} | ${reason}` : reason,
 })
 
-export interface RunTaskInput {
+interface RunTaskInput {
   readonly repo: string
   readonly worktree: string
   readonly config: Config
@@ -122,7 +122,6 @@ export const runTask = async (input: RunTaskInput): Promise<TaskResult> => {
   process.once("SIGTERM", stopSignal)
   process.once("SIGINT", stopSignal)
 
-  const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
   let last: unknown
   let reason = ""
   let budgetBreach = ""
@@ -150,7 +149,8 @@ export const runTask = async (input: RunTaskInput): Promise<TaskResult> => {
     if (!registered) throw new Error("/goal command not registered — is goal-loop installed in the global opencode config?")
     logBoth("goal command registered")
 
-    const model = config.model ? parseModelRef(config.model) : undefined
+    const modelRef = config.model ? parseModel(config.model) : undefined
+    const model = modelRef ? { providerID: modelRef.providerID, id: modelRef.modelID } : undefined
     const session = await client.session.create({
       location,
       title: `prompter ${path.basename(worktree)}`,
@@ -166,9 +166,9 @@ export const runTask = async (input: RunTaskInput): Promise<TaskResult> => {
         const data = (event as { data?: Record<string, unknown> }).data ?? {}
         if (data.sessionID && data.sessionID !== sessionID) continue
         if (event.type === "rpc.goal.notice") {
-          logBoth(`NOTICE ${String(data.level ?? "info")} ${String(data.title ?? "")}: ${shorten(String(data.message ?? ""))}`)
+          logBoth(`NOTICE ${String(data.level ?? "info")} ${String(data.title ?? "")}: ${short(String(data.message ?? ""), 240)}`)
         } else if (event.type === "session.execution.failed") {
-          logBoth(`execution failed: ${shorten(JSON.stringify(data.error ?? ""))}`)
+          logBoth(`execution failed: ${short(JSON.stringify(data.error ?? ""), 240)}`)
         }
       }
     })().catch(() => {})
@@ -217,11 +217,6 @@ export const runTask = async (input: RunTaskInput): Promise<TaskResult> => {
   return result
 }
 
-const shorten = (value: string, max = 240): string => {
-  const flat = value.replace(/\s+/g, " ").trim()
-  return flat.length <= max ? flat : `${flat.slice(0, max - 1)}…`
-}
-
 const onceClose = (stream: { once: (event: string, cb: () => void) => void }): Promise<void> =>
   new Promise((resolve) => stream.once("finish", resolve))
 
@@ -229,7 +224,3 @@ const readFileSafe = (file: string): string => {
   try { return readFileSync(file, "utf8") } catch { return "" }
 }
 
-const parseModelRef = (value: string): { providerID: string; id: string } => {
-  const slash = value.indexOf("/")
-  return { providerID: value.slice(0, slash), id: value.slice(slash + 1) }
-}

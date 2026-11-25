@@ -4,9 +4,8 @@
  * No I/O, no JSX; everything here is unit-tested headlessly. Presentation lives in
  * `src/hud-card.tsx` (card), `src/tui-history.tsx` (dialog sections) and `src/tui.tsx` (wiring).
  */
-import stringWidth from "string-width"
-import { COMPACT_MISS_CAP, isLive, completedIterationCount, type GoalSnapshot, type LoopCompactState } from "./types.ts"
-import { formatDurationCoarse, truncate } from "./format.ts"
+import { COMPACT_MISS_CAP, isLive, completedIterationCount, totalVerdictCount, type GoalSnapshot, type LoopCompactState } from "./types.ts"
+import { cellWidth, formatDurationCoarse, nonNegative, truncate } from "./format.ts"
 import { renderPips, verdictStreak } from "./history.ts"
 
 /**
@@ -21,6 +20,21 @@ type HudTone = "armed" | "evaluating" | "waiting" | "paused" | "hot" | "retrying
 
 /** Every turn keeps failing at the retry threshold or beyond: the goal is stuck, not merely slow. */
 export const isRetryStuck = (goal: GoalSnapshot): boolean => goal.retries >= RETRY_HOT_THRESHOLD
+
+/**
+ * How many turns the agent has actually been evaluated on the goal the pill is showing — the count the
+ * user wants at a glance ("14 turns evaluated"), and the same verdict trail that produces the detail
+ * card's "14x not_met in a row". The trail (via `totalVerdictCount`, which includes entries the retention
+ * cap dropped) is authoritative, NOT the per-iteration `turns` counter: a loop advance resets `turns` to 0
+ * while the trail keeps every evaluation, and a snapshot restored or re-armed out of band can read 0 turns
+ * beside a trail that already holds 14 verdicts — the exact state that made the live pill say "1 turn"
+ * next to a detail card saying "14x not_met in a row". `max` keeps legacy records (a trail absent but
+ * `turns` present) honest. Pure; the snapshot carries the trail, so the count moves on every changed event.
+ */
+export const currentTurnCount = (goal: GoalSnapshot): number =>
+  // A corrupt/non-finite legacy turns counter must not make the pill read "NaN turns"; the verdict
+  // trail stays authoritative and the clamp is a no-op for every finite counter.
+  Math.max(totalVerdictCount(goal), nonNegative(goal.turns))
 
 interface PillModel {
   readonly text: string
@@ -59,18 +73,26 @@ export const compactMarker = (compact: LoopCompactState | undefined, ascii: bool
   return { text: "pending", tone: "pending" }
 }
 
-const stateWord = (goal: GoalSnapshot): string =>
-  goal.status === "paused"
-    ? "paused"
-    : goal.evaluating
-      ? "checking"
-      : goal.waiting
-        ? "waiting"
-        : goal.queued
-          ? "queued"
-          : isRetryStuck(goal)
-            ? "stuck"
-            : "active"
+/**
+ * The pill should wear the delegation icon when the parent is waiting on a delegated subagent. A shell-only
+ * wait (or a restored record without the additive count) keeps the plain hollow ring: nothing to attribute
+ * the wait to, so no borrowed icon. One source for the TUI's glyph swap and the tests that pin it.
+ */
+export const waitingOnSubagents = (goal: GoalSnapshot): boolean =>
+  goal.status === "active" && goal.waiting === true && (goal.waitingSubagents ?? 0) > 0
+
+const stateWord = (goal: GoalSnapshot): string => {
+  if (goal.status === "paused") return "paused"
+  if (goal.evaluating) return "checking"
+  if (goal.waiting) {
+    const count = goal.waitingSubagents ?? 0
+    // Name what the parent is waiting on. One child reads as "waiting for subagent"; more than one shows
+    // the count so the pill agrees with the host's subagent tally. Unknown/zero stays the honest "waiting".
+    return count > 1 ? `waiting for ${count} subagents` : count === 1 ? "waiting for subagent" : "waiting"
+  }
+  if (goal.queued) return "queued"
+  return isRetryStuck(goal) ? "stuck" : "active"
+}
 
 /**
  * May the HUD card arm right now? A goal must be eligible to paint (live record on disk or in cache),
@@ -91,12 +113,14 @@ export const hudArmEnabled = (hasGoal: boolean, statusDialogOpen: boolean): bool
 
 /**
  * Walk a degradation ladder (fullest first) and pick the first rung that fits `budget` terminal cells,
- * width-aware via stringWidth. The final rung — the irreducible state core — is hard-truncated with the
- * caller's ellipsis when even it cannot fit; the pill never paints wider than `budget` cells.
+ * width-aware via cellWidth. The final rung — the irreducible state core — is hard-truncated with the
+ * caller's ellipsis when even it cannot fit; the pill never paints wider than `budget` cells. The
+ * evaluated-turn count is the last detail dropped before the core, so the number the user watches stays
+ * visible for as long as the width allows.
  */
 const fitLadder = (rungs: readonly string[], budget: number, ellipsis: string = "\u2026"): string => {
   for (const rung of rungs) {
-    if (stringWidth(rung) <= budget) return rung
+    if (cellWidth(rung) <= budget) return rung
   }
   return truncate(rungs[rungs.length - 1]!, Math.max(0, Math.floor(budget)), ellipsis)
 }
@@ -164,9 +188,9 @@ export const nextMenuIndex = (index: number, delta: number, rows: readonly { rea
   return norm
 }
 
-/** The 1-row ambient pill label plus its tone. Mirrors the composer-top indicator; extracted so it can be unit-tested. */
 /**
- * `budget` caps the label at this many terminal cells, degrading by dropping whole segments in priority
+ * The 1-row ambient pill label plus its tone. Mirrors the composer-top indicator; extracted so it can
+ * be unit-tested. `budget` caps the label at this many terminal cells, degrading by dropping whole segments in priority
  * order — `retry`, then `compact pending`, then `turns`, then the pips — before hard-truncating the
  * core with the surface's ellipsis. An unbounded budget (the default) composes exactly the historical
  * full label. `phase` is the breath cycle index (0..3, advanced by the caller's slow timer); an
@@ -175,7 +199,11 @@ export const nextMenuIndex = (index: number, delta: number, rows: readonly { rea
  */
 export const pillModel = (goal: GoalSnapshot, elapsed: number, ascii: boolean = false, budget: number = Number.POSITIVE_INFINITY, phase?: number): PillModel => {
   const state = stateWord(goal)
-  const turns = goal.turns > 0 ? ` · ${goal.turns} turn${goal.turns === 1 ? "" : "s"}` : ""
+  const count = currentTurnCount(goal)
+  // "N turns evaluated" names what the number counts: completed evaluations of this goal, not the
+  // turn currently being run. A bare "N turns" read as "turn N" and left users expecting the number to
+  // advance in place while a turn was in flight; the verdict trail only moves when a verdict lands.
+  const turns = count > 0 ? ` · ${count} turn${count === 1 ? "" : "s"} evaluated` : ""
   const retrying = isRetryStuck(goal) ? ` · retry ${goal.retries}` : ""
   // Paused outranks the retry counter (a pause IS the rate-limit story); a stuck-retrying goal outranks a hot compaction — nothing executes at all, so the compaction is not the urgent part.
   const tone: HudTone =
@@ -336,8 +364,6 @@ export const pillMotionNeeded = (args: { readonly working?: boolean; readonly ev
  * transition (wired in tui.tsx from the snapshot path). `cleared` and still-live statuses return
  * undefined — a deliberate user reset is silent, an active goal is not a completion. Same grammar
  * as `pillModel` so the jump-row text does not change shape.
- */
-/**
  * The terminal acknowledgment pill. `budget` (cells) is optional: when provided and the armed text would
  * exceed it, the text truncates to the budget with the surface's ellipsis instead of painting past the
  * row. Mirrors `pillModel`'s contract — the pill never exceeds the cells it is given.
@@ -359,7 +385,7 @@ export const terminalPill = (goal: GoalSnapshot, elapsed: number, ascii: boolean
     : `${glyph} goal ${word} · ${span}`
   if (budget !== undefined && Number.isFinite(budget)) {
     const cap = Math.max(1, Math.floor(budget))
-    if (stringWidth(text) > cap) return { text: truncate(text, cap, ascii ? "..." : "\u2026"), tone }
+    if (cellWidth(text) > cap) return { text: truncate(text, cap, ascii ? "..." : "\u2026"), tone }
   }
   return { text, tone }
 }
@@ -554,7 +580,7 @@ export const remediationFor = (goal: GoalSnapshot): Remediation | undefined => {
   if (goal.status === "paused") {
     const cause = goal.pauseCause
     if (cause === "cap") return { tone: "warning", text: `turn cap reached · /goal clear or set a new goal - a message will not extend it` }
-    if (cause === "stall") return { tone: "warning", text: `no tool use for ${Math.max(0, Math.floor(goal.stall))} turns · send a message to resume, or /goal clear` }
+    if (cause === "stall") return { tone: "warning", text: `no tool use for ${Math.floor(nonNegative(goal.stall))} turns · send a message to resume, or /goal clear` }
     if (cause === "repeated_failure") return { tone: "warning", text: `repeated not_met failure signature · rotate strategy, narrow scope, or produce a diagnostic artifact, then send a message to resume (or /goal clear)` }
     if (cause === "usage_limit") return { tone: "warning", text: `free usage limit on the judge · set a separate evaluator.model or wait for the quota window, then send a message to resume (or /goal clear)` }
     if (cause === "user") return { tone: "warning", text: `interrupted · send a message to resume` }
@@ -592,7 +618,7 @@ export const remediationFor = (goal: GoalSnapshot): Remediation | undefined => {
  * the remediation row does not need the onboarding hint. Looped or not — the rule is identical.
  */
 export const EVALUATOR_HINT_CARD = "the evaluator reads only the transcript"
-export const EVALUATOR_HINT_FULL = "the evaluator reads only the transcript - it cannot run commands; prove the condition with visible output"
+export const EVALUATOR_HINT_FULL = `${EVALUATOR_HINT_CARD} - it cannot run commands; prove the condition with visible output`
 export const evaluatorHint = (goal: GoalSnapshot): { readonly card: string; readonly full: string } | null => {
   // `evaluating` / `waiting` are boolean flags on an otherwise-`active` record; the hint applies while the status is active.
   if (goal.status !== "active") return null

@@ -1,5 +1,12 @@
-/** Task lifecycle. `running` records are recovered to `interrupted` by `tick` on the next run. */
-export type TaskStatus = "running" | "interrupted" | "in_review" | "merged" | "rejected" | "failed"
+/** Task lifecycle in `prompter status` display order. Single source for the type and CLI listings. */
+export const TASK_STATUSES = ["running", "in_review", "merged", "rejected", "failed", "interrupted"] as const
+export type TaskStatus = (typeof TASK_STATUSES)[number]
+
+/** Statuses that still own a backlog line or block task selection. */
+export const ACTIVE_TASK_STATUSES: ReadonlySet<string> = new Set(["running", "in_review"])
+
+/** Finished statuses whose worktree and branches `prompter cleanup` removes. */
+export const FINISHED_TASK_STATUSES: readonly TaskStatus[] = TASK_STATUSES.filter((s) => !ACTIVE_TASK_STATUSES.has(s))
 
 /** Append-only state record. The last record for an id is the current state. */
 export interface TaskState {

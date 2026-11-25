@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { ENTRY_CAP, bumpReceivedAt, preserveCarriedFields, pruneSnapshotEntries, terminalStampOf, dropSessions, type GoalSnapshotCacheEntry } from "../src/core/entries.ts"
-import type { GoalSnapshot, GoalStatus } from "../src/core/types.ts"
+import { ENTRY_CAP, bumpReceivedAt, goalsEqual, preserveCarriedFields, pruneSnapshotEntries, terminalStampOf, dropSessions, shouldKeepPlanningPlaceholder, isStalePlanningPull, PLANNING_PULL_GRACE_MS, type GoalSnapshotCacheEntry } from "../src/core/entries.ts"
+import { planningSnapshotId, type GoalSnapshot, type GoalStatus } from "../src/core/types.ts"
 
 const snap = (status: GoalStatus): GoalSnapshot =>
   ({ version: 1, status, sessionID: "ses", condition: "c", setAt: 0, startedAt: 0, turns: 0, stall: 0, retries: 0, checkins: 0, baseline: { cost: 0, input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 }, history: [], elapsedMs: 0 }) as unknown as GoalSnapshot
@@ -8,6 +8,71 @@ const snap = (status: GoalStatus): GoalSnapshot =>
 const entry = (status: GoalStatus | null, receivedAt = 1000): GoalSnapshotCacheEntry => ({
   goal: status === null ? null : snap(status),
   receivedAt,
+})
+
+describe("goalsEqual", () => {
+  const stripVolatile = (key: string, value: unknown) => (key === "elapsedMs" ? undefined : value)
+  const original = (a: GoalSnapshot | null, b: GoalSnapshot | null) => {
+    if (a === b) return true
+    if (!a || !b) return false
+    return JSON.stringify(a, stripVolatile) === JSON.stringify(b, stripVolatile)
+  }
+  const variants: Array<[string, (g: GoalSnapshot) => GoalSnapshot]> = [
+    ["same", (g) => ({ ...g })],
+    ["elapsed only (stripped)", (g) => ({ ...g, elapsedMs: g.elapsedMs + 1 })],
+    ["turns", (g) => ({ ...g, turns: g.turns + 1 })],
+    ["status", (g) => ({ ...g, status: "achieved" })],
+    ["condition", (g) => ({ ...g, condition: g.condition + "!" })],
+    ["history length", (g) => ({ ...g, history: [...g.history, g.history[0]!] })],
+    ["nested baseline", (g) => ({ ...g, baseline: { ...g.baseline, cost: 9 } })],
+    ["nested history value", (g) => ({ ...g, history: g.history.map((h, i) => (i === 0 ? { ...h, reason: h.reason + "x" } : h)) })],
+    ["loopIteration", (g) => ({ ...g, loopIteration: (g.loopIteration ?? 0) + 1 })],
+  ]
+  const base = {
+    ...snap("active"),
+    turns: 3,
+    condition: "ship it",
+    elapsedMs: 42,
+    loopIteration: 2,
+    history: [1, 2, 3].map((turn) => ({ turn, verdict: "not_met" as const, reason: `r${turn}`, at: turn * 1000, toolCalls: 1 })),
+  }
+
+  test("the scalar precheck agrees with the original deep comparison on every variant pair", () => {
+    for (const [nameA, makeA] of variants) {
+      for (const [nameB, makeB] of variants) {
+        const a = makeA(base)
+        const b = makeB(base)
+        expect(goalsEqual(a, b), `${nameA} vs ${nameB}`).toBe(original(a, b))
+      }
+    }
+  })
+
+  test("null and identity cases still hold", () => {
+    expect(goalsEqual(null, null)).toBe(true)
+    expect(goalsEqual(null, base)).toBe(false)
+    expect(goalsEqual(base, null)).toBe(false)
+    expect(goalsEqual(base, base)).toBe(true)
+  })
+})
+
+describe("snapshot-cache steady-state fast paths", () => {
+  test("pruneSnapshotEntries returns the original reference at or under the cap (no copy)", () => {
+    const many: Record<string, GoalSnapshotCacheEntry> = {}
+    for (let i = 0; i < 40; i++) many[`ses-${i}`] = entry("active", 1000 + i)
+    expect(pruneSnapshotEntries(many, undefined)).toBe(many)
+    expect(pruneSnapshotEntries(many, undefined, 40)).toBe(many)
+    // One over the cap does real work and may return a new object.
+    const over = { ...many, extra: entry("achieved", 1) }
+    expect(over).not.toBe(pruneSnapshotEntries(over, undefined, 40))
+  })
+
+  test("dropSessions with a Set lookup still honours keep and duplicate ids", () => {
+    const input = { a: entry("active"), b: entry("active"), c: entry("active"), d: entry("active") }
+    expect(Object.keys(dropSessions(input, ["b", "b", "c"], "c"))).toEqual(["a", "c", "d"])
+    // No matching ids returns the original reference.
+    expect(dropSessions(input, ["missing"], undefined)).toBe(input)
+    expect(dropSessions(input, [], undefined)).toBe(input)
+  })
 })
 
 describe("pruneSnapshotEntries", () => {
@@ -59,7 +124,7 @@ describe("pruneSnapshotEntries", () => {
   })
 
   test("default cap is the exported ENTRY_CAP", () => {
-    expect(ENTRY_CAP).toBeGreaterThan(0)
+    expect(ENTRY_CAP).toBe(64)
   })
 })
 
@@ -238,8 +303,8 @@ describe("steady null entries and the cap", () => {
     const out = pruneSnapshotEntries(bumped, undefined, ENTRY_CAP)
     expect(Object.keys(out)).toHaveLength(ENTRY_CAP)
     expect(out.ses_0?.receivedAt).toBe(99999) // the freshly checked entry survives the eviction
-    expect(out.live_a?.goal).not.toBeNull()
-    expect(out.live_b?.goal).not.toBeNull()
+    expect(out.live_a?.goal?.status).toBe("active")
+    expect(out.live_b?.goal?.status).toBe("paused")
     expect(out.ses_1).toBeUndefined() // oldest null evicted first
     expect(out.ses_2).toBeUndefined()
     expect(out.ses_3?.goal).toBeNull() // overflow is 2 (66 entries, cap 64); ses_3 is the newest survivor of the null tail
@@ -296,5 +361,77 @@ describe("dropSessions", () => {
     const input = { a: entryWith(5000) }
     expect(dropSessions(input, [])).toBe(input)
     expect(dropSessions(input, ["zzz"])).toBe(input)
+  })
+})
+
+describe("shouldKeepPlanningPlaceholder — the first-arm bar stays visible", () => {
+  const planning = (sessionID = "ses"): GoalSnapshot => ({ ...snap("active"), id: planningSnapshotId(sessionID), sessionID, queued: true })
+
+  test("a null re-pull during planning is not the placeholder completing", () => {
+    expect(shouldKeepPlanningPlaceholder(planning(), null, "ses", true)).toBe(true)
+  })
+
+  test("a stale terminal record from a previous goal is not the placeholder completing", () => {
+    expect(shouldKeepPlanningPlaceholder(planning(), snap("achieved"), "ses", true)).toBe(true)
+    expect(shouldKeepPlanningPlaceholder(planning(), snap("impossible"), "ses", true)).toBe(true)
+    expect(shouldKeepPlanningPlaceholder(planning(), snap("failed"), "ses", true)).toBe(true)
+    expect(shouldKeepPlanningPlaceholder(planning(), snap("cleared"), "ses", true)).toBe(true)
+  })
+
+  test("the real arm snapshot replaces the placeholder — a live record is never swallowed", () => {
+    expect(shouldKeepPlanningPlaceholder(planning(), snap("active"), "ses", true)).toBe(false)
+    expect(shouldKeepPlanningPlaceholder(planning(), snap("paused"), "ses", true)).toBe(false)
+  })
+
+  test("only the current session's placeholder is protected", () => {
+    expect(shouldKeepPlanningPlaceholder(planning("other"), null, "ses", true)).toBe(false)
+  })
+
+  test("a real goal's live→terminal transition is untouched", () => {
+    expect(shouldKeepPlanningPlaceholder(snap("active"), snap("achieved"), "ses", true)).toBe(false)
+    expect(shouldKeepPlanningPlaceholder(snap("active"), null, "ses", true)).toBe(false)
+  })
+
+  test("an authoritative terminal changed event replaces the placeholder (no phantom queued bar)", () => {
+    // arm()'s no-new-gap refusal emits a terminal achieved record straight to `changed` with a different
+    // id; no live snapshot follows in that path, so swallowing it strands the HUD/pill forever.
+    expect(shouldKeepPlanningPlaceholder(planning(), snap("achieved"), "ses", false)).toBe(false)
+    expect(shouldKeepPlanningPlaceholder(planning(), snap("impossible"), "ses", false)).toBe(false)
+    expect(shouldKeepPlanningPlaceholder(planning(), snap("cleared"), "ses", false)).toBe(false)
+    expect(shouldKeepPlanningPlaceholder(planning(), null, "ses", false)).toBe(false)
+  })
+})
+
+describe("isStalePlanningPull — a late answer cannot read as the new goal's completion", () => {
+  const at = 10_000
+
+  test("a null or stale-terminal answer composed during the planning window is suppressed", () => {
+    expect(isStalePlanningPull(at, null, at + 1000)).toBe(true)
+    expect(isStalePlanningPull(at, snap("achieved"), at + 1000)).toBe(true)
+    expect(isStalePlanningPull(at, snap("impossible"), at + 1000)).toBe(true)
+  })
+
+  test("a live answer stamped after the placeholder (the real arm) flows through", () => {
+    expect(isStalePlanningPull(at, { ...snap("active"), setAt: at + 500 }, at + 1000)).toBe(false)
+    expect(isStalePlanningPull(at, { ...snap("paused"), setAt: at + 500 }, at + 1000)).toBe(false)
+  })
+
+  test("a late pull of the pre-planning live goal is suppressed so it cannot evict the first-arm bar", () => {
+    expect(isStalePlanningPull(at, { ...snap("active"), setAt: at - 1 }, at + 1000)).toBe(true)
+    expect(isStalePlanningPull(at, { ...snap("paused"), setAt: at - 1 }, at + 1000)).toBe(true)
+  })
+
+  test("no planning placeholder was ever seen — nothing to suppress", () => {
+    expect(isStalePlanningPull(undefined, null, at)).toBe(false)
+    expect(isStalePlanningPull(undefined, snap("achieved"), at)).toBe(false)
+  })
+
+  test("the window expires at PLANNING_PULL_GRACE_MS, so a real terminal re-pull still converges", () => {
+    expect(isStalePlanningPull(at, snap("achieved"), at + PLANNING_PULL_GRACE_MS - 1)).toBe(true)
+    expect(isStalePlanningPull(at, snap("achieved"), at + PLANNING_PULL_GRACE_MS)).toBe(false)
+  })
+
+  test("a clock that went backwards never extends the window", () => {
+    expect(isStalePlanningPull(at, snap("achieved"), at - 1)).toBe(false)
   })
 })

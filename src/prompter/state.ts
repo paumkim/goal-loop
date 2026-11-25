@@ -3,7 +3,7 @@ import path from "node:path"
 import type { TaskState } from "./types.ts"
 
 /** Reduce the append-only journal to the latest record per id. */
-export const reduceJournal = (text: string): Map<string, TaskState> => {
+const reduceJournal = (text: string): Map<string, TaskState> => {
   const map = new Map<string, TaskState>()
   for (const line of text.split("\n")) {
     if (!line.trim()) continue

@@ -14,7 +14,7 @@ import type { Clock, EmitterPort, Logger } from "./ports.ts"
 
 interface CompactorDeps {
   readonly config: GoalConfig
-  readonly compact: (sessionID: string) => Promise<void>
+  readonly compact: (sessionID: string, opts?: { cold?: boolean }) => Promise<void>
   readonly context: (sessionID: string) => Promise<readonly unknown[]>
   readonly emitter: EmitterPort
   readonly clock: Clock
@@ -125,8 +125,10 @@ export class AutoCompactor {
    * Compacts at a loop-iteration boundary regardless of the token threshold, so the next iteration starts from a fresh context.
    * Never requested mid-work: a turn executing or background subagents/shells running defers the compaction.
    * Subject to in-flight and cooldown guards; skips tiny contexts. `force` skips only the cooldown — never the in-flight or busy gate.
+   * `cold` is forwarded to the host so the boundary compaction replays as no conversation at all; callers that are
+   * not a new goal version must leave it unset.
    */
-  async compactAtBoundary(sessionID: string, opts?: { force?: boolean }): Promise<BoundaryCompactResult> {
+  async compactAtBoundary(sessionID: string, opts?: { force?: boolean; cold?: boolean }): Promise<BoundaryCompactResult> {
     const { config, compact, context, emitter, clock, log } = this.deps
     if (!config.compactOnLoopIteration) return { requested: false, reason: "disabled" }
     this.sweepStale()
@@ -159,7 +161,10 @@ export class AutoCompactor {
     this.requestedAt.set(sessionID, now)
     this.inFlight.set(sessionID, now)
     try {
-      await compact(sessionID)
+      // `cold` is forwarded only when the caller is a goal-loop version boundary. The mark is set inside this call,
+      // after every busy/in-flight/cooldown guard has passed, so a deferred or skipped request never leaves the
+      // session primed for a cold replay on an unrelated later compaction.
+      await compact(sessionID, { cold: opts?.cold })
     } catch (error) {
       this.inFlight.delete(sessionID)
       const message = truncate(errorMessage(error), 160)

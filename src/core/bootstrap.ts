@@ -68,7 +68,7 @@ export function hasJq(): boolean {
 
 /**
  * Ensures coordinator/workplace layout in a git repository (`.term/coordinator/{config,state}.json`,
- * `worktrees/`) and appends missing runtime gitignore rules. Idempotent and never overwrites
+ * `worktree/`) and appends missing runtime gitignore rules. Idempotent and never overwrites
  * existing files. No-op outside a git repository.
  *
  * This provisions the layout for any git repo so the claim → worktree → submit → merge-next flow
@@ -124,7 +124,6 @@ export function ensureStartupScaffold(options: StartupScaffoldOptions): Workflow
 export {
   appendGitignoreRules,
   docsReadmeTemplate,
-  ensureCoordinatorWorkplaceLayout,
   ensureGoalRuntimeLayout,
   ensureWorkflowDocs,
   maintainerTemplate,

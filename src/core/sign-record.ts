@@ -26,9 +26,9 @@
  *     are printed so a stale copy cannot masquerade as a live check.
  */
 import { execFileSync } from "node:child_process"
-import { shortSha, stampOf } from "./dossier.ts"
-import { recordShaMentions } from "./verify-record.ts"
 import type { GoalSnapshot } from "./types.ts"
+import { recordAckSegment, recordSummaryLine, renderRecordReport, sweepRecordMentions } from "./record-attestation.ts"
+import type { RecordCheckShape } from "./record-attestation.ts"
 
 /** The probe contract: true = git verified a signature on the commit at the probed directory, false = git answered and the signature did not verify (object present, verify-commit exit non-zero), "unknown" = git could not answer (or there is no object to judge). */
 export type SignProbe = (sha: string) => boolean | "unknown"
@@ -66,13 +66,7 @@ export function gitSignProbe(cwd: string): SignProbe {
 
 type SignCheckStatus = "verified" | "unverified" | "unknown"
 
-interface SignCheck {
-  readonly sha: string
-  readonly shortSha: string
-  /** 1-based loop iterations that quote this sha (oldest first). */
-  readonly iterations: readonly number[]
-  readonly status: SignCheckStatus
-}
+type SignCheck = RecordCheckShape<SignCheckStatus>
 
 export interface SignVerification {
   readonly checks: readonly SignCheck[]
@@ -87,35 +81,16 @@ export interface SignVerification {
 
 /** Sweeps the record's quoted shas against the probe. Pure: the probe is injected, the sweep never throws. */
 export function signRecord(goal: GoalSnapshot, probe: SignProbe): SignVerification {
-  const checks = recordShaMentions(goal).map((m): SignCheck => {
-    let answer: boolean | "unknown"
-    try {
-      answer = probe(m.sha)
-    } catch {
-      answer = "unknown"
-    }
-    const status: SignCheckStatus = answer === true ? "verified" : answer === false ? "unverified" : "unknown"
-    return { sha: m.sha, shortSha: shortSha(m.sha), iterations: m.iterations, status }
-  })
-  let verified = 0
-  let unverified = 0
-  let unknown = 0
-  let mentions = 0
-  for (const check of checks) {
-    if (check.status === "verified") verified += 1
-    else if (check.status === "unverified") unverified += 1
-    else unknown += 1
-    mentions += check.iterations.length
+  const swept = sweepRecordMentions<SignCheckStatus>(goal, probe, "verified", "unverified")
+  return {
+    checks: swept.checks,
+    unique: swept.unique,
+    mentions: swept.mentions,
+    verified: swept.positive,
+    unverified: swept.negative,
+    unknown: swept.unknown,
   }
-  return { checks, unique: checks.length, mentions, verified, unverified, unknown }
 }
-
-const iterationList = (iterations: readonly number[]): string => iterations.map((v) => `v${v}`).join(", ")
-
-const GAP = "—"
-
-const statusCell = (status: SignCheckStatus): string =>
-  status === "verified" ? "yes" : status === "unverified" ? "no" : "unknown"
 
 /**
  * The signature report as Markdown — freshly generated, self-describing, safe to hand to a reviewer.
@@ -123,42 +98,38 @@ const statusCell = (status: SignCheckStatus): string =>
  * check; the honesty footer states exactly what "not under seal" does and does not imply.
  */
 export function signReportMarkdown(goal: GoalSnapshot, sign: SignVerification, nowMs: number, directory: string): string {
-  const stamp = stampOf(nowMs)
-  const condition = (goal.condition ?? "").replace(/\s+/g, " ").trim()
-  const conditionCell = condition.length > 200 ? `${condition.slice(0, 200)}…` : condition || GAP
-  const lines: string[] = [
-    "# /goal-loop record signatures",
-    "",
-    `- Generated: ${stamp}`,
-    `- Repository: ${directory}`,
-    `- Condition: ${conditionCell}`,
-    `- Shas quoted by the record: ${sign.unique} unique across ${sign.mentions} mention${sign.mentions === 1 ? "" : "s"}`,
-    "",
-    "| sha | quoted at | under seal |",
-    "| --- | --- | --- |",
-  ]
-  for (const check of sign.checks) {
-    lines.push(`| ${check.shortSha} | ${iterationList(check.iterations)} | ${statusCell(check.status)} |`)
-  }
-  if (sign.checks.length === 0) lines.push("| — | — | — |")
-  lines.push(
-    "",
-    `- Under seal (git verified): ${sign.verified} · not under seal: ${sign.unverified} · unknown: ${sign.unknown}`,
-    "",
-    "A signature attests integrity only as strongly as the key and the trust configured at the probed directory — git decides by its own rules. `verified` means git's configured rules accepted the commit's signature, nothing more, nothing less. Anything else — an unsigned commit, an expired or untrusted key, a bad signature — is `not under seal`, never proof of forgery; most commits are unsigned, and git's thresholds differ across machines and time. An unresolvable object has no signature to judge and reads `unknown`, never `not under seal`. Unknown means git could not answer (no binary, not a repository, unparseable sha, timed out) — never counted as “no”. Existence is not ancestry, ancestry is not content, content is not intent — the EC and ED reports are the other halves, and none substitutes for another. This report asks one question, per sha, of the repository at the directory named above, at generation time — it says nothing about the key's origin, the author's intent, the commit's content, or the working tree's cleanliness.",
-    "",
+  return renderRecordReport(
+    goal,
+    sign,
+    {
+      title: "# /goal-loop record signatures",
+      columnHeader: "under seal",
+      countsLine: `- Under seal (git verified): ${sign.verified} · not under seal: ${sign.unverified} · unknown: ${sign.unknown}`,
+      footer: "A signature attests integrity only as strongly as the key and the trust configured at the probed directory — git decides by its own rules. `verified` means git's configured rules accepted the commit's signature, nothing more, nothing less. Anything else — an unsigned commit, an expired or untrusted key, a bad signature — is `not under seal`, never proof of forgery; most commits are unsigned, and git's thresholds differ across machines and time. An unresolvable object has no signature to judge and reads `unknown`, never `not under seal`. Unknown means git could not answer (no binary, not a repository, unparseable sha, timed out) — never counted as “no”. Existence is not ancestry, ancestry is not content, content is not intent — the EC and ED reports are the other halves, and none substitutes for another. This report asks one question, per sha, of the repository at the directory named above, at generation time — it says nothing about the key's origin, the author's intent, the commit's content, or the working tree's cleanliness.",
+      positive: "verified",
+      negative: "unverified",
+    },
+    nowMs,
+    directory,
   )
-  return lines.join("\n")
 }
 
 /** The one-line outcome for the toast and the tests. No glyphs, no color — callers paint their own chrome. */
 export function signSummaryLine(sign: SignVerification): string {
-  if (sign.unique === 0) return "record quotes no shas to attest"
-  if (sign.unverified === 0 && sign.unknown === 0)
-    return `record under seal: ${sign.verified} of ${sign.unique} shas verify`
-  if (sign.unverified > 0)
-    return `record not under seal: ${sign.unverified} of ${sign.unique} shas do not verify`
-  return `record unverifiable: ${sign.unknown} of ${sign.unique} shas could not be attested`
+  return recordSummaryLine(
+    {
+      unique: sign.unique,
+      positive: sign.verified,
+      negative: sign.unverified,
+      unknown: sign.unknown,
+    },
+    {
+      none: "record quotes no shas to attest",
+      success: (v) => `record under seal: ${v.positive} of ${v.unique} shas verify`,
+      failure: (v) => `record not under seal: ${v.negative} of ${v.unique} shas do not verify`,
+      unknown: (v) => `record unverifiable: ${v.unknown} of ${v.unique} shas could not be attested`,
+    },
+  )
 }
 
 /**
@@ -167,12 +138,22 @@ export function signSummaryLine(sign: SignVerification): string {
  * The leading space matches the other rows' suffix grammar. A record with no quoted shas says so, never fabricates a pass.
  */
 export function signAckSegment(sign: Pick<SignVerification, "unique" | "verified" | "unverified" | "unknown">, ascii: boolean): string {
-  const ok = ascii ? "+" : "✓"
-  const bad = ascii ? "-" : "✗"
-  if (sign.unique === 0) return ascii ? " (no shas)" : " (no shas to attest)"
-  if (sign.unverified > 0) return ` (${bad} ${sign.unverified} of ${sign.unique} unsigned)`
-  if (sign.unknown > 0) return ` (! ${sign.unknown} of ${sign.unique} unknown)`
-  return ` (${ok} ${sign.verified}/${sign.unique} signed)`
+  return recordAckSegment(
+    {
+      unique: sign.unique,
+      positive: sign.verified,
+      negative: sign.unverified,
+      unknown: sign.unknown,
+    },
+    ascii,
+    {
+      noneAscii: " (no shas)",
+      noneUnicode: " (no shas to attest)",
+      negative: "unsigned",
+      unknown: "unknown",
+      positive: "signed",
+    },
+  )
 }
 
 /** The shape the host hands back to the dossier row's in-place acknowledgment (and the dialog needs nothing else — the counts are the whole truth of the click). */

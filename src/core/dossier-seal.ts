@@ -29,7 +29,8 @@
  */
 import { writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
-import { buildLoopDossier, stampOf, fileStampOf } from "./dossier.ts"
+import { artifactName, buildLoopDossier, stampOf, iterationList } from "./dossier.ts"
+import { recordCellHelpers } from "./record-attestation.ts"
 import { MAX_EXPORT_ATTEMPTS } from "./dossier-export.ts"
 import {
   gitCatFileProbe,
@@ -66,16 +67,9 @@ interface SealedDossier {
  * unrepresentable clock stamps the epoch rather than throwing — the name stays honest.
  * Never collides with the plain export's stem (`goal-dossier-<stamp>.md`).
  */
-export const sealedDossierName = (nowMs: number, attempt = 0): string => {
-  const suffix = attempt > 0 ? `-${attempt + 1}` : ""
-  return `goal-dossier-sealed-${fileStampOf(nowMs)}${suffix}.md`
-}
+export const sealedDossierName = (nowMs: number, attempt = 0): string => artifactName("dossier-sealed", nowMs, attempt)
 
-const iterationList = (iterations: readonly number[]): string => iterations.map((v) => `v${v}`).join(", ")
-
-const verifyCell = (status: string): string => (status === "present" ? "yes" : status === "missing" ? "no" : "unknown")
-const reachCell = (status: string): string => (status === "ancestor" ? "yes" : status === "unreached" ? "no" : "unknown")
-const signCell = (status: string): string => (status === "verified" ? "yes" : status === "unverified" ? "no" : "unknown")
+const { verifyCell, reachCell, signCell } = recordCellHelpers<string>()
 
 /** Shas that answered yes on all three questions, joined by sha (the same mention order in all three sweeps). */
 export const cleanShaCount = (

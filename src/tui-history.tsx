@@ -7,7 +7,6 @@
  * RGBA, no absolute positioning. Pure layout math lives in `src/core/history.ts` (unit-tested).
  */
 import { TextAttributes, type ColorInput } from "@opentui/core"
-import stringWidth from "string-width"
 import { For, Show, createMemo, createSignal, onCleanup } from "solid-js"
 import type { JSX } from "@opentui/solid"
 import { BAR_CELLS, LABEL, barCaption, contextSparkline, currentIterationVerdict, durationShares, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, relativeTime, pauseDiagnostics, renderBar, trailWindow, turnsSinceVerdict, verdictCounts, verdictEntryGlyph, verdictStreak } from "./core/history.ts"
@@ -404,12 +403,15 @@ const shaSuffix = (entry: { sha?: string }) => (entry.sha ? ` · ${entry.sha.sli
 
 /**
  * The why ledger: at most the three most recent verdicts whose reason text is non-empty,
- * oldest first (the trail's own direction). One row per verdict — glyph, verdict word,
- * turn, relative time, the commit sha the verdict landed on (when the host stamped one),
- * reason — the evaluator's *why* at a glance, without scrolling the
- * dialog to the last evaluator row. Click-to-copy when the caller wires onCopyReason;
- * an always-mounted affordance cell advertises the row (the grammar shared with the condition/summary/
- * reason rows). The copied acknowledgment rides the row for a beat, like every other row.
+ * oldest first (the trail's own direction). One block per verdict: a short furniture row
+ * (glyph, verdict word, turn, relative time, the commit sha the verdict landed on when the
+ * host stamped one) and the reason on its own row below it, spanning the full content width
+ * like a rail summary. The old inline layout pinned the reason to a far-right column sized to
+ * the widest furniture cell, so a long reason wrapped in a narrow strip and left a blank slab
+ * across the left half of the dialog. Click-to-copy when the caller wires onCopyReason; an
+ * always-mounted affordance cell sits on the short furniture row so the reason owns every
+ * cell to the right edge (the grammar shared with the condition/summary/reason rows). The
+ * copied acknowledgment rides that furniture row for a beat.
  */
 const WhyLedger = (props: {
   theme: HistoryTheme
@@ -442,26 +444,32 @@ const WhyLedger = (props: {
   const rows = () => props.history.filter((entry) => entry.reason.trim().length > 0).slice(-WHY_LIMIT)
   const now = () => props.nowMs?.() ?? Date.now()
   const furniture = (entry: VerdictEntry) => `${entry.verdict.replace("_", " ")} · turn ${entry.turn} · ${relativeTime(entry.at, now())}${shaSuffix(entry)}${spendSuffix(entry)}`
-  // The reason column hangs off the end of the muted furniture; verdict word, turn digits and relative time vary across rows, which used to shift the reason. Pin the furniture cell to the widest visible row (stringWidth — the row carries multibyte glyphs) so reasons land on one x.
-  const furnitureWidth = () => rows().reduce((max, entry) => Math.max(max, stringWidth(furniture(entry))), 0)
   return (
     <Show when={rows().length > 0}>
       <For each={rows()}>
         {(entry, index) => {
           const interactive = props.onCopyReason !== undefined
           return (
-            <box flexDirection="row" gap={2} onMouseUp={interactive ? (event) => { if (event.button !== 0) return; event.stopPropagation(); copy(entry) } : undefined} onMouseOver={interactive ? () => setHovered(entry.at) : undefined} onMouseOut={interactive ? () => setHovered(null) : undefined}>
-              {label(theme(), index() === 0 ? "why" : "")}
-              <text wrapMode="none" flexShrink={0} fg={colorFor(theme(), entry, mono())} attributes={TextAttributes.BOLD}>
-                {verdictEntryGlyph(entry, ascii())}
-              </text>
-              <text wrapMode="none" flexShrink={0} fg={theme().text.muted} width={furnitureWidth()}>
-                {furniture(entry)}
-              </text>
-              <text wrapMode="word" flexGrow={1} fg={theme().text.base}>
-                {truncate(entry.reason, WHY_REASON_MAX, ascii() ? "..." : "\u2026")}
-              </text>
-              {interactive ? <Affordance theme={theme()} mono={mono} verb="copy" hovered={hovered() === entry.at} ack={copied() === entry.at ? (ascii() ? "+ copied" : "✓ copied") : null} /> : null}
+            <box flexDirection="column" gap={0} onMouseUp={interactive ? (event) => { if (event.button !== 0) return; event.stopPropagation(); copy(entry) } : undefined} onMouseOver={interactive ? () => setHovered(entry.at) : undefined} onMouseOut={interactive ? () => setHovered(null) : undefined}>
+              {/* furniture stays on its own short row — the verdict word, turn and time are metadata, not a column that squeezes the reason. The copy affordance rides this row so the reason below owns every cell to the right edge. */}
+              <box flexDirection="row" gap={2}>
+                {label(theme(), index() === 0 ? "why" : "")}
+                <text wrapMode="none" flexShrink={0} fg={colorFor(theme(), entry, mono())} attributes={TextAttributes.BOLD}>
+                  {verdictEntryGlyph(entry, ascii())}
+                </text>
+                <text wrapMode="none" flexShrink={0} fg={theme().text.muted}>
+                  {furniture(entry)}
+                </text>
+                <box flexGrow={1} />
+                {interactive ? <Affordance theme={theme()} mono={mono} verb="copy" hovered={hovered() === entry.at} ack={copied() === entry.at ? (ascii() ? "+ copied" : "✓ copied") : null} /> : null}
+              </box>
+              {/* the reason fills the width under a blank label gutter, like a rail summary: no far-right strip, no blank slab underneath, no affordance reserve. */}
+              <box flexDirection="row" gap={2}>
+                {label(theme(), "")}
+                <text wrapMode="word" flexGrow={1} fg={theme().text.base}>
+                  {truncate(entry.reason, WHY_REASON_MAX, ascii() ? "..." : "\u2026")}
+                </text>
+              </box>
             </box>
           )
         }}

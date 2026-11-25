@@ -102,7 +102,9 @@ describe("changed-paths shared collector", () => {
 
     test("resolveIntegrationBase finds merge-base with integration refs", () => {
       const run = createGitRun(dir)
-      expect(resolveIntegrationBase(run)).toBeTruthy()
+      // This fixture has one commit on dev, so dev/HEAD/origin-less merge-base is exactly HEAD —
+      // "truthy" would also pass for a wrong ref or a fabricated SHA.
+      expect(resolveIntegrationBase(run)).toBe(git(["rev-parse", "HEAD"]).trim())
     })
   })
 })

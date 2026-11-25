@@ -62,6 +62,14 @@ describe("resolveProjectRoot", () => {
     const plain = scratch()
     expect(resolveProjectRoot(plain)).toBe(plain)
   })
+  test("a Windows-style fixture path on POSIX never anchors at this checkout", () => {
+    // resolve("C:/work/project") is relative to cwd on POSIX, so walking up from it finds this
+    // repo's .git. Every repo-scoped writer would then drop artifacts here instead of nowhere.
+    for (const fake of ["C:/work/project", "D:\\work\\project"]) {
+      expect(resolveProjectRoot(fake)).toBe(fake)
+      expect(resolveProjectRoot(fake)).not.toBe(process.cwd())
+    }
+  })
 })
 
 describe("currentBranch", () => {
@@ -114,7 +122,7 @@ describe("resolveCommitPolicy", () => {
   test("a coordinator repo resolves to coordinator mode on auto", () => {
     const root = repo(["dev", "main"], "dev")
     mkdirSync(join(root, ".term", "coordinator"), { recursive: true })
-    writeFileSync(join(root, ".term/coordinator/config.json"), '{"devBranch":"dev","worktreeDir":"worktrees"}')
+    writeFileSync(join(root, ".term/coordinator/config.json"), '{"devBranch":"dev","worktreeDir":"worktree"}')
     writeFileSync(join(root, ".term/coordinator/state.json"), '{"version":1,"leases":{},"mergeLock":null}')
     mkdirSync(join(root, "packages/coordinator/bin"), { recursive: true })
     writeFileSync(join(root, "packages/coordinator/bin/coordinator"), "#!/bin/sh\n")
@@ -124,7 +132,7 @@ describe("resolveCommitPolicy", () => {
     expect(policy.branch).toBe("dev")
     expect(policy.coordinatorBin?.endsWith("packages/coordinator/bin/coordinator")).toBe(true)
     expect(policy.coordinatorBin).toBe(join(root, "packages/coordinator/bin/coordinator"))
-    expect(policy.worktreeDir).toBe("worktrees")
+    expect(policy.worktreeDir).toBe("worktree")
   })
   test("detectCoordinator needs two markers", () => {
     const root = repo(["dev"], "dev")

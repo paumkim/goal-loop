@@ -5,7 +5,7 @@ import { appendState } from "./state.ts"
 import type { BacklogLine, Config, TaskState, TaskStatus } from "./types.ts"
 import { nowIso } from "./util.ts"
 
-export interface OutcomeInput {
+interface OutcomeInput {
   readonly id: string
   readonly objective: string
   readonly status: TaskStatus

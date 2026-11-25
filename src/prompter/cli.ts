@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { formatValue } from "../core/errors.ts"
 import path from "node:path"
 import { markBacklog, recordOutcome } from "./apply.ts"
 import { parseBacklog, selectNextTask, summarizeBacklog, writeLineStatus } from "./backlog.ts"
@@ -10,7 +11,7 @@ import { readPromptBodies, buildObjective } from "./objective.ts"
 import { approve, cleanupWorktree, reject, reviewLines } from "./review.ts"
 import { describeStop, killSwitch, newBudget, noteUsage, stopReason } from "./safety.ts"
 import { byStatus, loadState } from "./state.ts"
-import type { BacklogLine, Config, TaskState } from "./types.ts"
+import { FINISHED_TASK_STATUSES, TASK_STATUSES, type BacklogLine, type Config, type TaskState } from "./types.ts"
 import { globalStopFile, logPath, money, prompterHome, short, statePath, worktreeRoot } from "./util.ts"
 
 const say = (...parts: unknown[]): void => console.log(parts.map((p) => String(p)).join(" "))
@@ -27,7 +28,7 @@ Usage:
   prompter reject <id> [reason]        abandon a reviewed task
   prompter stop                        write the global kill switch
   prompter resume                      remove the global kill switch
-  prompter cleanup [repo]              remove stale worktrees/branches of finished tasks`
+  prompter cleanup [repo]              remove stale worktree/branches of finished tasks`
 
 interface Parsed {
   readonly command: string
@@ -52,7 +53,7 @@ const parseArgs = (argv: string[]): Parsed => {
 const resolveRepo = (parsed: Parsed): string => path.resolve(parsed.repoFlag ?? parsed.positional.at(-1) ?? process.cwd())
 
 const ensureHome = (): void => {
-  for (const dir of [prompterHome(), path.join(prompterHome(), "state"), path.join(prompterHome(), "worktrees"), path.join(prompterHome(), "log")]) {
+  for (const dir of [prompterHome(), path.join(prompterHome(), "state"), path.join(prompterHome(), "worktree"), path.join(prompterHome(), "log")]) {
     mkdirSync(dir, { recursive: true })
   }
 }
@@ -254,7 +255,7 @@ const main = async (): Promise<void> => {
       say(`base    ${config.baseBranch}   backlog ${config.backlog}`)
       say(`limits  ${describeStop(config)}`)
       say(`stop    ${killSwitch(config, repo, { exists: existsSync, env: process.env }) ?? "clear"}`)
-      say(`states  ${["running", "in_review", "merged", "rejected", "failed", "interrupted"].map((s) => `${s}=${byStatus(states, s).length}`).join("  ")}`)
+      say(`states  ${TASK_STATUSES.map((s) => `${s}=${byStatus(states, s).length}`).join("  ")}`)
       say("backlog:")
       say(summarizeBacklog(parseBacklog(readBacklogText(repo, config)), states))
       return
@@ -272,7 +273,7 @@ const main = async (): Promise<void> => {
       if (!id) throw new Error("usage: prompter approve <id> [repo] [--verify]")
       const config = loadConfig(repo)
       const state = loadState(config.stateFile ?? statePath(repo)).get(id)
-      if (!state) throw new Error(`unknown task id: ${id}`)
+      if (!state) throw new Error(`unknown task id: ${formatValue(id)}`)
       const result = approve(state, config, repo, config.stateFile ?? statePath(repo), { exists: existsSync, env: process.env }, { runVerify: parsed.flags.has("--verify") })
       say(result.message)
       if (!result.ok) process.exitCode = 1
@@ -286,7 +287,7 @@ const main = async (): Promise<void> => {
       const reason = rest.join(" ")
       const config = loadConfig(repo)
       const state = loadState(config.stateFile ?? statePath(repo)).get(id)
-      if (!state) throw new Error(`unknown task id: ${id}`)
+      if (!state) throw new Error(`unknown task id: ${formatValue(id)}`)
       const result = reject(state, config, repo, config.stateFile ?? statePath(repo), reason)
       say(result.message)
       if (!result.ok) process.exitCode = 1
@@ -311,7 +312,7 @@ const main = async (): Promise<void> => {
       const states = loadState(config.stateFile ?? statePath(repo))
       let removed = 0
       for (const state of states.values()) {
-        if (["merged", "rejected", "failed", "interrupted"].includes(state.status)) {
+        if (FINISHED_TASK_STATUSES.includes(state.status)) {
           // cleanupWorktree checks the worktree and branch independently — reach it even when only a stale
           // branch remains (e.g. the worktree was removed by hand or by the OS).
           const notes = cleanupWorktree(repo, state)
