@@ -7626,6 +7626,17 @@
       "submittedAt": "2026-11-25T16:03:38Z",
       "mergedAt": "2026-11-25T16:06:08Z",
       "mergedInto": "dev"
+    },
+    "todo-comment-triage": {
+      "agent": "build-agent",
+      "paths": "docs/todo-comment-triage.md,docs/changelog.html",
+      "branch": "wt/todo-comment-triage",
+      "worktree": "worktree/wt-todo-comment-triage",
+      "status": "done",
+      "createdAt": "2026-11-25T16:16:17Z",
+      "submittedAt": "2026-11-25T16:21:06Z",
+      "mergedAt": "2026-11-25T16:23:46Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
