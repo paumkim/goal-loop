@@ -1,1 +1,0 @@
-timer-suppress-during-planning — an idle check-in left over from the goal being replaced no longer wakes the working session while the arm-time planner distils a fresh `/goal`: showPlanning() disarms it, a mid-plan guard re-arms it instead of firing, and endPlanning() restores the wait only when no replacement was armed.
