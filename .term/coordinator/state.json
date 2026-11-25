@@ -7593,6 +7593,17 @@
       "submittedAt": "2026-11-25T14:04:42Z",
       "mergedAt": "2026-11-25T14:07:08Z",
       "mergedInto": "dev"
+    },
+    "prompt-library-curation": {
+      "agent": "orchestrator",
+      "paths": "prompts",
+      "branch": "wt/prompt-library-curation",
+      "worktree": "worktree/wt-prompt-library-curation",
+      "status": "done",
+      "createdAt": "2026-11-25T14:28:17Z",
+      "submittedAt": "2026-11-25T14:38:43Z",
+      "mergedAt": "2026-11-25T14:41:17Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
