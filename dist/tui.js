@@ -4527,7 +4527,7 @@ var cardRowPlan = (goal, contextOpen = false, maxRows = Number.POSITIVE_INFINITY
   };
 };
 var hudCardRows = (goal, contextOpen = false, maxRows = Number.POSITIVE_INFINITY, width = 64) => cardRowPlan(goal, contextOpen, maxRows, width).rows;
-var pinBudget = (terminalWidth, pillText) => Math.floor(terminalWidth) - cellWidth(pillText) - cellWidth(PIN_PREFIX) - 1;
+var pinBudget = (terminalWidth, pillText, reservedCells = 0) => Math.floor(terminalWidth) - cellWidth(pillText) - cellWidth(PIN_PREFIX) - 1 - 2 - (Number.isFinite(reservedCells) ? Math.max(0, Math.floor(reservedCells)) : 0);
 var DIALOG_FOOTER_FULL_HINT = "up/down scroll \xB7 pgup/pgdn \xB7 home/end \xB7 p pin \xB7 c copy \xB7 x older";
 var DIALOG_FOOTER_SHORT_HINT = "up/down scroll \xB7 p pin \xB7 c copy \xB7 x older";
 var footerCopyLabel = (copied, roomy, ascii = false) => copied ? ascii ? "+ copied" : "\u2713 copied" : roomy ? "copy condition" : "copy";
@@ -8053,14 +8053,14 @@ var tui_default = Plugin.define({
           }
         };
         const landingNow = () => props.sessionID !== undefined && landing().has(props.sessionID);
+        const badgeCells = () => {
+          const intent = activeIntent();
+          return intent ? activityBadgeCells(intent) : 0;
+        };
         const pill = () => {
           try {
             const g = goal();
             const landingSfx = () => landingSuffix(motionDisabled(process.env));
-            const badgeCells = () => {
-              const intent = activeIntent();
-              return intent ? activityBadgeCells(intent) : 0;
-            };
             const budget = Math.max(8, mountWidthOr() - 1 - (landingNow() ? cellWidth(landingSfx()) : 0) - 2 - badgeCells());
             if (g)
               return pillModel(g, elapsed(), motionDisabled(process.env), budget, motionOk ? breathPhase() : undefined);
@@ -8081,7 +8081,7 @@ var tui_default = Plugin.define({
           if (!pinnedNow())
             return base;
           const g = goal();
-          return g ? base + pinSuffix(g.condition, pinBudget(mountWidthOr(), base), motionDisabled(process.env)) : base;
+          return g ? base + pinSuffix(g.condition, pinBudget(mountWidthOr(), base, badgeCells()), motionDisabled(process.env)) : base;
         };
         const activeIntent = () => {
           const intent = props.sessionID ? intentForActivity(activity()[props.sessionID]) : undefined;

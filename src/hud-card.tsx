@@ -172,9 +172,9 @@ export const cardRowPlan = (goal: GoalSnapshot, contextOpen = false, maxRows: nu
 /** Rows the card occupies (the 1-cell left accent consumes a column, not a row); the absolute mount above the jump row anchors with `top={-hudCardRows(goal, contextOpen, maxRows)}`. Pass `contextOpen` so the anchor grows with the menu, `maxRows` to cap at the viewport. */
 export const hudCardRows = (goal: GoalSnapshot, contextOpen = false, maxRows: number = Number.POSITIVE_INFINITY, width: number = 64): number => cardRowPlan(goal, contextOpen, maxRows, width).rows
 
-/** Width available to a pinned condition in the pill given the terminal width and the unpinned pill text — cells in, cells out (cellWidth on both sides; the pill carries multibyte glyphs). */
-export const pinBudget = (terminalWidth: number, pillText: string): number =>
-  Math.floor(terminalWidth) - cellWidth(pillText) - cellWidth(PIN_PREFIX) - 1
+/** Width available to a pinned condition in the pill given the terminal width and the unpinned pill text — cells in, cells out (cellWidth on both sides; the pill carries multibyte glyphs). The trailing caret (" ▴"/" ▾"), the one-cell right margin and any already-claimed cells (the live activity word) are reserved so the full row never paints past the mount. */
+export const pinBudget = (terminalWidth: number, pillText: string, reservedCells: number = 0): number =>
+  Math.floor(terminalWidth) - cellWidth(pillText) - cellWidth(PIN_PREFIX) - 1 - 2 - (Number.isFinite(reservedCells) ? Math.max(0, Math.floor(reservedCells)) : 0)
 
 // Neither hint repeats the Esc chord — Esc stays in the host dialog chrome at every width tier; the hint spends its cells on scrolling and the three plugin chords.
 export const DIALOG_FOOTER_FULL_HINT = "up/down scroll · pgup/pgdn · home/end · p pin · c copy · x older"

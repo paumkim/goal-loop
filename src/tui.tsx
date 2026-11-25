@@ -1144,6 +1144,12 @@ export default Plugin.define({
         // Declared above pill(): the pill's budget subtracts the landing acknowledgment suffix measured
         // in CELLS (cellWidth), never in code units, and pillText() rides the same suffix. Single source.
         const landingNow = () => props.sessionID !== undefined && landing().has(props.sessionID)
+        // A live activity word is a separate text node on the same pill row; its cells must come out
+        // of the pinned condition's budget too, or a pin + badge paints past the mount.
+        const badgeCells = () => {
+          const intent = activeIntent()
+          return intent ? activityBadgeCells(intent) : 0
+        }
         const pill = () => {
           try {
             const g = goal()
@@ -1156,10 +1162,6 @@ export default Plugin.define({
           const landingSfx = () => landingSuffix(motionDisabled(process.env))
           // A live activity word shares the same row as the state text, so it must come out of the
           // same budget: the state degrades through its existing ladder instead of clipping the word.
-          const badgeCells = () => {
-            const intent = activeIntent()
-            return intent ? activityBadgeCells(intent) : 0
-          }
           const budget = Math.max(8, mountWidthOr() - 1 - (landingNow() ? cellWidth(landingSfx()) : 0) - 2 - badgeCells()) // -1: the 1-cell right margin; -2: the caret cell rides the same row
           if (g) return pillModel(g, elapsed(), motionDisabled(process.env), budget, motionOk ? breathPhase() : undefined)
             const t = terminal()
@@ -1183,7 +1185,7 @@ export default Plugin.define({
           const g = goal()
           // The pinned condition rides the jump row so it stays visible while the conversation scrolls;
           // truncated to whatever cells remain after the state prefix.
-          return g ? base + pinSuffix(g.condition, pinBudget(mountWidthOr(), base), motionDisabled(process.env)) : base
+          return g ? base + pinSuffix(g.condition, pinBudget(mountWidthOr(), base, badgeCells()), motionDisabled(process.env)) : base
         }
         // A live tool intent replaces ONLY the pill's leading cell. The breath wave underneath is still what
         // pillModel paints, so the ring, the waiting ring, the stuck dot and the terminal acknowledgments keep
