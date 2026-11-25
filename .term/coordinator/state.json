@@ -7294,6 +7294,38 @@
       "submittedAt": "2026-11-25T06:06:17Z",
       "mergedAt": "2026-11-25T06:07:58Z",
       "mergedInto": "dev"
+    },
+    "terminal-injection-dedupe": {
+      "agent": "build",
+      "paths": "src/index.ts,src/core/prompts.ts,test/plugin.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/terminal-injection-dedupe",
+      "worktree": "worktree/wt-terminal-injection-dedupe",
+      "status": "done",
+      "createdAt": "2026-11-25T06:08:18Z",
+      "submittedAt": "2026-11-25T06:24:05Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-25T06:24:05Z",
+      "forcedScopeFiles": [
+        "test/notes.test.ts"
+      ],
+      "mergedAt": "2026-11-25T06:26:46Z",
+      "mergedInto": "dev"
+    },
+    "agent-messaging": {
+      "agent": "build",
+      "paths": "src/runtime/messaging.ts,src/index.ts,test/messaging.test.ts,test/plugin.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/agent-messaging",
+      "worktree": "worktree/wt-agent-messaging",
+      "status": "claimed",
+      "createdAt": "2026-11-25T06:15:52Z"
+    },
+    "mirror-disable-read-path": {
+      "agent": "build",
+      "paths": "src/tui.tsx",
+      "branch": "wt/mirror-disable-read-path",
+      "worktree": "worktree/wt-mirror-disable-read-path",
+      "status": "claimed",
+      "createdAt": "2026-11-25T06:25:38Z"
     }
   },
   "mergeLock": null,
