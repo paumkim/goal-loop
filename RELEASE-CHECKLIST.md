@@ -1,3 +1,7 @@
+> **2026-11-25 branch synchronization.** `dev` and `main` were merged to a common tip and
+> pushed to `origin`, so both branches resolve to the same commit. Integration continues on
+> `dev`; releases are promoted from `main` by merging `dev` into it and pushing the merge.
+>
 > **1.2.0 release (2026-11-19).** The repository is renamed to `paumkim/goal-loop` and
 > `package.json` is `1.2.0`. The install specifier is `github:paumkim/goal-loop#v1.2.0`; the
 > one-liner now lives on `main`. Installs made before the rename (the
