@@ -7763,6 +7763,17 @@
       ],
       "mergedAt": "2026-11-25T19:29:05Z",
       "mergedInto": "dev"
+    },
+    "sync-dev-main": {
+      "agent": "orchestrator",
+      "paths": "RELEASE-CHECKLIST.md",
+      "branch": "wt/sync-dev-main",
+      "worktree": "worktree/wt-sync-dev-main",
+      "status": "done",
+      "createdAt": "2026-11-26T00:26:34Z",
+      "submittedAt": "2026-11-26T00:26:49Z",
+      "mergedAt": "2026-11-26T00:29:18Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
