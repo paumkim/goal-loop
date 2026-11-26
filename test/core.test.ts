@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { isInheritModelValue, parseModelRef, resolveConfig } from "../src/core/config.ts"
 import { classifyFailure, formatValue, isNotFoundError, type FailureClass } from "../src/core/errors.ts"
-import { diffUsage, elideAtWordBoundary, formatCost, formatDuration, formatDurationCoarse, formatSpend, formatStatus, formatTokens, outcomeStory, stripLoneSurrogates, truncate, wrapLines } from "../src/core/format.ts"
+import { diffUsage, elideAtWordBoundary, formatCost, formatDuration, formatDurationCoarse, formatSpend, formatStatus, formatTokens, outcomeStory, stripControls, stripLoneSurrogates, truncate, wrapLines } from "../src/core/format.ts"
 import stringWidth from "string-width"
 import { parseGoalCommand, parseGoalLoopDirective } from "../src/core/parse.ts"
 import { PLANNED_CONDITION_MAX_CHARS, parsePlan, planGoalRequest } from "../src/core/planner.ts"
@@ -21,7 +21,7 @@ import {
 } from "../src/core/prompts.ts"
 import { currentTurnStart, renderParentSummary, renderTranscript } from "../src/core/transcript.ts"
 import { isEvaluatorReport, verdictFromNativeReport, echoedCondition, echoMatches } from "../src/core/evaluator-agent.ts"
-import { DELEGATE_VERDICT } from "../src/core/prompts.ts"
+import { DELEGATE_VERDICT, MESSAGE_WAKE_TEXT, PEER_PARENTS_HINT } from "../src/core/prompts.ts"
 import { EMPTY_USAGE, type CommitPolicy, type GoalRecord } from "../src/core/types.ts"
 import { isAlreadySatisfiedLanding, parseVerdict } from "../src/core/verdict.ts"
 
@@ -626,6 +626,45 @@ describe("lone-surrogate sanitization in the text helpers", () => {
   })
 })
 
+describe("stripControls", () => {
+  // The fast-path guard skips five regex passes only when no actionable byte is present. LF and tab
+  // are deliberately *not* actionable — the chain preserves them — so ordinary multiline output must
+  // take the fast path and come back byte-identical (same reference, no copy).
+  test("is an identity on clean multiline text, including tabs and trailing newlines", () => {
+    const clean = "347 pass\n\t298 skip\n0 fail\n"
+    expect(stripControls(clean)).toBe(clean)
+  })
+
+  test("strips OSC/CSI/Fe, lone C0 and DEL, and normalizes CR", () => {
+    expect(stripControls("a\u001b]0;title\u0007b")).toBe("ab")
+    expect(stripControls("a\u001b]0;title\u001b\\b")).toBe("ab")
+    expect(stripControls("a\u001b[31mb\u001b[0mc")).toBe("abc")
+    expect(stripControls("a\u001bDb")).toBe("ab") // two-char Fe (ESC D)
+    expect(stripControls("a\u0000\u0008\u000b\u000c\u000e\u001f\u007fb")).toBe("ab")
+    expect(stripControls("a\r\nb\rc\nd")).toBe("a\nb\nc\nd")
+    expect(stripControls("a\tb\nc")).toBe("a\tb\nc")
+  })
+
+  test("matches the full legacy chain on a deterministic fuzz corpus", () => {
+    const legacy = (text: string): string =>
+      text
+        .replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g, "")
+        .replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, "")
+        .replace(/\u001b[@-Z\\-_]/g, "")
+        .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "")
+        .replace(/\r\n?/g, "\n")
+    const pool = ["a", "\n", "\t", "\r", "\u001b[31m", "\u0000", "\u007f", " ", "\u001b]0;t\u0007"]
+    let seed = 7
+    const rand = (): number => (seed = (seed * 1103515245 + 12345) & 0x7fffffff)
+    for (let k = 0; k < 256; k++) {
+      let text = ""
+      const len = rand() % 48
+      for (let i = 0; i < len; i++) text += pool[rand() % pool.length]!
+      expect(stripControls(text)).toBe(legacy(text))
+    }
+  })
+})
+
 describe("formatStatus", () => {
   const base = (): GoalRecord => ({
     version: 1,
@@ -731,6 +770,14 @@ describe("prompts", () => {
     expect(retry({ condition: "a", label: "timeout" }, COMMIT)).toContain("`dev` branch")
     expect(checkin({ condition: "a", waitedMs: 1_000, subagents: 1, shells: 0 }, COMMIT)).toContain("`dev` branch")
     expect(systemReminder("a", COMMIT)).toContain("`dev` branch")
+  })
+  test("messaging hints surface both tools without carrying a message body", () => {
+    for (const text of [PEER_PARENTS_HINT, MESSAGE_WAKE_TEXT]) {
+      expect(text).toContain("goal_msg_send")
+      expect(text).toContain("goal_msg_read")
+      expect(text.split("\n")).toHaveLength(1)
+      expect(text).not.toContain("<")
+    }
   })
   test("the commit rule says what counts as committed", () => {
     const text = directive("all tests pass", COMMIT)

@@ -39,7 +39,8 @@ import { formatLearningsForPrompt } from "../core/outcome-telemetry.ts"
 import { FAILURE_SIGNATURE_REPEAT_THRESHOLD, failureEscalationReason, persistFailureDiagnosticArtifact, recognizeNoProgress, strategyForRepeat } from "../core/failure-signature.ts"
 import { resolveProjectRoot } from "../core/git.ts"
 import { isWindowsDrivePathOnPosix } from "../core/wire.ts"
-import { sameDirectory, type GoalStore } from "./store.ts"; import { stripUndefined } from "../core/wire.ts"
+import { sameDirectory, type GoalStore } from "./store.ts"
+import { stripUndefined } from "../core/wire.ts"
 import {
   inspectImprovementBacklog,
   normalizeDedupeKey,
@@ -429,6 +430,14 @@ export class GoalController {
   live(sessionID: string): GoalRecord | undefined {
     const record = this.goals.get(sessionID)
     return record && isLive(record.status) ? record : undefined
+  }
+
+  /** Whether this session ever armed a goal, live or terminal. The durable read is needed after a restart,
+   * which adopts only live records; a plain subagent session has no record and must keep its children's
+   * completion reports, while a session whose goal ended must drop them as stale wake signals. */
+  async hasRecord(sessionID: string): Promise<boolean> {
+    if (this.goals.has(sessionID)) return true
+    return (await this.deps.store.load(sessionID)) !== undefined
   }
 
   /**

@@ -26,20 +26,24 @@ export const globalStopFile = (): string => path.join(prompterHome(), "STOP")
 
 export const localStopFile = (repo: string): string => path.join(repo, ".prompter", "STOP")
 
+/** One home for the config helpers' error wording. Messages are unchanged; only the construction is shared. */
+const invalidModel = (value: unknown): Error => new Error(`model must be "provider/model" (got ${formatValue(value)})`)
+const invalidValue = (expected: string, value: unknown): Error => new Error(`expected ${expected}, got ${formatValue(value)}`)
+
 /** "provider/model" -> { providerID, modelID }. The model id may itself contain slashes. */
 export const parseModel = (value: string): { providerID: string; modelID: string } => {
   const slash = value.indexOf("/")
-  if (slash <= 0) throw new Error(`model must be "provider/model" (got ${formatValue(value)})`)
+  if (slash <= 0) throw invalidModel(value)
   const providerID = value.slice(0, slash)
   const modelID = value.slice(slash + 1)
-  if (!providerID || !modelID || /\s/.test(value)) throw new Error(`model must be "provider/model" (got ${formatValue(value)})`)
+  if (!providerID || !modelID || /\s/.test(value)) throw invalidModel(value)
   return { providerID, modelID }
 }
 
 export const intFrom = (value: unknown, fallback: number, min: number, max: number): number => {
   if (value === undefined || value === null || value === "") return fallback
   const n = typeof value === "number" ? value : Number.parseInt(String(value), 10)
-  if (!Number.isFinite(n)) throw new Error(`expected an integer, got ${formatValue(value)}`)
+  if (!Number.isFinite(n)) throw invalidValue("an integer", value)
   const clamped = Math.min(max, Math.max(min, Math.trunc(n)))
   return clamped
 }
@@ -47,7 +51,7 @@ export const intFrom = (value: unknown, fallback: number, min: number, max: numb
 export const numberFrom = (value: unknown, fallback: number, min: number, max: number): number => {
   if (value === undefined || value === null || value === "") return fallback
   const n = typeof value === "number" ? value : Number(value)
-  if (!Number.isFinite(n)) throw new Error(`expected a number, got ${formatValue(value)}`)
+  if (!Number.isFinite(n)) throw invalidValue("a number", value)
   return Math.min(max, Math.max(min, n))
 }
 
@@ -62,7 +66,7 @@ export const boolFrom = (value: unknown, fallback: boolean): boolean => {
   if (typeof value === "boolean") return value
   // String() preserves the CLI's coercion of numbers/boxed values; parseBool owns only the spellings.
   const parsed = parseBool(String(value))
-  if (parsed === undefined) throw new Error(`expected a boolean, got ${formatValue(value)}`)
+  if (parsed === undefined) throw invalidValue("a boolean", value)
   return parsed
 }
 

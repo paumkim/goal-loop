@@ -22,6 +22,7 @@ there.
 
 | Workstream | Lease slug | Summary |
 | --- | --- | --- |
+| merge-churn-reduction-rebase-fifo-anchors-pending | `merge-churn-reduction-rebase-fifo-anchors-pending` | wait-rebase, FIFO landing and append-only spec anchors |
 | CCIII | `proactive-strategy-escalation` | proactive strategy escalation replaces the repeated-failure pause |
 | CCIV | `bounded-failure-diagnostics` | one diagnostic artifact per failure streak (stable per-session signature path) |
 | CCV | `universal-no-progress-recognition` | one universal no-progress recognizer shared by plain goals and loops |
@@ -376,6 +377,7 @@ there.
 | CCI | `diff-usage-finite-guard` | non-finite guard on the usage delta |
 | planner-reuse-builtin-session | `planner-reuse-builtin-session` | arm-time planner reuses the built-in subagent session family |
 | timer-suppress-during-planning | `timer-suppress-during-planning` | a leftover check-in cannot wake the parent during the arm-time planner |
+| evaluator-planner-subagent-child-reuse | `evaluator-planner-subagent-child-reuse` | evaluator and planner are reused parent-linked subagent children |
 
 ## Workstream AC — compaction misses are counted once (A-1)
 
@@ -10487,3 +10489,128 @@ Verification: `test/plugin.test.ts` pins both `ctx.session.create` calls as `par
 `showPlanning()` now marks the runtime as planning and disarms a pending check-in at planning start. `endPlanning()` — called on every planner exit — lifts the mark and restores a fresh check-in only when no replacement was armed and the earlier wait is still live. A check-in re-armed by a turn event landing mid-plan is pushed out by a full interval instead of consuming a wake. No verdict, retry, backoff or planning-scope behavior changed.
 
 Verification: `test/controller.test.ts` pins that no synthetic wake or check-in notice lands while the planner is in flight past the old due time, that a failed plan restores the wait's check-in, and that a mid-plan re-arm still waits. Full `bun run check` green (counts computed at gate time).
+
+## Workstream merge-churn-reduction-rebase-fifo-anchors-pending — wait-rebase and FIFO landing, append-only spec anchors (2026-11-25)
+
+`merge-next --wait` now auto-rebases a stale target onto the current dev and re-runs the gate before landing;
+FIFO is enforced (non-head leases need `--force`, or `--wait-for-turn` to wait for the turn). SPEC.md prose is
+append-only at per-slug anchors; changelog notes go to `.term/changelog-pending/<slug>.md` and are folded by
+merge-next. The spec gate computes counts at check time and the package test uses a relaxed band.
+## Workstream evaluator-planner-subagent-child-reuse — evaluator and planner are reused parent-linked subagent children (2026-11-24)
+
+Two earlier workstreams (`evaluator-goal-achieved-planner` and `planner-parentless-completion`) removed the
+`parentID` from the harness-owned evaluator and arm-time planner children to avoid host completion wake-ups. That
+made both agents appear as new top-level sessions in OpenCode's session list — one `evaluator` per turn and one
+`Goal planner` per arm — instead of subagents nested under the goal session, and contradicted the original CCX/CCII
+subagent design (`sessions.create({ parentID, agent, model })`).
+
+Both children are now created with the working session as their `parentID` and reused: one evaluator subagent child
+serves every verdict and every loop summarizer / next-goal generation, and one planner subagent child serves every
+arm. The per-session child ids live in module maps cleared on plugin `dispose`; a failed or timed-out generation drops
+its child so the next one starts clean. The model rides with each prompt so a `/model` switch reaches the reused
+child. No synthetic completion report is admitted into the worker's transcript — the verdict and plan still come from
+each child's own event stream, and the existing report strip stays as a defensive guard. This supersedes the
+parentless sections of the two earlier workstreams; terminal visibility, verdict contract, verifier gate and loop
+semantics are unchanged.
+
+Verification: `test/plugin.test.ts` pins both `ctx.session.create` calls as parent-linked, pins reuse across the
+verdict + summary + next-goal generations (one child created, three prompts), and keeps the no-report assertion for
+both agents; the planner test pins `parentID === "ses_1"`. Full `bun run check` green.
+
+### Goal-loop children excluded from the busy check (evaluator-internal-subagent-exclusion, 2026-11-24)
+
+Making the judge and planner parent-linked children of the goal owner also made them look like workers the owner
+delegated and is waiting on: `BackgroundTracker.busy()` counted every running descendant, so a still-running judge
+(reused across loop steps) or arm-time planner could self-defer the verdict it was created to produce. The earlier
+claim that judge and planner children are "parentless or evidence-only, so they cannot self-defer" no longer holds
+once those children carry `parentID: sessionID`.
+
+`BackgroundTracker` now keeps an explicit id → agent-identity registry for goal-loop-owned sessions. `noteInternal`
+is called at both child-creation sites in `src/index.ts` with `EVALUATOR_AGENT_ID` / `PLANNER_AGENT_ID` (idempotent
+for a reused child), and `busy()` omits registered sessions before counting descendants. The evaluator recognizes
+its own child by id, so its own in-flight verdict is never mistaken for background work; an ordinary worker session
+running the same agent stays counted. Deleting a session forgets its registration, and no timing or agent-name
+inference is involved — the plugin knows which children it spawned. Real delegated workers and shells still defer
+evaluation through the unchanged `defer()` / `onBackgroundDrained()` path.
+
+Verification: `test/controller.test.ts` pins that a registered judge and planner are excluded while a worker child
+still counts, that re-registering a reused child is idempotent, and that deletion forgets the identity;
+`test/plugin.test.ts` pins both `background.noteInternal(id, …)` call sites. Focused controller + plugin suites green.
+
+### Clarity, consistency and performance cleanup (clarity-consistency-performance, 2026-11-24)
+
+A small, behavior-preserving cleanup pass driven by the persistent improvement backlog. Each unit is independently
+verified with `bun run check`; no rendered string, error posture or runtime decision changes.
+
+- Dead export: `completedConditionCount` (`src/core/types.ts`) had no production caller — the controller counts the
+  ledger with `boundCompletedConditions` plus `.length`. The export and its self-test are removed; the field comment
+  now states the sum inline. The stale "50-entry" prose in the ledger test header is corrected to the bounded window.
+- Stale spec: the "Installed-binary divider rename" section described `src/core/opencode-labels.ts` and the
+  `patch-host` CLI command, both removed by the provider-compaction plugin-only fix documented above. The section is
+  deleted so SPEC.md matches the tree instead of advertising a patch path that no longer exists.
+- Doc accuracy: `docs/config.html` and `README.md` said `evaluator.mode` governs the opt-in `consensus: 2` second
+  vote. In `src/runtime/evaluator.ts` that vote is gated only on `consensus` and uses `evaluator.model`; `mode` is
+  consulted only for the `/goal-loop` summarize and next-condition steps. The two descriptions now say so.
+- TUI duplication: `motionFlags()` now supplies the four shared transient pill flags to both the breath and crest
+  predicates (plain `working` stays local to the breath), and `runDossierAction()` owns the identical session/goal
+  lookup plus empty-catch posture of the seven dossier palette commands. Rendered output and error handling are
+  unchanged; `dist/tui.js` is regenerated from `src/tui.tsx`.
+- Redundant work: `verifyMet` used to canonicalize the same `checkReuseKey(item.def) + head` twice for every executed
+  command check — once to look up the cache, then again in `runOne`. The key is now carried on the queued task and
+  reused. Static evidence: `checkReuseKey(` call sites in `controller.ts` drop from 2 to 1, so canonicalizations per
+  verdict drop from 2N to N; a microbenchmark puts one canonicalization at ~0.0002 ms. Cache keys, coalescing,
+  reuse metadata and evidence bytes are unchanged (`test/verify.test.ts`: 29 pass / 0 fail).
+- Shared attestation core: `verify-record.ts`, `reach-record.ts` and `sign-record.ts` were function-for-function twins
+  in their sweep, `statusCell`, Markdown skeleton, summary branch and ack branch; each differed only in labels and
+  prose. Those parts now live in `src/core/record-attestation.ts`, parameterized by the caller's exact strings; the
+  three real git probes, all exported names/shapes and every rendered byte stay unchanged, and the three dossier
+  cell-helper trios share `recordCellHelpers()`. `recordShaMentions` moved into the shared module and is re-exported
+  from `verify-record.ts`, so no import path changes and the module graph stays acyclic. Byte-equivalence was checked
+  across 237 report/summary/ack/sweep outputs with 0 mismatches; focused attestation suites pass 133/133.
+
+Verification: full `bun run check` green per unit; SPEC marker re-counted after the self-test removal.
+
+### Authoritative terminal events replace the planning placeholder (terminal-planning-placeholder-authority, 2026-11-24)
+
+`shouldKeepPlanningPlaceholder()` suppressed every non-live snapshot while the cache held an arm-time planning
+placeholder, regardless of where the snapshot came from. In the arm path where `arm()` refuses a new gap, the
+terminal `achieved` record is emitted straight to `changed` and no live snapshot follows, so the suppression left
+a phantom queued bar and pill that never converged. The helper now takes `fromPull`: only `get` re-pulls can carry
+a stale answer composed before the arm landed; a `changed` event (including a user's `cleared`) is authoritative
+and replaces the placeholder. Pull-sourced null/stale-terminal suppression is unchanged, and the id-based guard
+still lets a genuine live arm through.
+
+Verification: `test/entries.test.ts` adds a regression asserting that a terminal snapshot with a different id is
+not kept when `fromPull` is false, while all ten pull-sourced cases keep their original expectations; focused suite
+54 pass / 0 fail. `dist/tui.js` regenerated from `src/tui.tsx`.
+
+### A late pre-planning pull cannot evict the placeholder (planning-placeholder-live-pull-eviction, 2026-11-24)
+
+`isStalePlanningPull()` used to suppress only null and terminal answers. A pull composed while the previous goal
+was still live could arrive after the placeholder was cached and replace it with that older live record; the
+first-arm bar then disappeared until the real arm landed. The guard now also suppresses a live answer whose
+`setAt` predates the placeholder, while a live snapshot stamped after it (the real arm) still flows through. The
+35-second grace window, `changed`-event authority and stale-tick reconvergence are unchanged.
+
+Verification: `test/entries.test.ts` pins both sides — a post-placeholder live snapshot is admitted, a
+pre-placeholder one is suppressed; the focused suite is green and `dist/tui.js` is regenerated.
+### Subagent reports reach a parent with no goal (subagent-report-idle-delivery, 2026-11-25)
+
+The `context` hook used to strip every host-injected subagent completion whenever the session had no *live* goal.
+That conflated two different sessions: one whose goal had ended (where an injected report is a stale no-op wake
+signal) and a plain subagent that never armed a goal at all (where its children's reports are the evidence it must
+assemble for its own parent). The global `subagent-one-trip` plugin made the loss total: it folds all reports in
+the request into one `<subagents>` block whose inner `<background-result kind="subagent">` text still matched the
+strip matcher, so one filter removed every child at once. An idle parent was woken by its children, saw no new
+evidence, ended its turn, and never sent its final report upstream.
+
+The hook now distinguishes the two cases through `GoalController.hasRecord()`, which checks the in-memory record
+and falls back to durable storage (restart restores only live records). Reports are admitted when a goal is live
+or the session never had one, and stripped only for a session whose goal ended. For the folded shape, dedupe keys
+on every child id in the block instead of the first: a later block carrying one more completed child is fresh,
+while an unchanged block stays stale. `isInternalChildReport` checks the same full id set, so a harness child
+hidden in a folded block still cannot leak into the worker.
+
+Verification: `test/plugin.test.ts` pins a plain worker keeping its child's report, a folded block admitted on a
+new child and dropped when unchanged, and a folded block still stripped after a terminal goal;
+`test/notes.test.ts` pins multi-id extraction. Focused suites 104 pass / 0 fail, full `bun run check` green.

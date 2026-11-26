@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-11-24T22:42:00Z",
+  "updatedAt": "2026-11-25T16:30:00Z",
   "description": "Persistent prioritized improvement backlog for goal-loop autonomous improvement loops. Items are de-duplicated by id and dedupeKeys; planners should select the highest-priority unblocked open item not already satisfied by completed conditions/history.",
   "items": [
     {
@@ -499,6 +499,35 @@
       "related": [
         "evaluator-empty-request-abstain"
       ]
+    },
+    {
+      "id": "todo-feeding-into-backlog",
+      "title": "Feed backlog candidates from TODO/FIXME markers, audits, failing checks, and telemetry",
+      "category": "planning",
+      "priority": 3,
+      "impact": "low",
+      "risk": "low",
+      "status": "open",
+      "finding": "The TODO/FIXME/HACK/XXX triage at dev 2eed46c found zero actionable marker comments in tracked source, config, or docs (167 broad token matches were all Roman-numeral workstream labels, mktemp .XXXXXX templates, base64 integrity hashes, binary asset bytes, or historical/definitional references). The done item persistent-prioritized-backlog-dedup claims the ledger is fed from audits, failing checks, TODO/FIXME, and telemetry, but SPEC-workstreams.md honest limits state that automatic feeding was out of scope and remains unimplemented, and that backlog state is not auto-updated when work lands. The planner therefore still relies on hand-seeded items.",
+      "improvement": "Add a read-only classifier (start with scripts/todo-triage-audit.ts) that scans tracked source/config/docs for marker-shaped tokens, excludes Roman-numeral workstream labels, mktemp templates, lockfile hashes, binary assets, and append-only SPEC/definition files, and prints before/after counts plus candidate items. Then wire opt-in candidate emission into the planner's backlogSuggestion path, de-duplicating against existing ids/dedupeKeys and completed conditions/history with src/core/improvement-backlog.ts. Keep the feeder off by default so a single marker cannot force-arm a goal; add tests for classification and dedupe. No change to verification or commit gates.",
+      "evidence": [
+        "TODO/FIXME/HACK/XXX triage 2026-11-25 (lease todo-comment-triage): docs/todo-comment-triage.md records 167 broad / 19 word-boundary matches and 0 actionable marker comments; this is the one larger follow-up promoted from that triage.",
+        "SPEC-workstreams.md:6440,6452 honest limits: no automatic feeding from audits, failing checks, TODO/FIXME, or telemetry yet; backlog state is not auto-updated when work lands.",
+        "docs/improvement-backlog.json item persistent-prioritized-backlog-dedup (done) lists 'Feed from audits, failing checks, TODO/FIXME, and telemetry' in its improvement text but shipped only src/core/improvement-backlog.ts, this ledger, and controller selectBacklogSuggestion().",
+        "src/core/improvement-backlog.ts already provides validateImprovementBacklog, findBacklogDedupeMatches, and selectNextBacklogItem; reuse them instead of reimplementing dedupe or selection."
+      ],
+      "dedupeKeys": [
+        "todo-feeding",
+        "auto-feed-backlog",
+        "backlog-marker-feeder",
+        "todo-triage-feeder"
+      ],
+      "related": [
+        "persistent-prioritized-backlog-dedup",
+        "structured-outcome-telemetry",
+        "standing-invariants-sweep"
+      ],
+      "createdAt": "2026-11-25T16:30:00Z"
     }
   ]
 }

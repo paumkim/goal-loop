@@ -4,7 +4,7 @@
  * These tests pin the grammar and the context-hook predicate.
  */
 import { describe, expect, test } from "bun:test"
-import { backgroundResultID, isGoalNoteMessage, stripGoalNotes, isGoalInstructionMessage, stripGoalContext, carriesGoalGrammar, TERMINAL_REMINDER, isGoalEvaluationMessage, stripGoalEvaluations } from "../src/core/prompts.ts"
+import { backgroundResultID, backgroundResultIDs, isGoalNoteMessage, stripGoalNotes, isGoalInstructionMessage, stripGoalContext, carriesGoalGrammar, TERMINAL_REMINDER, isGoalEvaluationMessage, stripGoalEvaluations } from "../src/core/prompts.ts"
 
 const textMessage = (text: string) => ({ role: "user", content: [{ type: "text", text }] })
 /** Grammar fixtures: the matchers must accept the exact bytes the host paints, tag and all. */
@@ -189,6 +189,18 @@ describe("isGoalInstructionMessage / stripGoalContext", () => {
     // The host also delivers injected context as a flat `text`, not only as `content` text parts.
     expect(backgroundResultID({ role: "user", text: '<background-result kind="subagent" sessionID="ses_flat">done</background-result>' })).toBe("ses_flat")
     expect(backgroundResultID({ role: "user", text: "ordinary text" })).toBeUndefined()
+  })
+
+  test("backgroundResultIDs keys a consolidated block by every child, not only the first", () => {
+    const folded = textMessage(
+      '<subagents count="2">' +
+        '<subagent sessionID="ses_a"><background-result kind="subagent" sessionID="ses_a">a</background-result></subagent>' +
+        '<subagent sessionID="ses_b"><background-result kind="subagent" sessionID="ses_b">b</background-result></subagent>' +
+        '</subagents>',
+    )
+    expect(backgroundResultIDs(folded)).toEqual(["ses_a", "ses_b"])
+    expect(backgroundResultID(folded)).toBe("ses_a")
+    expect(backgroundResultIDs(textMessage("ordinary text"))).toEqual([])
   })
 
   test("a compaction checkpoint is history, not an instruction, and survives the terminal strip", () => {

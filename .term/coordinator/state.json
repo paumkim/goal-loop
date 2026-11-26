@@ -7615,6 +7615,154 @@
       "submittedAt": "2026-11-25T14:58:44Z",
       "mergedAt": "2026-11-25T15:01:21Z",
       "mergedInto": "dev"
+    },
+    "dedupe-same-major-lockfile-versions": {
+      "agent": "orchestrator",
+      "paths": "package.json,bun.lock,docs/dependency-dedupe-audit.md",
+      "branch": "wt/dedupe-same-major-lockfile-versions",
+      "worktree": "worktree/wt-dedupe-same-major-lockfile-versions",
+      "status": "done",
+      "createdAt": "2026-11-25T15:56:35Z",
+      "submittedAt": "2026-11-25T16:03:38Z",
+      "mergedAt": "2026-11-25T16:06:08Z",
+      "mergedInto": "dev"
+    },
+    "todo-comment-triage": {
+      "agent": "build-agent",
+      "paths": "docs/todo-comment-triage.md,docs/changelog.html",
+      "branch": "wt/todo-comment-triage",
+      "worktree": "worktree/wt-todo-comment-triage",
+      "status": "done",
+      "createdAt": "2026-11-25T16:16:17Z",
+      "submittedAt": "2026-11-25T16:21:06Z",
+      "mergedAt": "2026-11-25T16:23:46Z",
+      "mergedInto": "dev"
+    },
+    "promote-todo-feeding-backlog-item": {
+      "agent": "build-agent",
+      "paths": "docs/improvement-backlog.json,docs/todo-comment-triage.md,docs/changelog.html",
+      "branch": "wt/promote-todo-feeding-backlog-item",
+      "worktree": "worktree/wt-promote-todo-feeding-backlog-item",
+      "status": "done",
+      "createdAt": "2026-11-25T16:28:04Z",
+      "submittedAt": "2026-11-25T16:31:59Z",
+      "mergedAt": "2026-11-25T16:34:22Z",
+      "mergedInto": "dev"
+    },
+    "remove-nested-headless-evaluator": {
+      "agent": "build",
+      "paths": "src/core/config.ts,src/core/evaluation-gate.ts,src/harness.ts,src/hooks.ts,src/index.ts,test/config-defaults.test.ts,test/plugin.test.ts,docs/changelog.html,SPEC.md,SPEC-workstreams.md",
+      "branch": "wt/remove-nested-headless-evaluator",
+      "worktree": "worktree/wt-remove-nested-headless-evaluator",
+      "status": "done",
+      "createdAt": "2026-11-25T17:26:54Z",
+      "submittedAt": "2026-11-25T17:41:07Z",
+      "mergedAt": "2026-11-25T17:42:46Z",
+      "mergedInto": "dev"
+    },
+    "proactive-parent-messaging": {
+      "agent": "build",
+      "paths": "src/index.ts,src/hooks.ts,src/runtime/background.ts,src/core/prompts.ts,test,SPEC.md,SPEC-workstreams.md,docs/changelog.html",
+      "branch": "wt/proactive-parent-messaging",
+      "worktree": "worktree/wt-proactive-parent-messaging",
+      "status": "done",
+      "createdAt": "2026-11-25T17:11:13Z",
+      "submittedAt": "2026-11-25T17:24:48Z",
+      "mergedAt": "2026-11-25T17:27:23Z",
+      "mergedInto": "dev"
+    },
+    "universal-improvement-pass": {
+      "agent": "build",
+      "paths": "src/core/format.ts,src/core/learning-log.ts,src/core/outcome-telemetry.ts,src/runtime/controller.ts,test/core.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/universal-improvement-pass",
+      "worktree": "worktree/wt-universal-improvement-pass",
+      "status": "done",
+      "createdAt": "2026-11-25T17:44:10Z",
+      "submittedAt": "2026-11-25T17:48:27Z",
+      "mergedAt": "2026-11-25T17:51:03Z",
+      "mergedInto": "dev"
+    },
+    "skip-internal-wake-evaluation": {
+      "agent": "build-agent",
+      "paths": "src/runtime/events.ts,test/internal-wake.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/skip-internal-wake-evaluation",
+      "worktree": "worktree/wt-skip-internal-wake-evaluation",
+      "status": "done",
+      "createdAt": "2026-11-25T17:51:03Z",
+      "submittedAt": "2026-11-25T17:56:49Z",
+      "mergedAt": "2026-11-25T18:01:48Z",
+      "mergedInto": "dev"
+    },
+    "wake-resume-mapping": {
+      "agent": "build",
+      "paths": "AGENTS.md",
+      "branch": "wt/wake-resume-mapping",
+      "worktree": "worktree/wt-wake-resume-mapping",
+      "status": "done",
+      "createdAt": "2026-11-25T17:51:20Z",
+      "submittedAt": "2026-11-25T17:51:49Z",
+      "mergedAt": "2026-11-25T17:54:22Z",
+      "mergedInto": "dev"
+    },
+    "uip-error-vocabulary": {
+      "agent": "build",
+      "paths": "src/prompter/util.ts,docs/changelog.html",
+      "branch": "wt/uip-error-vocabulary",
+      "worktree": "worktree/wt-uip-error-vocabulary",
+      "status": "done",
+      "createdAt": "2026-11-25T18:04:32Z",
+      "submittedAt": "2026-11-25T18:06:42Z",
+      "mergedAt": "2026-11-25T18:09:07Z",
+      "mergedInto": "dev"
+    },
+    "subagent-report-idle-delivery": {
+      "agent": "build",
+      "paths": "src/hooks.ts,src/harness.ts,src/core/prompts.ts,src/runtime/controller.ts,test/plugin.test.ts,test/notes.test.ts,SPEC.md,SPEC-workstreams.md,docs/changelog.html",
+      "branch": "wt/subagent-report-idle-delivery",
+      "worktree": "worktree/wt-subagent-report-idle-delivery",
+      "status": "done",
+      "createdAt": "2026-11-25T18:29:24Z",
+      "submittedAt": "2026-11-25T18:31:33Z",
+      "mergedAt": "2026-11-25T18:34:09Z",
+      "mergedInto": "dev"
+    },
+    "coordinator-wait-wake": {
+      "agent": "hy4-flash-free",
+      "paths": "src/core/coordinator-wait.ts,src/index.ts,src/core/prompts.ts,test/coordinator-wait.test.ts,SPEC.md,docs/changelog.html,packages/coordinator/README.md",
+      "branch": "wt/coordinator-wait-wake",
+      "worktree": "worktree/wt-coordinator-wait-wake",
+      "status": "done",
+      "createdAt": "2026-11-25T18:26:35Z",
+      "submittedAt": "2026-11-25T18:41:19Z",
+      "mergedAt": "2026-11-25T18:43:52Z",
+      "mergedInto": "dev"
+    },
+    "coordinator-standby-autopark": {
+      "agent": "hy4-flash-free",
+      "paths": "src/core/coordinator-wait.ts,src/index.ts,test/coordinator-wait.test.ts,test/plugin.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/coordinator-standby-autopark",
+      "worktree": "worktree/wt-coordinator-standby-autopark",
+      "status": "done",
+      "createdAt": "2026-11-25T18:51:19Z",
+      "submittedAt": "2026-11-25T18:58:37Z",
+      "mergedAt": "2026-11-25T19:01:12Z",
+      "mergedInto": "dev"
+    },
+    "tui-polish-pass": {
+      "agent": "build",
+      "paths": "src/tui.tsx,src/tui-history.tsx,src/tui-keymap.ts,src/tui-error.ts,src/tui-actions.ts,src/hud-card.tsx,src/status-dialog.tsx,src/affordance.tsx,src/core/hud.ts,src/core/dialog-keys.ts,dist/tui.js,test/tui-*.test.ts,test/tui-*.test.tsx,test/__snapshots__/tui-snapshots.test.tsx.snap,checklist/tui-polish-pass-1.md",
+      "branch": "wt/tui-polish-pass",
+      "worktree": "worktree/wt-tui-polish-pass",
+      "status": "done",
+      "createdAt": "2026-11-25T19:10:28Z",
+      "submittedAt": "2026-11-25T19:25:05Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-25T19:25:05Z",
+      "forcedScopeFiles": [
+        "test/tui-hud.test.tsx"
+      ],
+      "mergedAt": "2026-11-25T19:29:05Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,

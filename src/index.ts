@@ -8,15 +8,27 @@
  * Mirrors Claude Code's /goal (status, clear aliases, met / not met / impossible verdicts, stall guard, retries,
  * background-work check-ins, restore on restart).
  */
+import { join } from "node:path"
 import { estimateContextTokens } from "./core/context-size.ts"
 import { Plugin, type Agent } from "@opencode/plugin"
 import { createHarness, evaluatorChildBySession, plannerChildBySession } from "./harness.ts"
 import { registerHooks } from "./hooks.ts"
 import { ensureStartupScaffold, hasJq, pluginRootFromMeta, resolveCoordinatorBin } from "./core/bootstrap.ts"
-import { resolveConfig } from "./core/config.ts"
+import { isNestedHeadless, resolveConfig } from "./core/config.ts"
+import {
+  isMergeTurn,
+  isStandbyRecord,
+  readCoordinatorState,
+  STANDBY_PREFIX,
+  standbyKey,
+  standbySlugFromSubmitOutput,
+  withStandbyActivity,
+  type StandbyRecord,
+} from "./core/coordinator-wait.ts"
 import { EVALUATOR_AGENT_ID, EVALUATOR_SYSTEM_PROMPT } from "./core/evaluator-agent.ts"
 import { findRepository, resolveCommitPolicy, resolveProjectRoot } from "./core/git.ts"
 import { parseBool, parseGoalCommand } from "./core/parse.ts"
+import { mergeTurnWakeText, MESSAGE_WAKE_TEXT } from "./core/prompts.ts"
 import { PLANNER_AGENT_ID, PLANNER_AGENT_TITLE, PLANNER_SYSTEM_PROMPT } from "./core/planner.ts"
 import { renderTranscript } from "./core/transcript.ts"
 import type { UsageSnapshot } from "./core/types.ts"
@@ -247,6 +259,10 @@ export default Plugin.define({
     const log = withFileSink(createLogger(), process.env.OPENCODE_GOAL_LOG_FILE)
     const lifetime = new AbortController()
     const probe = probeFlag(process.env.OPENCODE_GOAL_PROBE)
+    // Nested headless children are workers of a live goal owner. They share its directory and plugin
+    // storage, so arming a goal there would start a second evaluator on the same work with a different
+    // judge prefix and digest. The owner's live TUI judge stays the only verdict authority.
+    const nestedHeadless = isNestedHeadless(process.env)
 
     // Ship the evaluator as a first-class agent type, not just a rubric sent to `general`. `AgentEditor.update`
     // creates the agent when absent (host agent.ts contract), so registering here is idempotent across reloads.
@@ -279,9 +295,11 @@ export default Plugin.define({
     // coordinator/workplace layout, goal runtime dirs, workflow docs/templates, and gitignore rules;
     // non-git dirs get runtime-only setup). Never overwrites user content, never breaks goal arming.
     let coordinatorBin: string | undefined
+    let coordinatorStatePath: string | undefined
     try {
       const pluginRoot = pluginRootFromMeta(import.meta.dir)
       const repository = findRepository(ctx.location.directory)
+      if (repository) coordinatorStatePath = join(repository.root, ".term/coordinator/state.json")
       // Anchor the scaffold at the git root: launching from a subfolder (e.g. docs/) must not create
       // .term in that subfolder. resolveProjectRoot returns the repo root for a subfolder and the
       // directory itself outside a repo, so the runtime-only path still applies there.
@@ -333,6 +351,7 @@ export default Plugin.define({
       log,
       lifetime,
       probe,
+      nestedHeadless,
       controller: () => controller,
       background: () => background,
       emit: () => emit,
@@ -393,10 +412,29 @@ export default Plugin.define({
     // only while the goal-plugin is enabled, and disappear with it. A worker's messages are tagged with the id of
     // its parent session (the "parent agent"), so each parent is both sender and receiver across parallel tasks.
     const messaging = new AgentMessaging(ctx.storage, systemClock, { readOnly: probe })
+    // Sessions parked on a submitted lease. They have no running turn or delegated child, but they are NOT stale:
+    // the goal is live and the agent is waiting for its merge turn. The controller's activity check sees one
+    // virtual worker per parked session, so the evaluator abstains instead of judging the wait.
+    const standbySessions = new Set<string>()
+    void ctx.storage
+      .scan({ prefix: STANDBY_PREFIX })
+      .then(({ entries }) => {
+        for (const entry of entries) {
+          if (isStandbyRecord(entry.value)) standbySessions.add(entry.key.slice(STANDBY_PREFIX.length))
+        }
+      })
+      .catch((error) => log.warn("goal standby restore failed", { error: String(error) }))
     const agentIdFor = async (sessionID: string): Promise<string> => {
       const info = await ctx.session.get({ sessionID }).catch(() => undefined) as { parentID?: unknown } | undefined
       const parent = info?.parentID
       return typeof parent === "string" && parent !== "" && parent !== sessionID ? parent : sessionID
+    }
+    /** One parking path for the explicit tool and the submit hook: idempotent re-parks just refresh the record. */
+    const parkStandby = async (sessionID: string, slug: string, address: string): Promise<void> => {
+      if (probe || !coordinatorStatePath) return
+      const record: StandbyRecord = { slug, address, at: systemClock.now() }
+      await ctx.storage.set(standbyKey(sessionID), record as unknown as Parameters<typeof ctx.storage.set>[1])
+      standbySessions.add(sessionID)
     }
     await ctx.tool.transform((editor) => {
       editor.add({
@@ -415,7 +453,24 @@ export default Plugin.define({
           const text = typeof (input as { text?: unknown }).text === "string" ? (input as { text: string }).text : ""
           if (!to || !text.trim()) return { content: "goal_msg_send needs a non-empty `to` session id and `text`." }
           const from = await agentIdFor(toolContext.sessionID)
+          // Wake only on the empty -> non-empty transition: a burst of messages addressed to a parked parent
+          // produces one nudge, not one turn per message. Probe mode writes nothing, so it wakes nothing.
+          const hadUnread = await messaging.count(to).catch(() => 0)
           const message = await messaging.send(from, to, text)
+          if (!probe && hadUnread === 0) {
+            // "Idle" = no turn executing and no background work delegated. A failed activity check counts as
+            // active (fail closed) so a storage/host hiccup cannot park a session behind an unread message.
+            const active = controller.isExecuting(to) || await controller.isActive(to).catch(() => true)
+            if (!active) {
+              await ctx.session.prompt({
+                sessionID: to,
+                text: MESSAGE_WAKE_TEXT,
+                delivery: "steer",
+              } as Parameters<typeof ctx.session.prompt>[0]).catch((error) => {
+                log.warn("goal message wake failed", { sessionID: to, error: String(error) })
+              })
+            }
+          }
           return { content: `Sent to ${to} from ${from} (id ${message.id}).` }
         },
       })
@@ -435,6 +490,38 @@ export default Plugin.define({
           return { content: `${messages.length} message(s) for ${agent}:\n${body}` }
         },
       })
+      editor.add({
+        name: "goal_standby",
+        description:
+          "Park a submitted coordinator lease and end your turn: the system sends you a message and resumes you when your lease reaches the front of the merge queue. Call after `coordinator submit` with the claimed slug.",
+        input: {
+          type: "object",
+          properties: {
+            slug: { type: "string", description: "The wt/<slug> lease you submitted" },
+          },
+          required: ["slug"],
+        } as const,
+        async execute(input, toolContext) {
+          const slug = typeof (input as { slug?: unknown }).slug === "string" ? (input as { slug: string }).slug.trim() : ""
+          if (!slug) return { content: "goal_standby needs a non-empty `slug` (the lease you submitted)." }
+          if (!coordinatorStatePath) return { content: "goal_standby: no coordinator repository detected; nothing to wait for." }
+          await parkStandby(toolContext.sessionID, slug, await agentIdFor(toolContext.sessionID))
+          return {
+            content: `Standby registered for ${slug}. End your turn — the system will message you when your merge turn arrives, then run coordinator merge-next --wait --target ${slug} from the main repo.`,
+          }
+        },
+      })
+    })
+    // Delegation-flow integration: a worker that submits through the coordinator is parked automatically, even
+    // if it never calls goal_standby. The submit output is the same durable signal the CLI prints on success;
+    // a failed call or a mere transcript mention cannot park a session.
+    await ctx.tool.hook("execute.after", (event) => {
+      if (event.status !== "completed" || !/\b(shell|bash)\b/.test(event.tool)) return
+      const slug = standbySlugFromSubmitOutput(event.result)
+      if (!slug) return
+      void agentIdFor(event.sessionID)
+        .then((address) => parkStandby(event.sessionID, slug, address))
+        .catch((error) => log.warn("goal submit standby failed", { sessionID: event.sessionID, error: String(error) }))
     })
     // The compactor and the controller need each other: the controller asks the compactor to compact at a loop boundary,
     // and the compactor asks the controller (and the background tracker) whether the session has work in flight.
@@ -449,7 +536,7 @@ export default Plugin.define({
       commitFor: (directory) => resolveCommitPolicy(config.commit, directory, coordinatorBin),
       session,
       evaluator,
-      background,
+      background: withStandbyActivity(background, (id) => standbySessions.has(id)),
       store,
       emitter,
       verifier: createVerifier(),
@@ -566,6 +653,16 @@ export default Plugin.define({
             const raw = prompt.text ?? ""
             // Status / clear / invalid are commands, not goals — never send them to the planner.
             const shouldPlan = parseGoalCommand(raw, config.maxConditionChars).type === "set"
+            if (nestedHeadless && shouldPlan) {
+              emit.notice({
+                sessionID,
+                kind: "set",
+                level: "info",
+                title: "goal-loop",
+                message: "Nested headless worker: goal arming is disabled; the live terminal owner is the only judge.",
+              })
+              return
+            }
             const planned = shouldPlan ? await planGoal(sessionID, raw) : undefined
             if (planned) armedPlanScopes.set(sessionID, { condition: planned.condition, scope: planned.scope })
             else armedPlanScopes.delete(sessionID)
@@ -615,7 +712,9 @@ export default Plugin.define({
       config,
       controller,
       evaluator,
+      nestedHeadless,
       messaging,
+      background,
       agentIdFor,
       handleBareLoop,
       planGoal,
@@ -629,6 +728,45 @@ export default Plugin.define({
       isInternalChildReport,
       coldReplay: COLD_REPLAY,
     })
+
+    // ---- coordinator standby watcher
+    // Background tick only: an agent parked after `coordinator submit` never polls the queue inside its turn.
+    // When its submitted lease reaches the FIFO head and no merge holds the lock, send one message through the
+    // existing functional message/session path and steer the session back into its merge turn.
+    const standbyWatcher = setInterval(() => {
+      void (async () => {
+        if (probe || !coordinatorStatePath) return
+        const { entries } = await ctx.storage.scan({ prefix: STANDBY_PREFIX })
+        if (entries.length === 0) return
+        const state = await readCoordinatorState(coordinatorStatePath)
+        if (!state) return
+        for (const entry of entries) {
+          if (!isStandbyRecord(entry.value)) continue
+          const sessionID = entry.key.slice(STANDBY_PREFIX.length)
+          if (!sessionID) continue
+          const lease = state.leases?.[entry.value.slug]
+          // Another agent can land or release the lease while we wait. Retire the standby so the session is not
+          // marked active forever on a lease that can never reach its turn.
+          if (!lease || lease.status === "done") {
+            await ctx.storage.remove(entry.key)
+            standbySessions.delete(sessionID)
+            continue
+          }
+          if (!isMergeTurn(state, entry.value.slug)) continue
+          // A still-executing turn does not need a steer; keep the record for the next tick instead of
+          // interrupting work with a queue-plumbing message.
+          if (controller.isExecuting(sessionID)) continue
+          const text = mergeTurnWakeText(entry.value.slug, coordinatorBin ?? "coordinator")
+          await messaging.send("goal-loop-coordinator", entry.value.address, text)
+          await ctx.storage.remove(entry.key)
+          standbySessions.delete(sessionID)
+          await ctx.session
+            .prompt({ sessionID, text, delivery: "steer" } as Parameters<typeof ctx.session.prompt>[0])
+            .catch((error) => log.warn("goal standby wake failed", { sessionID, error: String(error) }))
+        }
+      })().catch((error) => log.warn("goal standby watcher failed", { error: String(error) }))
+    }, 2_000)
+    ;(standbyWatcher as { unref?: () => void }).unref?.()
 
     // ---- event pump with reconnect
     const route = createRouter({ controller, background, log, compactor })
@@ -659,6 +797,7 @@ export default Plugin.define({
 
     return async () => {
       lifetime.abort()
+      clearInterval(standbyWatcher)
       evaluatorChildBySession.clear()
       plannerChildBySession.clear()
       for (const timer of updateTimers) clearTimeout(timer)

@@ -107,6 +107,20 @@ export const DEFAULTS = {
 export const MAX_BUSY_RETRIES = 5
 
 /**
+ * True inside a nested opencode-headless child instance. The headless driver stamps
+ * `OPENCODE_HEADLESS_DEPTH` with the child's nesting depth (>=1); top-level runs (prompter, e2e,
+ * a user-launched server) carry no such marker. A nested worker shares the goal owner's working
+ * directory and plugin storage, so arming a goal there would run a second evaluator on the same
+ * work — with a different judge prefix and digest — while the goal owner's live judge is already
+ * the single verdict authority. Absent or unparseable markers are treated as top-level.
+ */
+export function isNestedHeadless(env: NodeJS.ProcessEnv = process.env): boolean {
+  const raw = env.OPENCODE_HEADLESS_DEPTH
+  if (typeof raw !== "string" || !/^\d+$/.test(raw.trim())) return false
+  return Number.parseInt(raw.trim(), 10) > 0
+}
+
+/**
  * Config tokens that mean "use the parent session's current model" instead of a pinned `provider/model`.
  * `inherit` is canonical; the others are accepted aliases so the intent reads naturally in any config style.
  * Matching is trimmed and case-insensitive (see `isInheritModelValue`).

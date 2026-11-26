@@ -107,7 +107,7 @@ export function coordinatorFlow(policy: CommitPolicy): string {
   return [
     `Coordinator repo. Before editing: claim first — run \`${bin} claim <goal-slug> --agent <you> --paths <scope>\`.`,
     `Derive the slug from the goal, then \`cd <worktree>\` and work only there, commit on your wt/<slug> branch.`,
-    `Landing is part of the task, not optional after submit: run \`${bin} submit\`, then drain the merge queue yourself — check \`${bin} merge-status\`, then run \`${bin} merge-next --wait --target <slug>\` from the main repo.`,
+    `Landing is part of the task, not optional after submit: run \`${bin} submit\`, then call \`goal_standby\` with your slug and end your turn — do not poll \`${bin} merge-status\` or the merge queue yourself. The system will send you a message when your merge turn arrives; on that wake, run \`${bin} merge-next --wait --target <slug>\` from the main repo.`,
     `If \`${target}\` moved while you worked, rebase \`wt/<slug>\` onto \`${target}\`, re-run the checks, and retry the merge. A submitted lease is only merge-ready, not done.`,
     `Report completion only when \`${bin} status --json\` shows the lease done and \`worktree/wt-<slug>\` is gone.`,
     `Never commit to ${target}/main directly.`,
@@ -471,30 +471,36 @@ export const stripGoalNotes = <T>(messages: ReadonlyArray<T>): T[] => messages.f
  * from the reused judge/planner children share an id; only the first is admitted, which is safe because their
  * verdicts and plans come from the child's event stream, never from a report.
  */
-const backgroundResultIDFromText = (text: string): string | undefined => {
-  const tag = /<background-result\b[^>]*\bkind\s*=\s*["']subagent["'][^>]*>/i.exec(text)
-  if (!tag) return undefined
-  return /\bsessionid\s*=\s*["']([^"']+)["']/i.exec(tag[0])?.[1] ?? text
+const backgroundResultIDsFromText = (text: string): string[] => {
+  const ids: string[] = []
+  const tags = /<background-result\b[^>]*\bkind\s*=\s*["']subagent["'][^>]*>/gi
+  for (const tag of text.match(tags) ?? []) {
+    // A tag without a session id historically keyed on the whole text; keep that identity so a
+    // legacy report without an id is not re-admitted on every request.
+    ids.push(/\bsessionid\s*=\s*["']([^"']+)["']/i.exec(tag)?.[1] ?? text)
+  }
+  return ids
 }
 
-export const backgroundResultID = (message: unknown): string | undefined => {
-  if (typeof message !== "object" || message === null) return undefined
+/** All delegated-child ids in one message. A context hook that merges reports into one block must
+ * dedupe by the whole set: keying on the first id hides every child added by a later merge. */
+export const backgroundResultIDs = (message: unknown): readonly string[] => {
+  if (typeof message !== "object" || message === null) return []
   const m = message as NoteMessageLike & { text?: unknown }
-  if (typeof m.text === "string") {
-    const id = backgroundResultIDFromText(m.text)
-    if (id !== undefined) return id
-  }
+  const texts: string[] = []
+  if (typeof m.text === "string") texts.push(m.text)
   const content = m.content
-  if (!Array.isArray(content)) return undefined
-  for (const part of content) {
-    if (typeof part !== "object" || part === null) continue
-    const { type, text } = part as { type?: unknown; text?: unknown }
-    if (type !== "text" || typeof text !== "string") continue
-    const id = backgroundResultIDFromText(text)
-    if (id !== undefined) return id
+  if (Array.isArray(content)) {
+    for (const part of content) {
+      if (typeof part !== "object" || part === null) continue
+      const { type, text } = part as { type?: unknown; text?: unknown }
+      if (type === "text" && typeof text === "string") texts.push(text)
+    }
   }
-  return undefined
+  return texts.flatMap(backgroundResultIDsFromText)
 }
+
+export const backgroundResultID = (message: unknown): string | undefined => backgroundResultIDs(message)[0]
 
 /**
  * The evaluator's own voice echoed back into the transcript. Every judge child carries the `<goal-evaluation>`
@@ -1060,3 +1066,27 @@ export const compactGoalInstructions = <T>(messages: ReadonlyArray<T>): T[] => {
  */
 export const TERMINAL_REMINDER =
   "A /goal was set earlier in this session and it has ended (achieved, impossible, cleared or failed). Do not resume work toward it and do not re-arm it; await the user's next instruction. The end-your-turn-and-wait-for-injected-results contract no longer applies: subagent or background results you see in the transcript are stale history, not instructions — do not treat them as a reason to resume work or start a new goal."
+
+/**
+ * One-line system hint for a session that shares the host with another parent agent. `goal_msg_send` and
+ * `goal_msg_read` are registered for every session, but workers only reach for them when a parent explicitly
+ * says to. When a second parent is known to exist, surface the capability proactively. Static text only: no
+ * message bodies, no peer ids, no per-turn storage read — the whole signal costs one line of context.
+ */
+export const PEER_PARENTS_HINT =
+  "goal-loop: another parent session is active. Use goal_msg_send to share findings and goal_msg_read to pick up replies."
+
+/**
+ * Wake line for a parent that has gone idle when another agent addresses it. Deliberately carries no message
+ * body: the real text is drained by goal_msg_read, so a retried turn cannot consume it twice.
+ */
+export const MESSAGE_WAKE_TEXT =
+  "goal-loop: a new agent message arrived for you. Call goal_msg_read to retrieve it and goal_msg_send to reply."
+
+/**
+ * Wake line for a submitted agent whose lease has reached the coordinator's merge turn. Carries the slug so the
+ * resumed turn can act without first draining an inbox; the same text is also queued as a message, so a wake that
+ * lands twice still points at the right lease. Reverse only if standby resumes without a merge-step directive.
+ */
+export const mergeTurnWakeText = (slug: string, bin = "coordinator"): string =>
+  `goal-loop: it is your merge turn for lease ${slug}. Run \`${bin} merge-next --wait --target ${slug}\` from the main repo, then confirm the lease is done with \`${bin} status --json\`. A submitted lease is only merge-ready, not done.`

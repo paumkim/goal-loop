@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import plugin from "../index.ts"
 import { EVALUATOR_AGENT_ID, EVALUATOR_SYSTEM_PROMPT } from "../src/core/evaluator-agent.ts"
+import { MESSAGE_WAKE_TEXT, PEER_PARENTS_HINT } from "../src/core/prompts.ts"
 import { PLANNER_AGENT_ID } from "../src/core/planner.ts"
 
 /** A throwaway git repository with a `dev` branch. */
@@ -84,6 +85,7 @@ function context(directory: string, options: Record<string, unknown> = {}) {
         list: () => calls.tools,
         namespace: () => {},
       }),
+      hook: async (name: string, fn: (event: any) => any) => void (hooks[`tool:${name}`] = fn),
     },
     storage: {
       get: async (key: string) => storage.get(key),
@@ -153,7 +155,7 @@ describe("commit rules follow a session move", () => {
       expect(promptEvent.prompt.text).not.toContain("`release`")
 
       const contextEvent = { sessionID: "ses_1", agent: "build", model: {}, system: [], messages: [], tools: {}, options: {} }
-      hooks.context!(contextEvent)
+      await hooks.context!(contextEvent)
       const reminder = contextEvent.system.map((entry: any) => entry.text).join("\n")
       expect(reminder).toContain("`release`")
       expect(reminder).not.toContain("`dev`")
@@ -466,6 +468,30 @@ describe("plugin setup", () => {
     }
   })
 
+  test("a completed coordinator submit automatically parks the submitting worker", async () => {
+    const directory = coordinatorRepository()
+    const { ctx, hooks, storage } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const hook = hooks["tool:execute.after"]!
+      const settle = async () => {
+        for (let i = 0; i < 5; i++) await new Promise<void>((resolve) => setTimeout(resolve, 0))
+      }
+      expect(typeof hook).toBe("function")
+      hook({ tool: "shell", sessionID: "ses_1", status: "completed", result: { output: "submitted wt/my-slug\n" } })
+      await settle()
+      expect(storage.get("goal/standby/v1/ses_1")).toMatchObject({ slug: "my-slug", address: "ses_1" })
+      // A failed submit and a shell result that merely mentions submit must not park anyone.
+      storage.delete("goal/standby/v1/ses_1")
+      hook({ tool: "shell", sessionID: "ses_1", status: "error", error: "boom" })
+      hook({ tool: "shell", sessionID: "ses_1", status: "completed", result: { output: "how to submit wt/other" } })
+      await settle()
+      expect(storage.has("goal/standby/v1/ses_1")).toBe(false)
+    } finally {
+      await dispose?.()
+    }
+  })
+
   test("a plain git repository receives the startup scaffold and coordinator flow is ready", async () => {
     const directory = repository()
     const { ctx, calls } = context(directory)
@@ -541,7 +567,7 @@ describe("the context hook strips end-of-record notes", () => {
       const terminal = noteMessage("<goal-note final>\nGoal achieved (turn 1, 7m 21s).\ndone\n</goal-note>")
       const keep2 = noteMessage("<goal-note>\nLoop 1 of 3 achieved (turn 9); goal v2 armed.\nv2 armed\n</goal-note>")
       const event = { sessionID: "ses_1", agent: "build", model: {}, system: [], messages: [keep1, terminal, keep2], tools: {}, options: {} }
-      hooks.context!(event)
+      await hooks.context!(event)
       expect(event.messages).toEqual([keep1])
     } finally {
       await dispose?.()
@@ -556,7 +582,7 @@ describe("the context hook strips end-of-record notes", () => {
       const keep1 = noteMessage("alpha")
       const keep2 = noteMessage("beta")
       const event = { sessionID: "ses_1", agent: "build", model: {}, system: [], messages: [keep1, keep2], tools: {}, options: {} }
-      hooks.context!(event)
+      await hooks.context!(event)
       expect(event.messages).toEqual([keep1, keep2])
     } finally {
       await dispose?.()
@@ -579,7 +605,7 @@ describe("the context hook strips end-of-record notes", () => {
         ].join("\n"),
       )
       const event = { sessionID: "ses_1", agent: "build", model: {}, system: [], messages: [checkpoint], tools: {}, options: {} }
-      hooks.context!(event)
+      await hooks.context!(event)
       expect(event.messages).toEqual([checkpoint])
     } finally {
       await dispose?.()
@@ -594,7 +620,7 @@ describe("the context hook strips end-of-record notes", () => {
       const assistant = { role: "assistant", content: [{ type: "text", text: "working" }] }
       const continuation = noteMessage('<goal-continuation turn="2">\nThe goal is not met yet.')
       const event = { sessionID: "ses_1", agent: "build", model: {}, system: [], messages: [assistant, continuation], tools: {}, options: {} }
-      hooks.context!(event)
+      await hooks.context!(event)
       expect(event.messages).toHaveLength(2)
       expect((event.messages.at(-1) as any).role).toBe("user")
       expect(event.messages.at(-1)).toBe(continuation)
@@ -618,7 +644,7 @@ describe("the judge child's system prefix (CXXXVIII, opencode free gate)", () =>
     const dispose = await (plugin as any).setup(ctx)
     try {
       const event = { sessionID: "ses_judge", agent: EVALUATOR_AGENT_ID, model: { providerID: "9router-go", id: "KiloCode-Free" }, system: systemParts(), messages: [], tools: {}, options: {} }
-      hooks.context!(event)
+      await hooks.context!(event)
       expect(event.system).toHaveLength(1)
       expect((event.system[0] as any).text).toContain("You are the Evaluator")
       expect(JSON.stringify(event.system)).not.toContain("dogfood")
@@ -634,7 +660,7 @@ describe("the judge child's system prefix (CXXXVIII, opencode free gate)", () =>
     const dispose = await (plugin as any).setup(ctx)
     try {
       const event = { sessionID: "ses_judge", agent: EVALUATOR_AGENT_ID, model: { providerID: "opencode", id: "hy4-flash-free" }, system: systemParts(), messages: [], tools: {}, options: {} }
-      hooks.context!(event)
+      await hooks.context!(event)
       // A trimmed judge on opencode/hy4-flash-free was rejected in ~6ms with provider.free-limit 429.
       expect(event.system).toHaveLength(4)
       expect(JSON.stringify(event.system)).toContain("You are the Evaluator")
@@ -652,7 +678,7 @@ describe("the judge child's system prefix (CXXXVIII, opencode free gate)", () =>
     const dispose = await (plugin as any).setup(ctx)
     try {
       const event = { sessionID: "ses_worker", agent: "build", model: {}, system: systemParts(), messages: [], tools: {}, options: {} }
-      hooks.context!(event)
+      await hooks.context!(event)
       // 4 host parts + the standing coordinator claim rule (every worker activation, not just armed goals).
       expect(event.system).toHaveLength(5)
       expect(JSON.stringify(event.system)).toContain("dogfood")
@@ -669,19 +695,19 @@ describe("the standing coordinator activation rule", () => {
     const { ctx, hooks } = context(directory) // no /goal armed, systemReminder defaults off
     const dispose = await (plugin as any).setup(ctx)
     try {
-      const activate = (sessionID: string) => {
+      const activate = async (sessionID: string) => {
         const event = { sessionID, agent: "build", model: {}, system: [] as any[], messages: [], tools: {}, options: {} }
-        hooks.context!(event)
+        await hooks.context!(event)
         return event.system.map((part: any) => part.text).join("\n")
       }
-      const first = activate("ses_w1")
+      const first = await activate("ses_w1")
       expect(first).toContain("Coordinator repo. Before editing: claim first")
       expect(first).toContain("coordinator claim <goal-slug>")
       expect(first).toContain("work only there")
       expect(first).toContain("submit")
       expect(first).toContain("Never commit to dev/main directly.")
       // Not a one-shot: the same standing rule rides every later activation of the worker.
-      expect(activate("ses_w1")).toBe(first)
+      expect(await activate("ses_w1")).toBe(first)
     } finally {
       await dispose?.()
     }
@@ -702,7 +728,7 @@ describe("the standing coordinator activation rule", () => {
           tools: {},
           options: {},
         }
-        hooks.context!(event)
+        await hooks.context!(event)
         expect(JSON.stringify(event.system)).not.toContain("Before editing: claim first")
       }
     } finally {
@@ -717,7 +743,7 @@ describe("the standing coordinator activation rule", () => {
     const dispose = await (plugin as any).setup(ctx)
     try {
       const event = { sessionID: "ses_w", agent: "build", model: {}, system: [] as any[], messages: [], tools: {}, options: {} }
-      hooks.context!(event)
+      await hooks.context!(event)
       expect(event.system).toHaveLength(0)
     } finally {
       await dispose?.()
@@ -740,7 +766,7 @@ describe("the context hook drops the evaluator's own self-echo (CXV use-and-forg
         sessionID: "ses_1", agent: "build", model: {}, system: [] as any[],
         messages: [message(evalPrompt(1)), evidence, message(evalPrompt(2)), steer], tools: {}, options: {},
       }
-      hooks.context!(event)
+      await hooks.context!(event)
       expect(event.messages).toEqual([evidence, steer])
     } finally {
       await dispose?.()
@@ -758,7 +784,7 @@ describe("the context hook drops the evaluator's own self-echo (CXV use-and-forg
         sessionID: "ses_1", agent: "build", model: {}, system: [] as any[],
         messages: [assistant, message(evalPrompt(1)), steer], tools: {}, options: {},
       }
-      hooks.context!(event)
+      await hooks.context!(event)
       expect(event.messages).toEqual([assistant, steer])
       expect((event.messages.at(-1) as any).role).toBe("user")
     } finally {
@@ -782,7 +808,7 @@ describe("the context hook drops the evaluator's own self-echo (CXV use-and-forg
         sessionID: "ses_1", agent: "build", model: {}, system: [] as any[],
         messages: [steer, report], tools: {}, options: {},
       }
-      hooks.context!(event)
+      await hooks.context!(event)
       // The verdict came from the judge's event stream; the report the host admits on wake is stripped, and the
       // trailing-user repair must not re-add it (CXLI position inversion).
       expect(event.messages).toEqual([steer])
@@ -800,7 +826,7 @@ describe("the context hook drops the evaluator's own self-echo (CXV use-and-forg
         ["<conversation-checkpoint>", "<summary>worked</summary>", "<recent-context>", `[User]: ${evalPrompt(1)}`, "</recent-context>", "</conversation-checkpoint>"].join("\n"),
       )
       const event = { sessionID: "ses_1", agent: "build", model: {}, system: [] as any[], messages: [checkpoint], tools: {}, options: {} }
-      hooks.context!(event)
+      await hooks.context!(event)
       expect(event.messages).toEqual([checkpoint])
     } finally {
       await dispose?.()
@@ -1013,7 +1039,7 @@ describe("a terminal goal is inert in later context (LXVII)", () => {
         tools: {},
         options: {},
       }
-      hooks.context!(event)
+      await hooks.context!(event)
       expect(event.messages).toEqual([message("the user's own line")])
       // Nothing goal-shaped survives, so the counter-instruction has nothing to counter: no session-long
       // stale system line on every later request.
@@ -1024,7 +1050,7 @@ describe("a terminal goal is inert in later context (LXVII)", () => {
         ["<conversation-checkpoint>", "<summary>worked</summary>", "<recent-context>", "[User]: <goal>", "the parser is correct", "</goal>", "</recent-context>", "</conversation-checkpoint>"].join("\n"),
       )
       const quoting = { sessionID: "ses_1", agent: "build", model: {}, system: [] as any[], messages: [checkpoint], tools: {}, options: {} }
-      hooks.context!(quoting)
+      await hooks.context!(quoting)
       expect(quoting.messages).toEqual([checkpoint])
       expect(quoting.system.some((part: any) => typeof part?.text === "string" && part.text.includes("Do not resume work toward it"))).toBe(true)
     } finally {
@@ -1041,7 +1067,7 @@ describe("a terminal goal is inert in later context (LXVII)", () => {
       await goal.execute({ sessionID: "ses_1", prompt: { text: "the parser is correct" }, delivery: "steer" })
       const kickoff = message("<goal>\nthe parser is correct\n</goal>")
       const event = { sessionID: "ses_1", agent: "build", model: {}, system: [] as any[], messages: [kickoff], tools: {}, options: {} }
-      hooks.context!(event)
+      await hooks.context!(event)
       expect(event.messages).toEqual([kickoff])
       expect(event.system.some((part: any) => typeof part?.text === "string" && part.text.includes("Do not resume work toward it"))).toBe(false)
     } finally {
@@ -1057,7 +1083,7 @@ describe("a terminal goal is inert in later context (LXVII)", () => {
       const kickoff = message("<goal>\nthe parser is correct\n</goal>")
       const keep = message("hello")
       const event = { sessionID: "ses_1", agent: "build", model: {}, system: [] as any[], messages: [kickoff, keep], tools: {}, options: {} }
-      hooks.context!(event)
+      await hooks.context!(event)
       expect(event.messages).toEqual([keep])
       // No goal-shaped system line, but the standing coordinator claim rule is present on every activation.
       expect(event.system).toHaveLength(1)
@@ -1101,7 +1127,7 @@ describe("host subagent reports cannot retrigger a finished goal", () => {
     try {
       const own = line("the user's own line")
       const event = contextEvent([own, report("ses_worker"), report("ses_worker_2", "another child")])
-      hooks.context!(event)
+      await hooks.context!(event)
       expect(event.messages).toEqual([own])
     } finally {
       await dispose?.()
@@ -1118,7 +1144,7 @@ describe("host subagent reports cannot retrigger a finished goal", () => {
       const own = line("the user's own line")
       const first = report("ses_worker")
       const event = contextEvent([own, first])
-      hooks.context!(event)
+      await hooks.context!(event)
       expect(event.messages).toEqual([own, first])
     } finally {
       await dispose?.()
@@ -1134,13 +1160,13 @@ describe("host subagent reports cannot retrigger a finished goal", () => {
       await goal.execute({ sessionID: "ses_1", prompt: { text: "the parser is correct" }, delivery: "steer" })
       const own = line("the user's own line")
       const first = report("ses_worker")
-      hooks.context!(contextEvent([own, first])) // admitted once
+      await hooks.context!(contextEvent([own, first])) // admitted once
       const replay = contextEvent([own, first, report("ses_worker")]) // same id twice — both copies dropped now
-      hooks.context!(replay)
+      await hooks.context!(replay)
       expect(replay.messages).toEqual([own])
       const fresh = report("ses_other", "a different child")
       const next = contextEvent([own, fresh])
-      hooks.context!(next)
+      await hooks.context!(next)
       expect(next.messages).toEqual([own, fresh])
     } finally {
       await dispose?.()
@@ -1154,15 +1180,15 @@ describe("host subagent reports cannot retrigger a finished goal", () => {
     try {
       const own = line("the user's own line")
       const stale = report("ses_worker")
-      hooks.context!(contextEvent([own, stale])) // no goal: stripped and marked as seen
+      await hooks.context!(contextEvent([own, stale])) // no goal: stripped and marked as seen
       const goal = calls.commands.find((command: any) => command.name === "goal")
       await goal.execute({ sessionID: "ses_1", prompt: { text: "the parser is correct" }, delivery: "steer" })
       const rearmed = contextEvent([own, stale])
-      hooks.context!(rearmed)
+      await hooks.context!(rearmed)
       expect(rearmed.messages).toEqual([own]) // stale id is not admitted on re-arm
       const fresh = report("ses_new", "a fresh child")
       const next = contextEvent([own, fresh])
-      hooks.context!(next)
+      await hooks.context!(next)
       expect(next.messages).toEqual([own, fresh])
     } finally {
       await dispose?.()
@@ -1177,9 +1203,90 @@ describe("host subagent reports cannot retrigger a finished goal", () => {
     try {
       const own = line("real user task")
       const event = contextEvent([own, report("ses_worker")]) // trailing message is the stripped report
-      hooks.context!(event)
+      await hooks.context!(event)
       expect(event.messages).toEqual([own])
       expect((event.messages.at(-1) as any).role).toBe("user")
+    } finally {
+      await dispose?.()
+    }
+  })
+})
+
+describe("subagent reports reach a parent that has no goal of its own", () => {
+  const line = (text: string) => ({ role: "user", content: [{ type: "text", text }] })
+  const report = (id: string, body: string) =>
+    `<background-result kind="subagent" sessionID="${id}" state="completed" description="worker">\n${body}\n</background-result>`
+  /** The shape subagent-one-trip hands to the model when it folds several reports into one block. */
+  const folded = (...ids: string[]) =>
+    line(`<subagents count="${ids.length}">\n${ids
+      .map((id) => `<subagent sessionID="${id}" agent="general" description="worker" state="completed">\n${report(id, `result from ${id}`)}\n</subagent>`)
+      .join("\n\n")}\n</subagents>`)
+  const contextEvent = (messages: any[]) => ({ sessionID: "ses_1", agent: "build", model: {}, system: [] as any[], messages, tools: {}, options: {} })
+
+  test("a plain worker session keeps the report of its finished child", async () => {
+    const { ctx, hooks } = context(repository())
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const own = line("the user's own line")
+      const child = line(report("ses_child", "evidence"))
+      const event = contextEvent([own, child])
+      await hooks.context!(event)
+      expect(event.messages).toEqual([own, child])
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("a folded block is fresh when a new child is added, stale when unchanged", async () => {
+    const { ctx, hooks } = context(repository())
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const own = line("the user's own line")
+      const first = folded("ses_a", "ses_b")
+      const initial = contextEvent([own, first])
+      await hooks.context!(initial)
+      expect(initial.messages).toEqual([own, first])
+
+      const replay = contextEvent([own, first])
+      await hooks.context!(replay)
+      expect(replay.messages).toEqual([own]) // same children — no new work, no fresh wake
+
+      const grown = folded("ses_a", "ses_b", "ses_c")
+      const next = contextEvent([own, grown])
+      await hooks.context!(next)
+      expect(next.messages).toEqual([own, grown]) // ses_c arrived; do not hide it behind ses_a's id
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("a folded block is still stripped once the session's goal has ended", async () => {
+    const directory = repository()
+    const { ctx, hooks, storage } = context(directory)
+    storage.set("goal/v1/ses_1", {
+      version: 1,
+      id: "goal_prior",
+      sessionID: "ses_1",
+      directory,
+      condition: "the parser is correct",
+      status: "achieved",
+      setAt: 1_000_000,
+      startedAt: 1_000_000,
+      endedAt: 2_000_000,
+      reason: "Loop complete.",
+      turns: 1,
+      stall: 0,
+      retries: 0,
+      checkins: 0,
+      baseline: { cost: 0, input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
+      history: [],
+    })
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const own = line("the user's own line")
+      const event = contextEvent([own, folded("ses_a", "ses_b")])
+      await hooks.context!(event)
+      expect(event.messages).toEqual([own])
     } finally {
       await dispose?.()
     }
@@ -1582,7 +1689,7 @@ describe("verdicts are delegated to a first-class evaluator agent (CXXX)", () =>
     expect(code.slice(code.indexOf("const planGoal =")).includes("agentID: PLANNER_AGENT_ID")).toBe(true)
     // A host report from either harness-owned child is dropped by id, not only by agent metadata.
     expect(code).toContain("background().internalAgentOf(id) !== undefined")
-    expect(code).toContain("return live && fresh && !isInternalChildReport(message)")
+    expect(code).toContain("return (live || !hadGoal) && fresh && !isInternalChildReport(message)")
     expect(code).toContain("cache.set(sessionID, id)")
     expect(code).toContain("cache.get(sessionID)")
     expect(code).toContain("evaluatorChildBySession.clear()")
@@ -2314,5 +2421,174 @@ describe("agent-to-agent messaging (enabled with the plugin)", () => {
     } finally {
       await dispose()
     }
+  })
+
+  /** Feed host events into the real event pump; the peer signal is derived from session.created. */
+  const withSessions = async (sessions: ReadonlyArray<{ id: string; parent?: string }>, fn: (world: ReturnType<typeof context>) => Promise<void>) => {
+    const world = context(repository())
+    const { ctx, sessionParents } = world
+    for (const s of sessions) if (s.parent) sessionParents.set(s.id, s.parent)
+    const pending: any[] = sessions.map((s) => ({ type: "session.created", data: { sessionID: s.id, parentID: s.parent } }))
+    let live = true
+    ;(ctx as any).event = {
+      subscribe: async function* () {
+        while (live) {
+          const next = pending.shift()
+          if (next) yield next
+          else await new Promise((r) => setImmediate(r))
+        }
+      },
+    }
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      for (let i = 0; i < 30; i++) await new Promise((r) => setImmediate(r))
+      await fn(world)
+    } finally {
+      live = false
+      await dispose()
+    }
+  }
+
+  test("a worker sees the messaging hint only when another parent is alive, with no message bodies", async () => {
+    const sessions = [
+      { id: "ses_parent_A" }, { id: "ses_worker_A", parent: "ses_parent_A" },
+      { id: "ses_parent_B" }, { id: "ses_worker_B", parent: "ses_parent_B" },
+    ]
+    await withSessions(sessions, async ({ calls, hooks }) => {
+      const send = calls.tools.find((tool: any) => tool.name === "goal_msg_send")
+      await send.execute({ to: "ses_parent_B", text: "secret body that must not ride context" }, toolContext("ses_worker_A"))
+      const event = { sessionID: "ses_worker_A", agent: "build", system: [] as any[], messages: [] as any[], model: {}, tools: {}, options: {} }
+      await hooks.context!(event)
+      const text = JSON.stringify(event.system)
+      expect(text).toContain(PEER_PARENTS_HINT)
+      expect(text).toContain("goal_msg_send")
+      expect(text).toContain("goal_msg_read")
+      // The unread nudge and the peer line are each a single static line; no body, no peer ids.
+      expect(text).not.toContain("secret body that must not ride context")
+      expect(text).not.toContain("ses_parent_B")
+    })
+    await withSessions(sessions.slice(0, 2), async ({ hooks }) => {
+      const event = { sessionID: "ses_worker_A", agent: "build", system: [] as any[], messages: [] as any[], model: {}, tools: {}, options: {} }
+      await hooks.context!(event)
+      expect(JSON.stringify(event.system)).not.toContain(PEER_PARENTS_HINT)
+    })
+  })
+
+  test("a message wakes an idle parent once, but not a busy one", async () => {
+    const { ctx, calls, sessionParents } = context(repository())
+    sessionParents.set("ses_worker_A", "ses_parent_A")
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const send = calls.tools.find((tool: any) => tool.name === "goal_msg_send")
+      expect(send).toBeDefined()
+      await send.execute({ to: "ses_parent_B", text: "first" }, toolContext("ses_worker_A"))
+      const wakes = calls.prompts.filter((p: any) => p.sessionID === "ses_parent_B")
+      expect(wakes).toHaveLength(1)
+      expect(wakes[0].text).toBe(MESSAGE_WAKE_TEXT)
+      expect(wakes[0].delivery).toBe("steer")
+      expect(wakes[0].text).not.toContain("first")
+
+      // A second message while the first is unread does not add another wake.
+      await send.execute({ to: "ses_parent_B", text: "second" }, toolContext("ses_worker_A"))
+      expect(calls.prompts.filter((p: any) => p.sessionID === "ses_parent_B")).toHaveLength(1)
+    } finally {
+      await dispose()
+    }
+  })
+
+  test("a message does not wake a parent that is already executing", async () => {
+    const { ctx, calls, sessionParents } = context(repository())
+    sessionParents.set("ses_worker_A", "ses_parent_A")
+    let live = true
+    const pending: any[] = [{ type: "session.execution.started", data: { sessionID: "ses_parent_B" } }]
+    ;(ctx as any).event = {
+      subscribe: async function* () {
+        while (live) {
+          const next = pending.shift()
+          if (next) yield next
+          else await new Promise((r) => setImmediate(r))
+        }
+      },
+    }
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      for (let i = 0; i < 30; i++) await new Promise((r) => setImmediate(r))
+      const send = calls.tools.find((tool: any) => tool.name === "goal_msg_send")
+      await send.execute({ to: "ses_parent_B", text: "busy" }, toolContext("ses_worker_A"))
+      expect(calls.prompts.filter((p: any) => p.sessionID === "ses_parent_B")).toHaveLength(0)
+    } finally {
+      live = false
+      await dispose()
+    }
+  })
+
+  test("probe mode stores no message and wakes no parent", async () => {
+    const previous = process.env.OPENCODE_GOAL_PROBE
+    process.env.OPENCODE_GOAL_PROBE = "1"
+    try {
+      const { ctx, calls, storage, sessionParents } = context(repository())
+      sessionParents.set("ses_worker_A", "ses_parent_A")
+      const dispose = await (plugin as any).setup(ctx)
+      try {
+        const send = calls.tools.find((tool: any) => tool.name === "goal_msg_send")
+        await send.execute({ to: "ses_parent_B", text: "hidden" }, toolContext("ses_worker_A"))
+        expect(storage.has("goal/msg/v1/ses_parent_B")).toBe(false)
+        expect(calls.prompts.filter((p: any) => p.sessionID === "ses_parent_B")).toHaveLength(0)
+      } finally {
+        await dispose()
+      }
+    } finally {
+      if (previous === undefined) delete process.env.OPENCODE_GOAL_PROBE
+      else process.env.OPENCODE_GOAL_PROBE = previous
+    }
+  })
+})
+
+describe("nested headless workers leave the verdict to the live owner", () => {
+  const withDepth = async (depth: string | undefined, run: (env: { ctx: any; calls: any; hooks: any; storage: any }) => Promise<void>) => {
+    const previous = process.env.OPENCODE_HEADLESS_DEPTH
+    if (depth === undefined) delete process.env.OPENCODE_HEADLESS_DEPTH
+    else process.env.OPENCODE_HEADLESS_DEPTH = depth
+    try {
+      const directory = repository()
+      const env = context(directory)
+      const dispose = await (plugin as any).setup(env.ctx)
+      try {
+        await run(env)
+      } finally {
+        await dispose?.()
+      }
+    } finally {
+      if (previous === undefined) delete process.env.OPENCODE_HEADLESS_DEPTH
+      else process.env.OPENCODE_HEADLESS_DEPTH = previous
+    }
+  }
+
+  test("a raw /goal-loop directive becomes plain work text and arms nothing", async () => {
+    await withDepth("1", async ({ hooks, storage, calls }) => {
+      const event = { sessionID: "ses_1", messageID: "msg_1", prompt: { text: "/goal-loop inspect the parser" }, metadata: {}, delivery: "steer" }
+      await hooks.prompt!(event)
+      expect(event.prompt.text).toBe("inspect the parser")
+      expect(storage.has("goal/v1/ses_1")).toBe(false)
+      expect(calls.prompts).toHaveLength(0)
+    })
+  })
+
+  test("the /goal command reports the disabled arming instead of starting a goal", async () => {
+    await withDepth("2", async ({ calls, storage }) => {
+      const command = calls.commands.find((entry: any) => entry.name === "goal")
+      await command.execute({ sessionID: "ses_1", prompt: { text: "fix the parser" }, delivery: "steer" })
+      expect(storage.has("goal/v1/ses_1")).toBe(false)
+      expect(calls.prompts).toHaveLength(0)
+      expect(calls.notices.some((notice: any) => String(notice.message).includes("live terminal owner"))).toBe(true)
+    })
+  })
+
+  test("a top-level run still arms the goal normally", async () => {
+    await withDepth(undefined, async ({ hooks, storage }) => {
+      const event = { sessionID: "ses_1", messageID: "msg_1", prompt: { text: "/goal-loop inspect the parser" }, metadata: {}, delivery: "steer" }
+      await hooks.prompt!(event)
+      expect((storage.get("goal/v1/ses_1") as any).condition).toBe("inspect the parser")
+    })
   })
 })
